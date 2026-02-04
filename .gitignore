@@ -1,0 +1,30 @@
+# ===============================
+# Backend — Spring Boot / Maven
+# ===============================
+UnTamed-backend/target/
+UnTamed-backend/.idea/
+UnTamed-backend/*.iml
+UnTamed-backend/.classpath
+UnTamed-backend/.project
+UnTamed-backend/.settings/
+
+# ===============================
+# Frontend — React + Vite
+# ===============================
+untamed-frontend/node_modules/
+untamed-frontend/dist/
+untamed-frontend/.env
+untamed-frontend/.env.local
+
+# ===============================
+# IDEs / OS
+# ===============================
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ===============================
+# Logs
+# ===============================
+*.log
