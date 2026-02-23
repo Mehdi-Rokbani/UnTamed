@@ -1,0 +1,11 @@
+html, body {
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  
+}
+
+#root {
+  min-height: 100vh;
+  overflow: visible;
+}

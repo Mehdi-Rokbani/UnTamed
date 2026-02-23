@@ -1,0 +1,391 @@
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  padding-top: 73px;
+  background: #fff;
+  min-height: 100vh;
+}
+
+.header {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.backButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #222;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.backButton:hover {
+  background: #f7f7f7;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.backButton svg {
+  width: 16px;
+  height: 16px;
+  color: #222;
+  stroke-width: 2.5;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px 80px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 80px;
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 80px;
+  height: fit-content;
+}
+
+.sidebarText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #717171;
+  margin: 0;
+}
+
+/* Main Content */
+.main {
+  max-width: 600px;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #fff4f2;
+  border: 1px solid #c13515;
+  border-radius: 8px;
+  color: #c13515;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.errorBanner svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+
+/* Sections */
+.section {
+  padding: 32px 0;
+  border-bottom: 1px solid #ebebeb;
+}
+
+.section:first-of-type {
+  padding-top: 0;
+}
+
+.section:last-of-type {
+  border-bottom: none;
+}
+
+.sectionHeader {
+  margin-bottom: 24px;
+}
+
+/* Avatar Upload */
+.avatarContainer {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.avatarPreview {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.avatarPlaceholder {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.uploadButton {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.uploadButton:hover {
+  opacity: 0.7;
+}
+
+.uploadButton svg {
+  width: 32px;
+  height: 32px;
+  color: #222;
+  stroke-width: 1.5;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Form Fields */
+.fieldRow {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+.fieldLabel label {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 4px;
+}
+
+.fieldHint {
+  font-size: 14px;
+  color: #717171;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.fieldInput {
+  width: 100%;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  color: #222;
+  background: #fff;
+  border: 1px solid #b0b0b0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.input:hover,
+.textarea:hover,
+.select:hover {
+  border-color: #222;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: none;
+  border-color: #222;
+  box-shadow: 0 0 0 2px rgba(34, 34, 34, 0.1);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #b0b0b0;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.5;
+}
+
+.select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23222'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  padding-right: 40px;
+}
+
+/* Tag Preview */
+.tagPreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #f7f7f7;
+  border: 1px solid #ebebeb;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #222;
+}
+
+/* Action Buttons */
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid #ebebeb;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.saveButton {
+  background: linear-gradient(to right, #e61e4d 0%, #e31c5f 50%, #d70466 100%);
+  color: #fff;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: linear-gradient(to right, #d01346 0%, #d11957 50%, #c4045d 100%);
+  box-shadow: 0 4px 12px rgba(230, 30, 77, 0.3);
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  background: #fff;
+  color: #222;
+  border: 1px solid #222;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: #f7f7f7;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Utility */
+.loading {
+  padding: 80px 24px;
+  text-align: center;
+  font-size: 16px;
+  color: #717171;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .header,
+  .layout {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .main {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header,
+  .layout {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .title {
+    font-size: 26px;
+  }
+
+  .fieldRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .avatarPreview,
+  .avatarPlaceholder {
+    width: 96px;
+    height: 96px;
+  }
+
+  .avatarPlaceholder {
+    font-size: 36px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .saveButton,
+  .cancelButton {
+    width: 100%;
+  }
+}

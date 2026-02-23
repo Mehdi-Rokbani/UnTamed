@@ -1,0 +1,22 @@
+/* ===== GuideLayout ===== */
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.guide-shell {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.guide-main {
+  flex: 1;
+  overflow: hidden; /* each page manages its own scroll */
+  display: flex;
+  flex-direction: column;
+}

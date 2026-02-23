@@ -1,0 +1,767 @@
+/* Container & Layout */
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  padding-top: 73px;
+  background: #fff;
+  min-height: 100vh;
+}
+
+.header {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.backButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #222;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.backButton:hover {
+  background: #f7f7f7;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.backButton svg {
+  width: 16px;
+  height: 16px;
+  color: #222;
+  stroke-width: 2.5;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px 80px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 64px;
+}
+
+/* Error Banner */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fff4f2;
+  border: 1px solid #c13515;
+  border-radius: 8px;
+  color: #c13515;
+  font-size: 14px;
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto 24px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.errorBanner svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+
+.dismissError {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: #c13515;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.dismissError:hover {
+  opacity: 1;
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 80px;
+  height: fit-content;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebarCard {
+  background: #f7f7f7;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.sidebarIcon {
+  width: 40px;
+  height: 40px;
+  color: #222;
+  stroke-width: 1.5;
+  margin-bottom: 16px;
+}
+
+.sidebarTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 8px 0;
+}
+
+.sidebarText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #717171;
+  margin: 0;
+}
+
+.sidebarStats {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+  padding: 20px;
+  gap: 20px;
+}
+
+.statItem {
+  flex: 1;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: #222;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #717171;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.statDivider {
+  width: 1px;
+  height: 40px;
+  background: #ebebeb;
+}
+
+/* Main Content */
+.main {
+  max-width: 720px;
+}
+
+.section {
+  margin-bottom: 48px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sectionHeaderContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  gap: 16px;
+}
+
+.sectionIcon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sectionIcon svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  stroke-width: 2;
+}
+
+.sectionTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 4px 0;
+}
+
+.sectionSubtitle {
+  font-size: 14px;
+  color: #717171;
+  margin: 0;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Experience Input */
+.experienceInput {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.numberInput {
+  width: 120px;
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #222;
+  background: #f7f7f7;
+  border: 2px solid #ebebeb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  text-align: center;
+}
+
+.numberInput:hover {
+  border-color: #222;
+  background: #fff;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: #222;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(34, 34, 34, 0.1);
+}
+
+.numberInput::-webkit-inner-spin-button,
+.numberInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.numberInput[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.experienceLabel {
+  font-size: 16px;
+  color: #717171;
+  font-weight: 500;
+}
+
+/* Buttons */
+.saveBtn,
+.cancelBtn {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.saveBtn {
+  background: linear-gradient(to right, #e61e4d 0%, #e31c5f 50%, #d70466 100%);
+  color: #fff;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: linear-gradient(to right, #d01346 0%, #d11957 50%, #c4045d 100%);
+  box-shadow: 0 4px 12px rgba(230, 30, 77, 0.3);
+  transform: translateY(-1px);
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  background: #fff;
+  color: #222;
+  border: 1px solid #ddd;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: #f7f7f7;
+  border-color: #222;
+}
+
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.addButton:hover:not(:disabled) {
+  background: #000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.addButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.addButton svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+
+/* Form */
+.formHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #ebebeb;
+}
+
+.formTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: #717171;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+  border-radius: 50%;
+}
+
+.closeButton:hover {
+  background: #f7f7f7;
+  color: #222;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+}
+
+.formLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 8px;
+}
+
+.required {
+  color: #e61e4d;
+}
+
+.formInput {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: #222;
+  background: #fff;
+  border: 1px solid #b0b0b0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.formInput:hover {
+  border-color: #222;
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: #222;
+  box-shadow: 0 0 0 2px rgba(34, 34, 34, 0.1);
+}
+
+.formInput::placeholder {
+  color: #b0b0b0;
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #ebebeb;
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: 64px 32px;
+  background: #f7f7f7;
+  border-radius: 12px;
+}
+
+.emptyIcon {
+  width: 64px;
+  height: 64px;
+  color: #b0b0b0;
+  stroke-width: 1.5;
+  margin: 0 auto 20px;
+}
+
+.emptyTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 8px 0;
+}
+
+.emptyText {
+  font-size: 14px;
+  color: #717171;
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+}
+
+.emptyButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.emptyButton:hover {
+  background: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Certificate List */
+.certList {
+  display: grid;
+  gap: 16px;
+}
+
+.certCard {
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  transition: all 0.2s ease;
+}
+
+.certCard:hover {
+  border-color: #ddd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.certBadge {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #00a699 0%, #008489 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.certBadge svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  stroke-width: 2;
+}
+
+.certContent {
+  flex: 1;
+}
+
+.certTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 4px 0;
+}
+
+.certIssuer {
+  font-size: 14px;
+  color: #717171;
+  margin: 0 0 4px 0;
+}
+
+.certCredential {
+  font-size: 13px;
+  color: #b0b0b0;
+  margin: 0;
+  font-family: monospace;
+}
+
+.certLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #00a699;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.certLink:hover {
+  color: #008489;
+}
+
+.certLink svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.certActions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.iconButton,
+.iconButtonDanger {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.iconButton:hover:not(:disabled) {
+  border-color: #222;
+  background: #f7f7f7;
+}
+
+.iconButton svg {
+  width: 18px;
+  height: 18px;
+  color: #222;
+  stroke-width: 2;
+}
+
+.iconButtonDanger:hover:not(:disabled) {
+  border-color: #c13515;
+  background: #fff4f2;
+}
+
+.iconButtonDanger svg {
+  width: 18px;
+  height: 18px;
+  color: #c13515;
+  stroke-width: 2;
+}
+
+.iconButton:disabled,
+.iconButtonDanger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.certEditForm {
+  flex: 1;
+}
+
+/* Spinner */
+.spinner {
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
+.spinnerCircle {
+  stroke-dasharray: 50;
+  stroke-dashoffset: 25;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dash {
+  0% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -124;
+  }
+}
+
+/* Utility */
+.loading {
+  padding: 80px 24px;
+  text-align: center;
+  font-size: 16px;
+  color: #717171;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .header,
+  .layout,
+  .errorBanner {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .sidebarStats {
+    max-width: 400px;
+  }
+
+  .main {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header,
+  .layout,
+  .errorBanner {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .title {
+    font-size: 26px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeaderContent {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .certCard {
+    flex-direction: column;
+  }
+
+  .certActions {
+    align-self: flex-end;
+  }
+
+  .experienceInput {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .numberInput {
+    width: 100%;
+  }
+}

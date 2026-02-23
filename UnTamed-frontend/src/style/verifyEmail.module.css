@@ -1,0 +1,441 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --forest-deep: #1a4d2e;
+  --forest-mid: #2d5f3e;
+  --sunset-orange: #ff8c42;
+  --sunset-peach: #ffa566;
+  --cream: #faf8f3;
+  --white: #ffffff;
+  --success: #4d7c3f;
+  --error: #d4463c;
+  --text-dark: #1a4d2e;
+  --text-muted: #5a6c57;
+}
+
+/* ===== PAGE LAYOUT ===== */
+.verify-email-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--cream);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* ===== BACKGROUND ===== */
+.verify-bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--forest-deep) 0%, var(--forest-mid) 50%, #1a4d2e 100%);
+  opacity: 0.03;
+  z-index: 0;
+}
+
+/* ===== DECORATIVE ELEMENTS ===== */
+.verify-decoration {
+  position: absolute;
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.verify-decoration-1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255, 140, 66, 0.08) 0%, transparent 70%);
+  top: -100px;
+  right: -100px;
+  animation: float 12s ease-in-out infinite;
+}
+
+.verify-decoration-2 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(77, 124, 63, 0.06) 0%, transparent 70%);
+  bottom: -80px;
+  left: -80px;
+  animation: float 15s ease-in-out infinite reverse;
+}
+
+.verify-decoration-3 {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(255, 165, 102, 0.05) 0%, transparent 70%);
+  top: 50%;
+  left: 10%;
+  animation: float 18s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(20px, -20px) scale(1.05);
+  }
+}
+
+/* ===== CONTAINER ===== */
+.verify-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ===== BRAND ===== */
+.verify-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  animation: fadeInDown 0.6s ease;
+}
+
+.verify-logo {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--sunset-orange), var(--sunset-peach));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
+}
+
+.verify-brand-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.verify-brand-name span {
+  color: var(--sunset-orange);
+}
+
+/* ===== CARD ===== */
+.verify-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 48px 40px;
+  box-shadow: 0 8px 32px rgba(26, 77, 46, 0.08);
+  border: 1px solid rgba(212, 217, 208, 0.3);
+  animation: fadeInUp 0.6s ease 0.2s both;
+}
+
+/* ===== CONTENT ===== */
+.verify-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* ===== ICON CONTAINER ===== */
+.verify-icon-container {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.verify-icon-container.loading {
+  background: linear-gradient(135deg, rgba(255, 140, 66, 0.1), rgba(255, 165, 102, 0.1));
+}
+
+.verify-icon-container.success {
+  background: linear-gradient(135deg, rgba(77, 124, 63, 0.1), rgba(77, 124, 63, 0.15));
+  color: var(--success);
+  animation: successPulse 0.6s ease;
+}
+
+.verify-icon-container.error {
+  background: linear-gradient(135deg, rgba(212, 70, 60, 0.1), rgba(212, 70, 60, 0.15));
+  color: var(--error);
+  animation: errorShake 0.5s ease;
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes errorShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+/* ===== SPINNER ===== */
+.verify-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(255, 140, 66, 0.2);
+  border-top-color: var(--sunset-orange);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== HEADING ===== */
+.verify-heading {
+  font-family: 'Outfit', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 12px 0;
+}
+
+.verify-heading.success {
+  color: var(--success);
+}
+
+.verify-heading.error {
+  color: var(--error);
+}
+
+/* ===== TEXT ===== */
+.verify-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 24px 0;
+}
+
+.verify-redirect-text {
+  font-size: 13px;
+  color: var(--sunset-orange);
+  font-weight: 500;
+  margin: -12px 0 20px 0;
+}
+
+.verify-error-message {
+  background: rgba(212, 70, 60, 0.08);
+  border-left: 4px solid var(--error);
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 16px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ===== ACTIONS ===== */
+.verify-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+/* ===== BUTTONS ===== */
+.verify-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: none;
+  text-decoration: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.verify-btn-primary {
+  background: linear-gradient(135deg, var(--sunset-orange), var(--sunset-peach));
+  color: var(--white);
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
+}
+
+.verify-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 140, 66, 0.4);
+}
+
+.verify-btn-primary:active {
+  transform: translateY(0);
+}
+
+.verify-btn-secondary {
+  background: var(--white);
+  color: var(--text-dark);
+  border: 2px solid rgba(212, 217, 208, 0.8);
+}
+
+.verify-btn-secondary:hover {
+  border-color: var(--sunset-orange);
+  color: var(--sunset-orange);
+  transform: translateY(-2px);
+}
+
+.verify-btn-secondary:active {
+  transform: translateY(0);
+}
+
+.verify-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.verify-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ===== TIP ===== */
+.verify-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: rgba(255, 140, 66, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 140, 66, 0.15);
+  text-align: left;
+}
+
+.verify-tip svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--sunset-orange);
+}
+
+.verify-tip span {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ===== FOOTER ===== */
+.verify-footer {
+  text-align: center;
+  animation: fadeIn 0.6s ease 0.4s both;
+}
+
+.verify-footer p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.verify-footer a {
+  color: var(--sunset-orange);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.verify-footer a:hover {
+  color: var(--forest-deep);
+  text-decoration: underline;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 640px) {
+  .verify-card {
+    padding: 32px 24px;
+  }
+
+  .verify-brand-name {
+    font-size: 28px;
+  }
+
+  .verify-heading {
+    font-size: 24px;
+  }
+
+  .verify-icon-container {
+    width: 80px;
+    height: 80px;
+  }
+
+  .verify-icon-container svg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .verify-spinner {
+    width: 48px;
+    height: 48px;
+  }
+}
