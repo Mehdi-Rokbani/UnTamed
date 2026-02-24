@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { http } from "../api/http";
-import type { ActivityResponse, Difficulty } from "../types/activity";
+import type { PublicTemplateCard, Difficulty } from "../types/activity";
 import { ActivityCard } from "../components/ActivityCard";
 import styles from "../style/home.module.css";
+import { listPublicTemplates } from "../api/activity.api";
 import { Header } from "../components/Header";
 
 type LoadState = "idle" | "loading" | "error" | "done";
 
 export default function HomePage() {
   const [state, setState] = useState<LoadState>("idle");
-  const [activities, setActivities] = useState<ActivityResponse[]>([]);
+  const [templates, setTemplates] = useState<PublicTemplateCard[]>([]);
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "All">("All");
 
@@ -19,11 +19,11 @@ export default function HomePage() {
     (async () => {
       setState("loading");
       try {
-        const { data } = await http.get<ActivityResponse[]>("/api/activities/all");
-        if (!cancelled) {
-          setActivities(data ?? []);
-          setState("done");
-        }
+        const data = await listPublicTemplates();
+        if (cancelled) return;
+
+        setTemplates(data ?? []);
+        setState("done");
       } catch {
         if (!cancelled) setState("error");
       }
@@ -37,18 +37,18 @@ export default function HomePage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    return activities.filter((a) => {
+    return templates.filter((t) => {
       const matchesQuery =
         !q ||
-        a.title.toLowerCase().includes(q) ||
-        a.description.toLowerCase().includes(q) ||
-        (a.address?.displayName?.toLowerCase().includes(q) ?? false);
+        (t.title ?? "").toLowerCase().includes(q) ||
+        (t.description ?? "").toLowerCase().includes(q) ||
+        (t.tags ?? []).some((x) => (x ?? "").toLowerCase().includes(q));
 
-      const matchesDifficulty = difficulty === "All" || a.difficulty === difficulty;
+      const matchesDifficulty = difficulty === "All" || t.difficulty === difficulty;
 
       return matchesQuery && matchesDifficulty;
     });
-  }, [activities, query, difficulty]);
+  }, [templates, query, difficulty]);
 
   const handleClearFilters = () => {
     setQuery("");
@@ -59,162 +59,146 @@ export default function HomePage() {
 
   return (
     <>
-    <Header />
-    <main className={styles.home}>
-      {/* Hero Section */}
-      <section className={styles.homeHero}>
-        <div className={styles.heroBackground} />
-        <div className={styles.heroContent}>
-          <h1 className={styles.homeTitle}>
-            Find your next <span className={styles.accent}>UnTamed</span> adventure
-          </h1>
-          <p className={styles.homeSubtitle}>
-            Browse curated outdoor experiences posted by expert guides.<br />
-            Book, explore, and reconnect with nature.
-          </p>
+      <Header />
+      <main className={styles.home}>
+        <section className={styles.homeHero}>
+          <div className={styles.heroBackground} />
+          <div className={styles.heroContent}>
+            <h1 className={styles.homeTitle}>
+              Find your next <span className={styles.accent}>UnTamed</span> adventure
+            </h1>
+            <p className={styles.homeSubtitle}>
+              Browse curated outdoor experiences posted by expert guides.<br />
+              Book, explore, and reconnect with nature.
+            </p>
 
-          {/* Search & Filter Bar */}
-          <div className={styles.searchContainer}>
-            <div className={styles.searchBox}>
-              <svg className={styles.searchIcon} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="m21 21-4.35-4.35"/>
-              </svg>
-              <input
-                className={styles.searchInput}  
-                placeholder="Search activities, locations, or guides..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              {query && (
-                <button className={styles.clearSearch} onClick={() => setQuery("")}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/>
-                    <line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
+            <div className={styles.searchContainer}>
+              <div className={styles.searchBox}>
+                <svg
+                  className={styles.searchIcon}
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+
+                <input
+                  className={styles.searchInput}
+                  placeholder="Search experiences or tags..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+
+                {query && (
+                  <button className={styles.clearSearch} onClick={() => setQuery("")} type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <select
+                className={styles.difficultySelect}
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value as Difficulty | "All")}
+              >
+                <option value="All">All Levels</option>
+                <option value="EASY">🟢 Easy</option>
+                <option value="MEDIUM">🟡 Medium</option>
+                <option value="HARD">🔴 Hard</option>
+              </select>
+
+              {hasActiveFilters && (
+                <button className={styles.clearFilters} onClick={handleClearFilters} type="button">
+                  Clear filters
                 </button>
               )}
             </div>
 
-            <select
-              className={styles.difficultySelect}   
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as any)}
-            >
-              <option value="All">All Levels</option>
-              <option value="Easy">🟢 Easy</option>
-              <option value="Medium">🟡 Medium</option>
-              <option value="Hard">🔴 Hard</option>
-            </select>
-
-            {hasActiveFilters && (
-              <button className={styles.clearFilters} onClick={handleClearFilters}>
-                Clear filters
-              </button>
+            {state === "done" && (
+              <div className={styles.statsBar}>
+                <div className={styles.stat}>
+                  <span className={styles.statNumber}>{templates.length}</span>
+                  <span className={styles.statLabel}>Total Experiences</span>
+                </div>
+                <div className={styles.statDivider} />
+                <div className={styles.stat}>
+                  <span className={styles.statNumber}>{filtered.length}</span>
+                  <span className={styles.statLabel}>Showing</span>
+                </div>
+                {hasActiveFilters && (
+                  <>
+                    <div className={styles.statDivider} />
+                    <div className={styles.stat}>
+                      <span className={styles.statIcon}>🔍</span>
+                      <span className={styles.statLabel}>Filters active</span>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
+        </section>
 
-          {/* Stats */}
-          {state === "done" && (
-              <div className={styles.statsBar}>
-              <div className={styles.stat}>
-                <span className={styles.statNumber}>{activities.length}</span>
-                <span className={styles.statLabel}>Total Adventures</span>
+        <section className={styles.activitiesSection}>
+          <div className={styles.container}>
+            {state === "loading" && (
+              <div className={styles.stateContainer}>
+                <div className={styles.loadingSpinner} />
+                <p className={styles.stateText}>Loading adventures...</p>
               </div>
-              <div className={styles.statDivider} />
-              <div className={styles.stat}>
-                <span className={styles.statNumber}>{filtered.length}</span>
-                <span className={styles.statLabel}>Showing</span>
+            )}
+
+            {state === "error" && (
+              <div className={`${styles.stateContainer} ${styles.stateError}`}>
+                <p className={styles.stateText}>Failed to load experiences</p>
+                <p className={styles.stateSubtext}>Please check your connection and try again</p>
               </div>
-              {hasActiveFilters && (
-                <>
-                  <div className={styles.statDivider} />
-                  <div className={styles.stat}>
-                    <span className={styles.statIcon}>🔍</span>
-                    <span className={styles.statLabel}>Filters active</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
+            )}
 
-      {/* Activities Section */}
-      <section className={styles.activitiesSection}>
-        <div className={styles.container}>
-          {/* Loading State */}
-          {state === "loading" && (
-            <div className={styles.stateContainer}>
-              <div className={styles.loadingSpinner} />
-              <p className={styles.stateText}>Loading adventures...</p>
-            </div>
-          )}
-
-          {/* Error State */}
-          {state === "error" && (
-            <div className={`${styles.stateContainer} ${styles.stateError}`}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              <p className={styles.stateText}>Failed to load activities</p>
-              <p className={styles.stateSubtext}>Please check your connection and try again</p>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {state === "done" && filtered.length === 0 && activities.length === 0 && (
-            <div className={styles.stateContainer}>
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
-              <p className={styles.stateText}>No activities available yet</p>
-              <p className={styles.stateSubtext}>Check back soon for new adventures</p>
-            </div>
-          )}
-
-          {/* No Results State */}
-          {state === "done" && filtered.length === 0 && activities.length > 0 && (
-            <div className={styles.stateContainer}>
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="m21 21-4.35-4.35"/>
-              </svg>
-              <p className={styles.stateText}>No activities match your filters</p>
-              <p className={styles.stateSubtext}>Try adjusting your search or difficulty level</p>
-              <button className={styles.btnSecondary} onClick={handleClearFilters}>
-                Clear all filters
-              </button>
-            </div>
-          )}
-
-          {/* Activity Grid */}
-          {filtered.length > 0 && (
-            <>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Available Adventures</h2>
-                <p className={styles.sectionSubtitle}>
-                  {filtered.length} {filtered.length === 1 ? 'experience' : 'experiences'} waiting for you
-                </p>
+            {state === "done" && filtered.length === 0 && templates.length === 0 && (
+              <div className={styles.stateContainer}>
+                <p className={styles.stateText}>No experiences available yet</p>
+                <p className={styles.stateSubtext}>Check back soon for new adventures</p>
               </div>
+            )}
 
-              <div className={styles.activityGrid}>
-                {filtered.map((activity, index) => (
-                  <ActivityCard 
-                    key={activity.id} 
-                    activity={activity}
-                    index={index}
-                  />
-                ))}
+            {state === "done" && filtered.length === 0 && templates.length > 0 && (
+              <div className={styles.stateContainer}>
+                <p className={styles.stateText}>No experiences match your filters</p>
+                <p className={styles.stateSubtext}>Try adjusting your search or difficulty level</p>
+                <button className={styles.btnSecondary} onClick={handleClearFilters} type="button">
+                  Clear all filters
+                </button>
               </div>
-            </>
-          )}
-        </div>
-      </section>
-    </main>
+            )}
+
+            {filtered.length > 0 && (
+              <>
+                <div className={styles.sectionHeader}>
+                  <h2 className={styles.sectionTitle}>Available Experiences</h2>
+                  <p className={styles.sectionSubtitle}>
+                    {filtered.length} {filtered.length === 1 ? "experience" : "experiences"} waiting for you
+                  </p>
+                </div>
+
+                <div className={styles.activityGrid}>
+                  {filtered.map((t, index) => (
+                    <ActivityCard key={t.id} activity={t} index={index} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      </main>
     </>
   );
 }

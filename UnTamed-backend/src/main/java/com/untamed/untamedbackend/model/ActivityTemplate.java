@@ -1,4 +1,3 @@
-// src/main/java/com/untamed/untamedbackend/model/Activity.java
 package com.untamed.untamedbackend.model;
 
 import jakarta.validation.Valid;
@@ -20,12 +19,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Document(collection = "activities")
+@Document(collection = "activity_templates")
 @CompoundIndexes({
-        @CompoundIndex(name = "idx_status_date", def = "{'status': 1, 'date': 1}"),
-        @CompoundIndex(name = "idx_guide_status_date", def = "{'guide_id': 1, 'status': 1, 'date': 1}")
+        @CompoundIndex(name = "idx_guide", def = "{'guide_id': 1}"),
+        @CompoundIndex(name = "idx_categories", def = "{'category_ids': 1}")
 })
-public class Activity {
+public class ActivityTemplate {
 
     @Id
     private String id;
@@ -44,37 +43,13 @@ public class Activity {
     @PositiveOrZero
     private BigDecimal price;
 
-    @NotNull
-    @Future
-    @Indexed
-    private Instant date;
-
-    @Min(1)
-    private int capacity;
-
-    // booking count
-    @Builder.Default
-    private int bookedCount = 0;
-
-    // activity status
-    @NotNull
-    @Indexed
-    private ActivityStatus status;
-
-    // tags
     @Builder.Default
     @Indexed
     private List<@NotBlank String> tags = List.of();
 
-    // rating summary
     @Builder.Default
-    private RatingSummary rating = RatingSummary.builder().average(0.0).count(0).build();
+    private List<@Valid ActivityImage> images = List.of(); // Cloudinary stays same
 
-    // images
-    @Builder.Default
-    private List<@Valid ActivityImage> images= List.of();
-
-    // categories (reference by IDs)
     @NotEmpty
     @Indexed
     @Field("category_ids")
@@ -90,11 +65,13 @@ public class Activity {
     @Field("address_id")
     private String addressId;
 
-    // Optional: store a geo point snapshot for “nearby activities” queries without joining Address
     @GeoSpatialIndexed(type = GeoSpatialIndexType.GEO_2DSPHERE)
     private GeoJsonPoint location;
 
-    // created / updated timestamps
+    // ✅ rating belongs here
+    @Builder.Default
+    private RatingSummary rating = RatingSummary.builder().average(0.0).count(0).build();
+
     @CreatedDate
     private Instant createdAt;
 

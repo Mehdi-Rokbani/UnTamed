@@ -1,189 +1,279 @@
-/* ===== GuideSidebar — UnTamed Brand ===== */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+/* ============================================================
+   GUIDE SIDEBAR — Refined nature luxury
+   Dark forest green base, caramel accent, Playfair brand mark
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 
 :root {
-  --forest:    #1a3a2a;
-  --forest-mid:#224433;
-  --forest-lt: #2d5a3d;
-  --leaf:      #3a7a50;
-  --sage:      #5a8a6a;
-  --cream:     #f5f0e8;
-  --parchment: #ede7d8;
-  --caramel:   #c8823a;
-  --caramel-lt:#e09a52;
-  --orange:    #d4622a;
-  --text-on-dark: rgba(245,240,232,0.90);
-  --text-muted:   rgba(245,240,232,0.50);
-  --sidebar-w: 240px;
+  --sb-forest:       #16302A;
+  --sb-forest-mid:   #1e3d34;
+  --sb-forest-light: #254d42;
+  --sb-leaf:         #2e6b52;
+  --sb-caramel:      #c8783a;
+  --sb-caramel-lt:   #dfa060;
+  --sb-cream:        #f2ede4;
+  --sb-text:         rgba(242,237,228,0.88);
+  --sb-text-dim:     rgba(242,237,228,0.44);
+  --sb-divider:      rgba(242,237,228,0.08);
+  --sb-width:        232px;
 }
 
-/* ── Shell ── */
-.gs {
-  width: var(--sidebar-w);
+/* ── Shell: NO overflow:hidden — let nav scroll freely ── */
+.sidebar {
+  width: var(--sb-width);
+  min-width: var(--sb-width);
   height: 100vh;
-  background: var(--forest);
+  background: var(--sb-forest);
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
   font-family: 'DM Sans', sans-serif;
   flex-shrink: 0;
 }
 
-/* texture overlay */
-.gs::before {
-  content: '';
+/* Decorative layers — absolute, behind everything, clipped by sidebar bounds */
+.bgGlow {
+  position: absolute;
+  top: -60px;
+  left: -40px;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(46,107,82,0.35) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bgGrain {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(90,138,106,0.25) 0%, transparent 70%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='80' height='80' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 0;
 }
 
-.gs > * { position: relative; z-index: 1; }
-
-/* ── Brand Header ── */
-.gs-top {
-  padding: 18px 16px 12px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
+/* All direct children sit above decorative layers */
+.sidebar > :not(.bgGlow):not(.bgGrain) {
+  position: relative;
+  z-index: 1;
 }
 
-.gs-brand {
+/* ── Brand ── */
+.brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(245,240,232,0.10);
-}
-
-.gs-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--caramel), var(--orange));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  box-shadow: 0 3px 10px rgba(200,130,58,0.35);
+  padding: 20px 18px 14px;
+  border-bottom: 1px solid var(--sb-divider);
   flex-shrink: 0;
 }
 
-.gs-title {
+.brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(145deg, var(--sb-caramel), #a85c22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(200,120,58,0.4);
+  flex-shrink: 0;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brandName {
   font-family: 'Playfair Display', serif;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
-  color: var(--cream);
+  color: var(--sb-cream);
   letter-spacing: 0.01em;
-  line-height: 1.2;
+  line-height: 1;
 }
 
-.gs-sub {
-  font-size: 10px;
-  color: var(--caramel-lt);
+.brandRole {
+  font-size: 9.5px;
   font-weight: 500;
-  margin-top: 1px;
+  color: var(--sb-caramel-lt);
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  line-height: 1;
 }
 
-/* ── Nav Section ── */
-.gs-nav-section {
+/* ── User pill ── */
+.userPill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 12px 4px;
+  padding: 9px 11px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--sb-divider);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--sb-leaf);
+  color: var(--sb-cream);
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.userName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+
+.userBadge {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--sb-caramel-lt);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ── Nav — takes all remaining height, scrolls internally ── */
+.nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 12px 4px;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar { display: none; }
+
+.navSection {
   margin-bottom: 2px;
 }
 
-.gs-section-label {
+.sectionLabel {
+  display: block;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 0 10px;
-  margin-bottom: 4px;
+  color: var(--sb-text-dim);
+  padding: 12px 8px 4px;
 }
 
-/* ── Nav Items ── */
-.gs-item {
+/* ── Nav item ── */
+.navItem {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 7px;
   text-decoration: none;
-  color: var(--text-on-dark);
+  color: var(--sb-text);
   font-size: 13px;
   font-weight: 400;
-  transition: background 0.18s, color 0.18s, transform 0.15s;
+  transition: background 0.15s, color 0.15s;
   position: relative;
   margin-bottom: 1px;
+  white-space: nowrap;
 }
 
-.gs-item:hover {
+.navItem:hover {
   background: rgba(255,255,255,0.07);
-  color: var(--cream);
-  transform: translateX(2px);
+  color: var(--sb-cream);
 }
 
-.gs-item.active {
-  background: linear-gradient(135deg, rgba(200,130,58,0.22), rgba(200,130,58,0.10));
-  color: var(--caramel-lt);
+.navItemActive {
+  background: rgba(200,120,58,0.15);
+  color: var(--sb-caramel-lt);
   font-weight: 600;
 }
 
-.gs-item.active::before {
+/* Left accent bar — contained within nav padding */
+.navItemActive::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 20%;
-  bottom: 20%;
+  left: -12px;
+  top: 22%;
+  bottom: 22%;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--caramel);
-  margin-left: 0;
+  background: var(--sb-caramel);
 }
 
-.gs-icon {
-  font-size: 14px;
-  width: 20px;
-  text-align: center;
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
   flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity 0.15s;
 }
 
-.gs-label {
-  line-height: 1;
+.navItem:hover .navIcon,
+.navItemActive .navIcon {
+  opacity: 1;
 }
 
-/* ── Bottom / Logout ── */
-.gs-bottom {
-  padding: 12px 16px 16px;
-  border-top: 1px solid rgba(245,240,232,0.08);
+.navLabel { line-height: 1; }
+
+/* ── Footer — always at bottom, never scrolls away ── */
+.footer {
+  flex-shrink: 0;
+  padding: 8px 12px 16px;
+  border-top: 1px solid var(--sb-divider);
 }
 
-.gs-logout {
+.logoutBtn {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
-  background: rgba(212,98,42,0.12);
-  color: rgba(245,240,232,0.70);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sb-text-dim);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
-  transition: background 0.18s, color 0.18s;
+  transition: background 0.15s, color 0.15s;
   text-align: left;
 }
 
-.gs-logout:hover {
-  background: rgba(212,98,42,0.28);
-  color: #ff9070;
+.logoutBtn:hover {
+  background: rgba(220,80,60,0.12);
+  color: #f87060;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem, .logoutBtn { transition-duration: 0.01ms !important; }
 }

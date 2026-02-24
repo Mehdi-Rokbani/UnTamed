@@ -25,52 +25,63 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtAuthFilter jwtAuthFilter,
             SecurityJsonHandlers securityJsonHandlers,
-            CorsConfigurationSource corsConfigurationSource // ✅ inject bean
+            CorsConfigurationSource corsConfigurationSource
     ) throws Exception {
 
         http
-                // ✅ Force Spring Security to use our CORS config
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // JSON responses for 401/403
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(securityJsonHandlers)
                         .accessDeniedHandler(securityJsonHandlers)
                 )
 
                 .authorizeHttpRequests(auth -> auth
-
-                        // Allow Spring's error endpoint (prevents confusing 403 after exceptions)
+                        // allow Spring error endpoint
                         .requestMatchers("/error").permitAll()
 
-                        // ✅ IMPORTANT: allow browser preflight requests (CORS)
+                        // allow browser preflight (CORS)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+                        // ----------------------------
                         // Public endpoints
+                        // ----------------------------
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/geo/**").permitAll()
 
-                        // Activities READ:
-                        .requestMatchers(HttpMethod.GET, "/api/activities/all").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/activities/mine").hasRole("GUIDE")
-                        .requestMatchers(HttpMethod.GET, "/api/activities/**").permitAll()
+                        // Public templates browse (GetYourGuide style)
+                        .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
 
-                        // Activities WRITE (GUIDE only)
-                        .requestMatchers(HttpMethod.POST, "/api/activities/**").hasRole("GUIDE")
-                        .requestMatchers(HttpMethod.PATCH, "/api/activities/**").hasRole("GUIDE")
-                        .requestMatchers(HttpMethod.DELETE, "/api/activities/**").hasRole("GUIDE")
+                        // Public sessions browse + session details
+                        .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
 
-                        // User profile endpoints (auth required)
+                        // ----------------------------
+                        // GUIDE-only endpoints
+                        // ----------------------------
+
+                        // Templates management
+                        .requestMatchers(HttpMethod.GET, "/api/templates/mine").hasRole("GUIDE")
+                        .requestMatchers(HttpMethod.POST, "/api/templates/**").hasRole("GUIDE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/templates/**").hasRole("GUIDE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/templates/**").hasRole("GUIDE")
+
+                        // Sessions management
+                        .requestMatchers(HttpMethod.POST, "/api/sessions/**").hasRole("GUIDE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/sessions/**").hasRole("GUIDE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/sessions/**").hasRole("GUIDE")
+
+                        // Users (authenticated)
                         .requestMatchers("/api/users/**").authenticated()
 
-                        // Guide endpoints (GUIDE only)
+                        // Guides (GUIDE only)
                         .requestMatchers("/api/guides/**").hasRole("GUIDE")
 
-                        // Everything else requires authentication
+                        // everything else
                         .anyRequest().authenticated()
                 )
+
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -80,18 +91,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ Better with credentials; avoids some edge cases wi
-        // th allowedOrigins
+        // For dev
         config.setAllowedOriginPatterns(List.of("http://localhost:5173"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-
-        // Safer for future headers (like X-Request-Id)
         config.setAllowedHeaders(List.of("*"));
-
-        // If you ever need to read any custom response header on frontend:
-        // config.setExposedHeaders(List.of("X-Request-Id"));
-
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

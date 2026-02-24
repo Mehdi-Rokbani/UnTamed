@@ -19,6 +19,7 @@ import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import GuideLayout from "./components/GuideLayout";
 import GuideActivitiesPage from "./pages/GuideActivitiesPage";
 import EditActivityPage from "./pages/EditActivityPage";
+import TemplateSessionsPage from "./pages/Templatesessionspage";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -45,9 +46,6 @@ export default function App() {
           }
         />
 
-        {/* Activity details
-            NOTE: Your backend allows public GET for published activities.
-            If you want it public, remove RequireAuth here. */}
         <Route
           path="/activities/:id"
           element={
@@ -66,7 +64,6 @@ export default function App() {
             </RequireAuth>
           }
         />
-
         <Route
           path="/profile/edit"
           element={
@@ -75,7 +72,6 @@ export default function App() {
             </RequireAuth>
           }
         />
-
         <Route
           path="/profile/guide/edit"
           element={
@@ -87,7 +83,7 @@ export default function App() {
           }
         />
 
-        {/* GUIDE create */}
+        {/* Guide: create template (outside sidebar layout — full page wizard) */}
         <Route
           path="/activities/create"
           element={
@@ -99,7 +95,7 @@ export default function App() {
           }
         />
 
-        {/* GUIDE area with sidebar (only under /guide/*) */}
+        {/* Guide area — sidebar layout */}
         <Route
           path="/guide"
           element={
@@ -110,11 +106,16 @@ export default function App() {
             </RequireAuth>
           }
         >
-          {/* When user goes to /guide, redirect to /guide/activities */}
           <Route index element={<Navigate to="activities" replace />} />
 
+          {/* Template list dashboard */}
           <Route path="activities" element={<GuideActivitiesPage />} />
-          <Route path="activities/:id/edit" element={<EditActivityPage />} />
+
+          {/* Edit a template's details + photos */}
+          <Route path="templates/:id/edit" element={<EditActivityPage />} />
+
+          {/* Manage sessions (add / publish / unpublish / cancel) for a template */}
+          <Route path="templates/:id/sessions" element={<TemplateSessionsPage />} />
         </Route>
 
         {/* Errors */}

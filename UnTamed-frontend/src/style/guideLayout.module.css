@@ -1,22 +1,26 @@
-/* ===== GuideLayout ===== */
-
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-.guide-shell {
+.guideShell {
   display: flex;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+
+  align-items: stretch;   /* ✅ force full-height columns */
+  flex-wrap: nowrap;      /* ✅ prevents sidebar from dropping under main */
 }
 
-.guide-main {
+.guideMain {
   flex: 1;
-  overflow: hidden; /* each page manages its own scroll */
+  min-width: 0;
+  height: 100vh;          /* ✅ make the scroll container explicit */
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* ✅ target the sidebar element inside the layout */
+.guideShell > aside {
+  height: 100vh;          /* explicit */
+  align-self: stretch;    /* stretches even if parent align-items changes */
+  flex: 0 0 auto;         /* don’t let it shrink weirdly */
 }

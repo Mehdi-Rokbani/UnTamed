@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { ActivityResponse, ActivityStatus, Difficulty, ActivityImage, AddressPickDto } from "../types/activity";
-import { getActivityById, updateActivity, addActivityImage, deleteActivityImage_query, setActivityCover_query, reorderActivityImages, setActivityStatus } from "../api/activity.api";
+import type {
+  ActivityTemplateResponse,
+  Difficulty,
+  ActivityImage,
+  AddressPickDto,
+} from "../types/activity";
+
+import {
+  getTemplateById,
+  updateTemplate,
+  addTemplateImage,
+  deleteTemplateImage,
+  setTemplateCoverImage,
+  reorderTemplateImages,
+} from "../api/activity.api";
+
 import { listCategories } from "../api/category.api";
 import type { Category } from "../types/category";
+
 import LocationPicker from "../components/LocationPicker";
 import type { AddressResponse } from "../types/geo";
 import styles from "../style/editActivity.module.css";
@@ -12,49 +27,34 @@ type Tab = "DETAILS" | "PHOTOS";
 
 function niceError(msg: string) {
   if (msg.includes("location")) return "Add a location before publishing.";
-  if (msg.includes("coordinates")) return "Pick a location with map coordinates before publishing.";
-  if (msg.includes("image")) return "Upload at least one photo before publishing.";
-  if (msg.includes("category")) return "Select at least one category before publishing.";
-  if (msg.includes("future")) return "Choose a future date before publishing.";
+  if (msg.includes("coordinates")) return "Pick a location with map coordinates.";
+  if (msg.includes("image")) return "Upload at least one photo.";
+  if (msg.includes("category")) return "Select at least one category.";
   return msg;
 }
 
-// ISO -> "YYYY-MM-DDTHH:mm" for datetime-local
-function toLocalInputValue(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export default function EditActivityPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>(); // templateId now
   const nav = useNavigate();
 
   const [tab, setTab] = useState<Tab>("DETAILS");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [busyPublish, setBusyPublish] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [template, setTemplate] = useState<ActivityTemplateResponse | null>(null);
 
-  const [activity, setActivity] = useState<ActivityResponse | null>(null);
-
-  // editable fields
+  // editable fields (TEMPLATE fields only)
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
   const [price, setPrice] = useState<number>(0);
-  const [date, setDate] = useState<string>("");
-  const [capacity, setCapacity] = useState<number>(3);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [location, setLocation] = useState<AddressResponse | null>(null);
   const [tagsText, setTagsText] = useState<string>("");
-
-  const readOnly = (activity?.status ?? "DRAFT") === "CANCELLED";
 
   useEffect(() => {
     listCategories({ activeOnly: true })
@@ -69,23 +69,25 @@ export default function EditActivityPage() {
       setLoading(true);
       setErr(null);
       setOk(null);
-      try {
-        const a = await getActivityById(id);
-        if (dead) return;
-        setActivity(a);
 
-        setTitle(a.title ?? "");
-        setDescription(a.description ?? "");
-        setDifficulty((a.difficulty ?? "EASY") as Difficulty);
-        setPrice(Number(a.price ?? 0));
-        setDate(toLocalInputValue(a.date));
-        setCapacity(Number(a.capacity ?? 3));
-        setCategoryIds(a.categoryIds ?? []);
-        setLocation((a.address as any) ?? null);
-        setTagsText((a.tags ?? []).join(", "));
+      try {
+        const t = await getTemplateById(id);
+        if (dead) return;
+
+        setTemplate(t);
+
+        setTitle(t.title ?? "");
+        setDescription(t.description ?? "");
+        setDifficulty((t.difficulty ?? "EASY") as Difficulty);
+        setPrice(Number(t.price ?? 0));
+        setCategoryIds(t.categoryIds ?? []);
+        // NOTE: guide template response currently does not include address object,
+        // so keep location picker empty unless you return it from backend.
+        setLocation(null);
+        setTagsText((t.tags ?? []).join(", "));
       } catch (e) {
         if (dead) return;
-        setErr(e instanceof Error ? e.message : "Failed to load activity");
+        setErr(e instanceof Error ? e.message : "Failed to load template");
       } finally {
         if (!dead) setLoading(false);
       }
@@ -96,14 +98,13 @@ export default function EditActivityPage() {
   }, [id]);
 
   function toggleCategory(cid: string) {
-    if (readOnly) return;
     setCategoryIds((prev) => (prev.includes(cid) ? prev.filter((x) => x !== cid) : [...prev, cid]));
   }
 
   const imagesSorted = useMemo(() => {
-    const imgs = activity?.images ?? [];
+    const imgs = template?.images ?? [];
     return [...imgs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [activity]);
+  }, [template]);
 
   function buildAddressPick(loc: AddressResponse): AddressPickDto {
     return {
@@ -126,8 +127,7 @@ export default function EditActivityPage() {
   }
 
   async function onSave() {
-    if (!id || !activity) return;
-    if (readOnly) return;
+    if (!id || !template) return;
 
     setSaving(true);
     setErr(null);
@@ -139,15 +139,14 @@ export default function EditActivityPage() {
         description: description.trim(),
         difficulty,
         price,
-        date: new Date(date).toISOString(),
-        capacity,
         categoryIds,
         tags: parseTags(tagsText),
+        // send address only if you allow editing it via template update
         address: location ? buildAddressPick(location) : undefined,
       };
 
-      const updated = await updateActivity(id, payload);
-      setActivity(updated);
+      const updated = await updateTemplate(id, payload);
+      setTemplate(updated);
       setOk("Saved ✅");
     } catch (e) {
       setErr(niceError(e instanceof Error ? e.message : "Save failed"));
@@ -156,31 +155,9 @@ export default function EditActivityPage() {
     }
   }
 
-  async function togglePublish() {
-    if (!id || !activity) return;
-    if (readOnly) return;
-
-    const current = activity.status ?? "DRAFT";
-    const next: ActivityStatus = current === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
-
-    setBusyPublish(true);
-    setErr(null);
-    setOk(null);
-    try {
-      const updated = await setActivityStatus(id, next);
-      setActivity(updated);
-      setOk(next === "PUBLISHED" ? "Published ✅" : "Unpublished ✅");
-    } catch (e) {
-      setErr(niceError(e instanceof Error ? e.message : "Publish failed"));
-    } finally {
-      setBusyPublish(false);
-    }
-  }
-
   async function onUpload(files: FileList | null) {
-    if (!id || !activity) return;
+    if (!id || !template) return;
     if (!files || files.length === 0) return;
-    if (readOnly) return;
 
     setUploading(true);
     setErr(null);
@@ -189,11 +166,11 @@ export default function EditActivityPage() {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const updated = await addActivityImage(id, file, {
-          cover: i === 0 && (activity.images?.length ?? 0) === 0,
-          alt: title.trim() || "Activity image",
+        const updated = await addTemplateImage(id, file, {
+          cover: i === 0 && (template.images?.length ?? 0) === 0,
+          alt: title.trim() || "Template image",
         });
-        setActivity(updated);
+        setTemplate(updated);
       }
       setOk("Photos uploaded ✅");
     } catch (e) {
@@ -205,13 +182,12 @@ export default function EditActivityPage() {
 
   async function onSetCover(publicId?: string | null) {
     if (!id || !publicId) return;
-    if (readOnly) return;
 
     setErr(null);
     setOk(null);
     try {
-      const updated = await setActivityCover_query(id, publicId);
-      setActivity(updated);
+      const updated = await setTemplateCoverImage(id, publicId);
+      setTemplate(updated);
       setOk("Cover updated ✅");
     } catch (e) {
       setErr(niceError(e instanceof Error ? e.message : "Cover update failed"));
@@ -220,13 +196,12 @@ export default function EditActivityPage() {
 
   async function onDelete(publicId?: string | null) {
     if (!id || !publicId) return;
-    if (readOnly) return;
 
     setErr(null);
     setOk(null);
     try {
-      const updated = await deleteActivityImage_query(id, publicId);
-      setActivity(updated);
+      const updated = await deleteTemplateImage(id, publicId);
+      setTemplate(updated);
       setOk("Photo deleted ✅");
     } catch (e) {
       setErr(niceError(e instanceof Error ? e.message : "Delete failed"));
@@ -237,15 +212,15 @@ export default function EditActivityPage() {
   const [dragId, setDragId] = useState<string | null>(null);
 
   async function commitReorder(nextImages: ActivityImage[]) {
-    if (!id || readOnly) return;
+    if (!id) return;
     const ids = nextImages.map((x) => x.publicId).filter(Boolean) as string[];
     if (ids.length === 0) return;
 
     setErr(null);
     setOk(null);
     try {
-      const updated = await reorderActivityImages(id, ids);
-      setActivity(updated);
+      const updated = await reorderTemplateImages(id, ids);
+      setTemplate(updated);
       setOk("Reordered ✅");
     } catch (e) {
       setErr(niceError(e instanceof Error ? e.message : "Reorder failed"));
@@ -258,8 +233,7 @@ export default function EditActivityPage() {
 
   function onDrop(target: ActivityImage) {
     if (!dragId) return;
-    if (!activity) return;
-    if (readOnly) return;
+    if (!template) return;
 
     const list = imagesSorted;
     const fromIdx = list.findIndex((x) => x.publicId === dragId);
@@ -270,23 +244,24 @@ export default function EditActivityPage() {
     const [moved] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, moved);
 
-    // locally update orders for instant UI feel
     const normalized = next.map((x, idx) => ({ ...x, order: idx }));
-    setActivity((prev) => (prev ? { ...prev, images: normalized } : prev));
+    setTemplate((prev) => (prev ? { ...prev, images: normalized } : prev));
     commitReorder(normalized);
     setDragId(null);
   }
 
   if (loading) return <div className={styles.ea}>Loading…</div>;
-  if (!activity) return <div className={styles.ea}>Not found.</div>;
+  if (!template) return <div className={styles.ea}>Not found.</div>;
 
   return (
     <div className={styles.ea}>
       <div className={styles.eaTop}>
         <div>
-          <div className={styles.eaKicker}>Edit Activity</div>
-          <h1 className={styles.eaTitle}>{activity.title}</h1>
-          {readOnly && <div className={styles.eaReadonly}>🔒 Cancelled activities are read-only</div>}
+          <div className={styles.eaKicker}>Edit Template</div>
+          <h1 className={styles.eaTitle}>{template.title}</h1>
+          <div className={styles.eaReadonly} style={{ opacity: 0.85 }}>
+            Publishing is per session (dates) — edit sessions to publish/unpublish.
+          </div>
         </div>
 
         <div className={styles.eaActions}>
@@ -294,17 +269,7 @@ export default function EditActivityPage() {
             ← Back
           </button>
 
-          <button
-            className={styles.eaBtn}  
-            type="button"
-            onClick={togglePublish}
-            disabled={busyPublish || saving || uploading || readOnly}
-            title={readOnly ? "Cancelled activities are read-only" : ""}
-          >
-            {busyPublish ? "…" : (activity.status ?? "DRAFT") === "PUBLISHED" ? "Unpublish" : "Publish"}
-          </button>
-
-          <button className={`${styles.eaBtn} ${styles.eaBtnPrimary}`} type="button" onClick={onSave} disabled={saving || uploading || readOnly}>
+          <button className={`${styles.eaBtn} ${styles.eaBtnPrimary}`} type="button" onClick={onSave} disabled={saving || uploading}>
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
@@ -330,12 +295,12 @@ export default function EditActivityPage() {
           <div className={styles.eaGrid}>
             <div className={styles.eaField}>
               <label>Title</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={readOnly} />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
 
             <div className={styles.eaField}>
               <label>Difficulty</label>
-              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)} disabled={readOnly}>
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty)}>
                 <option value="EASY">🟢 EASY</option>
                 <option value="MEDIUM">🟡 MEDIUM</option>
                 <option value="HARD">🔴 HARD</option>
@@ -344,27 +309,17 @@ export default function EditActivityPage() {
 
             <div className={styles.eaField}>
               <label>Price (TND)</label>
-              <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(Number(e.target.value))} disabled={readOnly} />
-            </div>
-
-            <div className={styles.eaField}>
-              <label>Date & Time</label>
-              <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} disabled={readOnly} />
-            </div>
-
-            <div className={styles.eaField}>
-              <label>Capacity</label>
-              <input type="number" min={3} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} disabled={readOnly} />
+              <input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
             </div>
 
             <div className={`${styles.eaField} ${styles.eaFieldFull}`}>
               <label>Description</label>
-              <textarea rows={6} value={description} onChange={(e) => setDescription(e.target.value)} disabled={readOnly} />
+              <textarea rows={6} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
 
             <div className={`${styles.eaField} ${styles.eaFieldFull}`}>
               <label>Tags (comma separated)</label>
-              <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} disabled={readOnly} placeholder="camping, sunrise, family" />
+              <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="camping, sunrise, family" />
             </div>
 
             <div className={`${styles.eaField} ${styles.eaFieldFull}`}>
@@ -376,9 +331,8 @@ export default function EditActivityPage() {
                     <button
                       key={c.id}
                       type="button"
-                      className={`${styles.eaCat} ${selected ? styles.eaCatSelected  : ""}`}
+                      className={`${styles.eaCat} ${selected ? styles.eaCatSelected : ""}`}
                       onClick={() => toggleCategory(c.id)}
-                      disabled={readOnly}
                     >
                       {c.name}
                     </button>
@@ -390,6 +344,9 @@ export default function EditActivityPage() {
             <div className={`${styles.eaField} ${styles.eaFieldFull}`}>
               <label>Location</label>
               <LocationPicker value={location} onChange={setLocation} label="Meeting Point" />
+              <div style={{ marginTop: 6, opacity: 0.8, fontSize: 12 }}>
+                If location doesn’t prefill: return address in template response (optional).
+              </div>
             </div>
           </div>
         </div>
@@ -401,12 +358,12 @@ export default function EditActivityPage() {
               <div className={styles.eaPhotoSub}>Drag & drop to reorder. Click a photo to set cover.</div>
             </div>
 
-            <div className={styles.eaPhotoActions}  >
+            <div className={styles.eaPhotoActions}>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
-                disabled={uploading || readOnly}
+                disabled={uploading}
                 onChange={(e) => onUpload(e.target.files)}
               />
             </div>
@@ -417,22 +374,19 @@ export default function EditActivityPage() {
               <div
                 key={img.publicId ?? img.url}
                 className={`${styles.eaPhoto} ${dragId && dragId === img.publicId ? styles.eaPhotoDragging : ""}`}
-                draggable={!readOnly}
+                draggable
                 onDragStart={() => onDragStart(img)}
-                onDragOver={(e) => {
-                  if (readOnly) return;
-                  e.preventDefault();
-                }}
+                onDragOver={(e) => e.preventDefault()}
                 onDrop={() => onDrop(img)}
               >
-                <img src={img.url} alt={img.alt ?? "Activity photo"} />
+                <img src={img.url} alt={img.alt ?? "Template photo"} />
                 <div className={styles.eaPhotoOverlay}>
                   {img.cover && <span className={styles.eaPill}>Cover</span>}
                   <div className={styles.eaPhotoBtns}>
-                    <button type="button" onClick={() => onSetCover(img.publicId)} disabled={readOnly}>
+                    <button type="button" onClick={() => onSetCover(img.publicId)}>
                       Set cover
                     </button>
-                    <button type="button" onClick={() => onDelete(img.publicId)} disabled={readOnly}>
+                    <button type="button" onClick={() => onDelete(img.publicId)}>
                       Delete
                     </button>
                   </div>

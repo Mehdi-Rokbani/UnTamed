@@ -1,16 +1,16 @@
-// src/pages/CreateActivityPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type {
-  ActivityCreatePayload,
   ActivityImage,
-  ActivityResponse,
   Difficulty,
+  ActivityTemplateCreatePayload,
+  ActivityTemplateResponse,
+  ActivitySessionCreatePayload,
 } from "../types/activity";
 import type { AddressResponse } from "../types/geo";
 import type { Category } from "../types/category";
 
-import { addActivityImage, createActivity } from "../api/activity.api";
+import { addTemplateImage, createTemplate, createSession } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 
 import LocationPicker from "../components/LocationPicker";
@@ -28,6 +28,8 @@ export default function CreateActivityPage() {
   const [description, setDescription] = useState<string>("");
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
   const [price, setPrice] = useState<number>(0);
+
+  // session fields (Design A)
   const [date, setDate] = useState<string>("");
   const [capacity, setCapacity] = useState<number>(3);
 
@@ -38,8 +40,8 @@ export default function CreateActivityPage() {
   // Location
   const [location, setLocation] = useState<AddressResponse | null>(null);
 
-  // After creation
-  const [created, setCreated] = useState<ActivityResponse | null>(null);
+  // After template creation
+  const [createdTemplate, setCreatedTemplate] = useState<ActivityTemplateResponse | null>(null);
   const [images, setImages] = useState<ActivityImage[]>([]);
 
   // UI state
@@ -68,18 +70,18 @@ export default function CreateActivityPage() {
   // Validation per step
   const step1Valid = title.trim().length > 2 && description.trim().length > 5;
   const step2Valid = !!difficulty && price >= 0;
-  const step3Valid = !!date && capacity >= 3;
+  const step3Valid = !!date && capacity >= 3; // first session
   const step4Valid = categoryIds.length > 0;
   const step5Valid = location !== null;
   const step6Valid = images.length > 0;
 
-  const canCreateDraft = step1Valid && step2Valid && step3Valid && step4Valid && step5Valid;
+  const canCreateTemplate = step1Valid && step2Valid && step4Valid && step5Valid;
 
   const progressSteps = useMemo(
     () => [
       { n: 1, title: "Basic Info", desc: "Title & Description" },
       { n: 2, title: "Details", desc: "Difficulty & Price" },
-      { n: 3, title: "Schedule", desc: "Date & Capacity" },
+      { n: 3, title: "Schedule", desc: "First Date & Capacity" },
       { n: 4, title: "Categories", desc: "Select at least one" },
       { n: 5, title: "Location", desc: "Pick a place" },
       { n: 6, title: "Images", desc: "Upload photos" },
@@ -95,25 +97,23 @@ export default function CreateActivityPage() {
     if (step > 1) setStep((step - 1) as Step);
   };
 
-  // Creates the draft activity in the background
-  async function onCreateDraft(): Promise<boolean> {
+  // Step 5: create TEMPLATE (not session yet)
+  async function onCreateTemplate(): Promise<boolean> {
     setStatus(null);
 
-    if (!canCreateDraft || !location) {
-      setStatus("Please complete all steps before submitting.");
+    if (!canCreateTemplate || !location) {
+      setStatus("Please complete all required steps before continuing.");
       return false;
     }
 
-    const payload: ActivityCreatePayload = {
+    const payload: ActivityTemplateCreatePayload = {
       title: title.trim(),
       description: description.trim(),
       difficulty,
       price,
-      date: new Date(date).toISOString(),
-      capacity,
       categoryIds,
+      tags: [], // add tags later if you want
       address: {
-       
         provider: location.provider,
         providerPlaceId: location.providerPlaceId,
         displayName: location.displayName,
@@ -128,34 +128,33 @@ export default function CreateActivityPage() {
 
     try {
       setSubmitting(true);
-      const res = await createActivity(payload);
-      setCreated(res);
+      const res = await createTemplate(payload);
+      setCreatedTemplate(res);
       setImages(res.images ?? []);
-      setStatus("Draft created. Now upload pictures.");
+      setStatus("Template created. Now upload pictures.");
       return true;
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to create activity");
+      setStatus(err instanceof Error ? err.message : "Failed to create template");
       return false;
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Step 5 Next: silently create draft then advance to step 6
+  // Step 5 Next: create template then advance to step 6
   async function handleStep5Next() {
-    if (created) {
-      // Already created, just advance
+    if (createdTemplate) {
       setStep(6);
       return;
     }
-    const ok = await onCreateDraft();
+    const ok = await onCreateTemplate();
     if (ok) setStep(6);
   }
 
   async function onUploadFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    if (!created?.id) {
-      setStatus("Create the activity first.");
+    if (!createdTemplate?.id) {
+      setStatus("Create the template first.");
       return;
     }
 
@@ -165,11 +164,11 @@ export default function CreateActivityPage() {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const updated = await addActivityImage(created.id, file, {
+        const updated = await addTemplateImage(createdTemplate.id, file, {
           cover: i === 0 && images.length === 0,
           alt: title.trim() || "Activity image",
         });
-        setCreated(updated);
+        setCreatedTemplate(updated);
         setImages(updated.images ?? []);
       }
       setStatus("Images uploaded successfully ✅");
@@ -177,6 +176,39 @@ export default function CreateActivityPage() {
       setStatus(err instanceof Error ? err.message : "Failed to upload images");
     } finally {
       setUploading(false);
+    }
+  }
+
+  // Finish: create FIRST SESSION then navigate
+  async function onFinish() {
+    setStatus(null);
+
+    if (!createdTemplate?.id) {
+      setStatus("Template not created.");
+      return;
+    }
+    if (!step3Valid) {
+      setStatus("Please set a valid date and capacity.");
+      return;
+    }
+    if (!step6Valid) {
+      setStatus("Please upload at least one image.");
+      return;
+    }
+
+    const body: ActivitySessionCreatePayload = {
+      date: new Date(date).toISOString(),
+      capacity,
+    };
+
+    try {
+      setSubmitting(true);
+      await createSession(createdTemplate.id, body);
+      navigate("/home");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to create session");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -190,7 +222,7 @@ export default function CreateActivityPage() {
     setCapacity(3);
     setCategoryIds([]);
     setLocation(null);
-    setCreated(null);
+    setCreatedTemplate(null);
     setImages([]);
     setStatus(null);
     setSubmitting(false);
@@ -302,7 +334,7 @@ export default function CreateActivityPage() {
                       <input
                         id="price"
                         type="number"
-                        className={styles.formInput}  
+                        className={styles.formInput}
                         min={0}
                         step={0.01}
                         value={price}
@@ -319,8 +351,8 @@ export default function CreateActivityPage() {
             {/* Step 3 */}
             {step === 3 && (
               <div className={styles.formStep}>
-                <h2 className={styles.stepHeading}>When and how many?</h2>
-                <p className={styles.stepSubheading}>Set the date and group capacity</p>
+                <h2 className={styles.stepHeading}>First date and capacity</h2>
+                <p className={styles.stepSubheading}>You can add more dates later from sessions</p>
 
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
@@ -376,11 +408,7 @@ export default function CreateActivityPage() {
                         aria-pressed={selected}
                       >
                         <div className={styles.categoryIcon}>
-                          {icon && isImageUrl(icon) ? (
-                            <img src={icon} alt={c.name ?? "Category icon"} />
-                          ) : (
-                            <span>{icon ?? "📦"}</span>
-                          )}
+                          {icon && isImageUrl(icon) ? <img src={icon} alt={c.name ?? "Category icon"} /> : <span>{icon ?? "📦"}</span>}
                         </div>
                         <div className={styles.categoryTitle}>{c.name}</div>
                         {c.description && <div className={styles.categoryDesc}>{c.description}</div>}
@@ -391,7 +419,7 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 5: Location */}
+            {/* Step 5: Location (creates template on Next) */}
             {step === 5 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Where's the adventure?</h2>
@@ -415,13 +443,13 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 6: Images */}
+            {/* Step 6: Images (upload to template) */}
             {step === 6 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Upload pictures</h2>
                 <p className={styles.stepSubheading}>Add a cover photo and gallery images for your activity.</p>
 
-                {!created?.id ? (
+                {!createdTemplate?.id ? (
                   <div className={styles.infoCard}>
                     <div>Something went wrong. Please go back and try again.</div>
                   </div>
@@ -493,22 +521,17 @@ export default function CreateActivityPage() {
               <div className={`${styles.statusMessage} ${status.includes("✅") ? styles.success : styles.error}`}>{status}</div>
             )}
 
-            {/* ── Navigation Buttons ── */}
+            {/* Navigation */}
             <div className={styles.formNavigation}>
               {step > 1 && (
-                <button
-                  type="button"
-                  className={styles.navBtnSecondary}
-                  onClick={prevStep}
-                  disabled={submitting || uploading}
-                >
+                <button type="button" className={styles.navBtnSecondary} onClick={prevStep} disabled={submitting || uploading}>
                   Previous
                 </button>
               )}
 
               <div className={styles.navSpacer} />
 
-              {/* Steps 1–4: plain Next */}
+              {/* Steps 1–4: Next */}
               {step >= 1 && step <= 4 && (
                 <button
                   type="button"
@@ -526,39 +549,29 @@ export default function CreateActivityPage() {
                 </button>
               )}
 
-              {/* Step 5: Next (silently creates draft) — no "Create Draft" button */}
+              {/* Step 5: Next creates template */}
               {step === 5 && (
-                <button
-                  type="button"
-                  className={styles.navBtnPrimary}
-                  onClick={handleStep5Next}
-                  disabled={!step5Valid || submitting}
-                >
+                <button type="button" className={styles.navBtnPrimary} onClick={handleStep5Next} disabled={!step5Valid || submitting}>
                   {submitting ? "Creating..." : "Next"}
                 </button>
               )}
 
-              {/* Step 6: Finish → /home */}
+              {/* Step 6: Finish creates first session */}
               {step === 6 && (
                 <button
                   type="button"
                   className={styles.navBtnPrimarySubmit}
-                  disabled={uploading || !created?.id || !step6Valid}
-                  onClick={() => navigate("/home")}
+                  disabled={uploading || submitting || !createdTemplate?.id || !step6Valid}
+                  onClick={onFinish}
                 >
-                  {uploading ? "Uploading..." : "Finish"}
+                  {submitting ? "Finishing..." : "Finish"}
                 </button>
               )}
             </div>
 
-            {created?.id && (
+            {createdTemplate?.id && (
               <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  className={styles.navBtnSecondary}
-                  onClick={resetAll}
-                  disabled={submitting || uploading}
-                >
+                <button type="button" className={styles.navBtnSecondary} onClick={resetAll} disabled={submitting || uploading}>
                   Start Over
                 </button>
               </div>
