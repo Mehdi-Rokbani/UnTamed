@@ -50,18 +50,11 @@ export function Header() {
           <Link to="/home" className={styles.navLink} onClick={closeMobileMenu}>
             Home
           </Link>
-          <Link to="/contact" className={styles.navLink} onClick={closeMobileMenu}>
-            Contact
+          {user?.role === "GUIDE" && (
+                  <Link to="/guide" className={styles.navLink} onClick={closeMobileMenu}>
+            Dashboard
           </Link>
-          <Link to="/blog" className={styles.navLink} onClick={closeMobileMenu}>
-            Blog
-          </Link>
-          <Link to="/support" className={styles.navLink} onClick={closeMobileMenu}>
-            Support
-          </Link>
-          <Link to="/about" className={styles.navLink} onClick={closeMobileMenu}>
-            About
-          </Link>
+                )}
 
           {/* Mobile only items */}
           {user && (

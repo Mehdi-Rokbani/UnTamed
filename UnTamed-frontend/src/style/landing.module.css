@@ -21,34 +21,12 @@
   --shadow-xl: 0 20px 60px rgba(26, 77, 46, 0.25);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
 
-#root {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-}
 
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
-body {
-  font-family: 'Poppins', sans-serif;
-  color: var(--text-dark);
-  overflow-x: hidden;
-}
 
 .landing-page {
   width: 100%;
-  min-width: 100vw;
+  
   overflow-x: hidden;
   margin: 0;
   padding: 0;
@@ -70,7 +48,7 @@ body {
   padding-top: 73px; /* But keep content below header */
 }
 
-.hero-background1 {
+.hero-background {
   position: absolute;
   top: 0;
   left: 0;
