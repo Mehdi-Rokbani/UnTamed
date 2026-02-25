@@ -185,3 +185,27 @@ export async function setSessionPublished(id: string, published: boolean) {
 
 }
 
+
+export type CreateBookingRequest = {
+  sessionId: string;
+  numberOfPeople: number;
+};
+
+export type BookingStatus = "PENDING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+
+export type BookingResponse = {
+  id: string;
+  userId: string;
+  sessionId: string;
+  numberOfPeople: number;
+  status: BookingStatus;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export async function createBooking(body: CreateBookingRequest) {
+  const { data } = await http.post<BookingResponse>("/api/bookings", body, {
+    withCredentials: true, // cookie auth
+  });
+  return data;
+}

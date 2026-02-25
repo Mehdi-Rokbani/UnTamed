@@ -20,6 +20,7 @@ import GuideLayout from "./components/GuideLayout";
 import GuideActivitiesPage from "./pages/GuideActivitiesPage";
 import EditActivityPage from "./pages/EditActivityPage";
 import TemplateSessionsPage from "./pages/Templatesessionspage";
+import MyBookingsPage from "./pages/MyBookingsPage";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -54,6 +55,15 @@ export default function App() {
             </RequireAuth>
           }
         />
+
+        <Route
+  path="/my-bookings"
+  element={
+    <RequireAuth>
+      <MyBookingsPage />
+    </RequireAuth>
+  }
+/>
 
         {/* Profile */}
         <Route

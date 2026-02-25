@@ -9,5 +9,13 @@ export default defineConfig({
       localsConvention: 'camelCaseOnly', // converts kebab-case → camelCase
     },
   },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
+  },
 })
 
