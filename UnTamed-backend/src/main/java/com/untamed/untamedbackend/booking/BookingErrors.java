@@ -15,5 +15,6 @@ public final class BookingErrors {
     public static final String BOOKING_NOT_FOUND = "Booking not found";
     public static final String BOOKING_NOT_OWNED = "Not your booking";
     public static final String BOOKING_NOT_ACTIVE = "Booking is not active";
+    public static final String BOOKING_IMMUTABLE_PAID = "This booking is already paid and cannot be changed";
     public static final String SOLD_OUT = "Not enough spots left";
 }

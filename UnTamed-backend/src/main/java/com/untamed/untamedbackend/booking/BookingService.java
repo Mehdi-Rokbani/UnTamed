@@ -16,10 +16,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BookingService {
 
-    private static final Duration CUTOFF = Duration.ofHours(5);
-
     private final BookingRepository bookingRepository;
     private final SessionSeatOps sessionSeatOps;
+    private final BookingPolicyProperties policy;
+
+    private Duration cutoff() {
+        long h = policy.getCutoffHours();
+        return Duration.ofHours(h > 0 ? h : 5);
+    }
+
+    private Duration pendingHold() {
+        long m = policy.getPendingMinutes();
+        return Duration.ofMinutes(m > 0 ? m : 15);
+    }
 
     public String requireUserId(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
@@ -28,25 +37,27 @@ public class BookingService {
         return auth.getName(); // your system currently uses email as name (fine)
     }
 
-    /** Option 1: one active booking per user+session.
-     * If an active booking exists (PENDING/COMPLETED), we increase seats instead of creating a new booking.
+    /**
+     * v1 behaviour:
+     * - If a PENDING booking exists for (userId, sessionId) => increase seats on that PENDING booking.
+     * - If not, create a NEW PENDING booking (even if old COMPLETED bookings exist).
+     *
+     * This pairs with a DB partial unique index:
+     *   unique(userId, sessionId) WHERE status == PENDING
      */
     public Booking createOrIncreaseBooking(String userId, String sessionId, int people) {
         if (people < 1) throw bad(BookingErrors.INVALID_PEOPLE);
 
-        // validate session and cutoff + guide restriction
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
         validateSessionBookable(session, userId);
 
-        // if active booking exists -> increase seats
-        var existingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatusIn(
-                userId,
-                sessionId,
-                List.of(BookingStatus.PENDING, BookingStatus.COMPLETED)
+        // only reuse PENDING booking (never reuse COMPLETED)
+        var pendingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
+                userId, sessionId, BookingStatus.PENDING
         );
 
-        if (existingOpt.isPresent()) {
-            return increaseSeats(existingOpt.get().getId(), userId, people);
+        if (pendingOpt.isPresent()) {
+            return increaseSeats(pendingOpt.get().getId(), userId, people);
         }
 
         // reserve seats atomically
@@ -74,7 +85,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertActive(b);
+        assertPendingMutable(b); // COMPLETED is immutable (Option A)
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionBookable(session, userId);
@@ -84,14 +95,7 @@ public class BookingService {
 
         b.setNumberOfPeople(b.getNumberOfPeople() + delta);
         b.setUpdatedAt(Instant.now());
-
-        // If still pending, keep/extend expiry window
-        if (b.getStatus() == BookingStatus.PENDING) {
-            b.setExpiresAt(computeExpiresAt(session.getDate(), Instant.now()));
-        } else {
-            // COMPLETED bookings do not expire
-            b.setExpiresAt(null);
-        }
+        b.setExpiresAt(computeExpiresAt(session.getDate(), Instant.now()));
 
         return bookingRepository.save(b);
     }
@@ -103,31 +107,24 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertActive(b);
+        assertPendingMutable(b); // COMPLETED is immutable (Option A)
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
 
         int current = b.getNumberOfPeople();
         if (delta >= current) {
-            // decreasing to 0 -> cancel
+            // decreasing to 0 => cancel
             cancelBooking(bookingId, userId);
-            // reload the booking
             return bookingRepository.findById(bookingId)
                     .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
         }
 
-        // release seats
         sessionSeatOps.releaseSeats(b.getSessionId(), delta);
 
         b.setNumberOfPeople(current - delta);
         b.setUpdatedAt(Instant.now());
-
-        // if completed, mark refund metadata (actual refund will be wired later)
-        if (b.getStatus() == BookingStatus.COMPLETED) {
-            b.setRefundRequested(true);
-            b.setRefundSeatsRequested(b.getRefundSeatsRequested() + delta);
-        }
+        b.setExpiresAt(computeExpiresAt(session.getDate(), Instant.now()));
 
         return bookingRepository.save(b);
     }
@@ -137,7 +134,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertActive(b);
+        assertPendingMutable(b); // COMPLETED is immutable (Option A)
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
@@ -151,11 +148,6 @@ public class BookingService {
         b.setStatus(BookingStatus.CANCELLED);
         b.setUpdatedAt(Instant.now());
         b.setExpiresAt(null);
-
-        if (b.getStatus() == BookingStatus.COMPLETED) {
-            b.setRefundRequested(true);
-            b.setRefundSeatsRequested(b.getRefundSeatsRequested() + toRelease);
-        }
 
         bookingRepository.save(b);
 
@@ -186,6 +178,10 @@ public class BookingService {
         bookingRepository.save(b);
     }
 
+    public List<Booking> listMine(String userId) {
+        return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
     // ---------- rules ----------
     private void validateSessionBookable(ActivitySession session, String userId) {
         if (session.getStatus() != ActivityStatus.PUBLISHED) {
@@ -203,7 +199,9 @@ public class BookingService {
         Instant now = Instant.now();
         Instant start = session.getDate();
         if (start == null) return;
-        if (start.minus(CUTOFF).isBefore(now)) {
+
+        // block if now is on/after (start - cutoff)
+        if (!now.isBefore(start.minus(cutoff()))) {
             throw conflict(BookingErrors.SESSION_CUTOFF);
         }
     }
@@ -214,24 +212,23 @@ public class BookingService {
         }
     }
 
-    private void assertActive(Booking b) {
+    private void assertPendingMutable(Booking b) {
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
+        if (b.getStatus() == BookingStatus.COMPLETED) {
+            throw conflict(BookingErrors.BOOKING_IMMUTABLE_PAID);
+        }
+        // only PENDING reaches here
     }
 
     // ---------- expiry policy ----------
-    // Simple policy:
-    // - if session far away (>= 3 days): expires in 24h
-    // - if closer (< 3 days): expires in 30 minutes
-    // - but never beyond cutoff (start - 5h)
+    // v1 policy:
+    // - Holds expire after pendingMinutes (default 15)
+    // - But never beyond cutoff (start - cutoffHours)
     private Instant computeExpiresAt(Instant sessionDate, Instant now) {
-        Duration farThreshold = Duration.ofDays(3);
-        Duration hold = sessionDate.isAfter(now.plus(farThreshold)) ? Duration.ofHours(24) : Duration.ofMinutes(30);
-
-        Instant proposed = now.plus(hold);
-        Instant latest = sessionDate.minus(CUTOFF);
-
+        Instant proposed = now.plus(pendingHold());
+        Instant latest = sessionDate.minus(cutoff());
         return proposed.isAfter(latest) ? latest : proposed;
     }
 
@@ -246,9 +243,5 @@ public class BookingService {
 
     private ResponseStatusException notFound(String msg) {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, msg);
-    }
-
-    public List<Booking> listMine(String userId) {
-        return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 }

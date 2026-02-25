@@ -8,6 +8,18 @@ import java.util.Optional;
 
 public interface BookingRepository extends MongoRepository<Booking, String> {
 
+    /**
+     * v1 rule:
+     * - At most one PENDING booking per user+session.
+     * - COMPLETED bookings are immutable and do not get "reused" when creating a new booking.
+     */
+    Optional<Booking> findFirstByUserIdAndSessionIdAndStatus(
+            String userId,
+            String sessionId,
+            BookingStatus status
+    );
+
+    // kept (optional) for other uses / backwards compatibility
     Optional<Booking> findFirstByUserIdAndSessionIdAndStatusIn(
             String userId,
             String sessionId,
