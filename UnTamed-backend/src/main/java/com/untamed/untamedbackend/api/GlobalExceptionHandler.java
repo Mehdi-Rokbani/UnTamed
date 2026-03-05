@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.api;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -46,8 +48,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneric(Exception ex) {
-        // Don’t leak internals to frontend; keep message simple
+    public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletResponse res) {
+        if (res.isCommitted()) {
+            // Response already started/closed → cannot write JSON anymore
+            return null;
+        }
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error", Map.of());
     }
 
@@ -80,5 +85,14 @@ public class GlobalExceptionHandler {
         while (cur.getCause() != null) cur = cur.getCause();
         String msg = cur.getMessage();
         return (msg == null) ? t.getClass().getSimpleName() : msg;
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleRse(ResponseStatusException ex, HttpServletResponse res) {
+        if (res.isCommitted()) return null;
+
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String msg = (ex.getReason() != null) ? ex.getReason() : status.getReasonPhrase();
+        return build(status, msg, Map.of());
     }
 }

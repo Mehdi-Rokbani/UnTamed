@@ -38,12 +38,13 @@ public class BookingService {
     }
 
     /**
-     * v1 behaviour:
+     * v1 behaviour (payment-ready):
+     * - If a PAYING booking exists for (userId, sessionId) => block and force verify flow.
      * - If a PENDING booking exists for (userId, sessionId) => increase seats on that PENDING booking.
      * - If not, create a NEW PENDING booking (even if old COMPLETED bookings exist).
      *
      * This pairs with a DB partial unique index:
-     *   unique(userId, sessionId) WHERE status == PENDING
+     *   unique(userId, sessionId) WHERE status IN (PENDING, PAYING)
      */
     public Booking createOrIncreaseBooking(String userId, String sessionId, int people) {
         if (people < 1) throw bad(BookingErrors.INVALID_PEOPLE);
@@ -51,16 +52,27 @@ public class BookingService {
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
         validateSessionBookable(session, userId);
 
-        // only reuse PENDING booking (never reuse COMPLETED)
+        // 1) If payment is in progress, do not create a new booking (force /payments/verify)
+        var payingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
+                userId, sessionId, BookingStatus.PAYING
+        );
+        if (payingOpt.isPresent()) {
+            // helpful message for frontend behaviour
+            throw conflict("Payment in progress. Please verify payment status.");
+        }
+
+        // 2) Only reuse PENDING booking (never reuse COMPLETED)
         var pendingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
                 userId, sessionId, BookingStatus.PENDING
         );
 
         if (pendingOpt.isPresent()) {
+            // NOTE: this refreshes expiresAt (your current behavior).
+            // If later you want "expiresAt fixed from first hold", we can change this.
             return increaseSeats(pendingOpt.get().getId(), userId, people);
         }
 
-        // reserve seats atomically
+        // 3) Reserve seats atomically
         boolean reserved = sessionSeatOps.tryReserveSeats(sessionId, people);
         if (!reserved) throw conflict(BookingErrors.SOLD_OUT);
 
@@ -85,7 +97,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertPendingMutable(b); // COMPLETED is immutable (Option A)
+        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionBookable(session, userId);
@@ -107,7 +119,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertPendingMutable(b); // COMPLETED is immutable (Option A)
+        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
@@ -134,7 +146,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertPendingMutable(b); // COMPLETED is immutable (Option A)
+        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
@@ -162,6 +174,7 @@ public class BookingService {
         Booking b = bookingRepository.findById(bookingId).orElse(null);
         if (b == null) return;
 
+        // Expiration job only targets PENDING, keep that rule strict.
         if (b.getStatus() != BookingStatus.PENDING) return;
         if (b.getExpiresAt() == null) return;
         if (!b.getExpiresAt().isBefore(Instant.now())) return;
@@ -182,7 +195,89 @@ public class BookingService {
         return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
-    // ---------- rules ----------
+    // ---------------- PAYMENT HOOKS (to be called by PaymentService) ----------------
+
+    /**
+     * Move PENDING -> PAYING when /payments/create happens.
+     * If already PAYING, returns as-is (idempotent).
+     */
+    public Booking markPaying(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+
+        if (b.getStatus() == BookingStatus.COMPLETED) throw conflict(BookingErrors.BOOKING_IMMUTABLE_PAID);
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
+        }
+
+        // If already timed out, expire it immediately
+        if (b.getExpiresAt() != null && b.getExpiresAt().isBefore(Instant.now())) {
+            expireBooking(b.getId());
+            throw conflict("Booking expired");
+        }
+
+        if (b.getStatus() == BookingStatus.PAYING) return b;
+        if (b.getStatus() != BookingStatus.PENDING) throw conflict("Booking not payable");
+
+        b.setStatus(BookingStatus.PAYING);
+        b.setUpdatedAt(Instant.now());
+        return bookingRepository.save(b);
+    }
+
+    /**
+     * Payment success: PAYING -> COMPLETED (idempotent).
+     * Important: once COMPLETED, booking is immutable.
+     */
+    public Booking markCompleted(String bookingId) {
+        Booking b = bookingRepository.findById(bookingId).orElse(null);
+        if (b == null) return null;
+
+        if (b.getStatus() == BookingStatus.COMPLETED) return b; // idempotent
+
+        // If booking already released, payment came too late; caller decides refund/ignore policy.
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            return b;
+        }
+
+        b.setStatus(BookingStatus.COMPLETED);
+        b.setExpiresAt(null);
+        b.setUpdatedAt(Instant.now());
+        return bookingRepository.save(b);
+    }
+
+    /**
+     * Payment failure: if hold deadline passed => EXPIRED + seats released; else => back to PENDING.
+     */
+    public Booking handlePaymentFailed(String bookingId) {
+        Booking b = bookingRepository.findById(bookingId).orElse(null);
+        if (b == null) return null;
+
+        if (b.getStatus() == BookingStatus.COMPLETED) return b; // already paid
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) return b;
+
+        Instant now = Instant.now();
+        Instant exp = b.getExpiresAt();
+
+        if (exp != null && exp.isBefore(now)) {
+            // expire + release seats
+            expireBooking(b.getId());
+            return bookingRepository.findById(b.getId()).orElse(null);
+        }
+
+        // back to PENDING if we were PAYING
+        if (b.getStatus() == BookingStatus.PAYING) {
+            b.setStatus(BookingStatus.PENDING);
+            b.setUpdatedAt(now);
+            return bookingRepository.save(b);
+        }
+
+        return b;
+    }
+
+    // ---------------- rules ----------------
+
     private void validateSessionBookable(ActivitySession session, String userId) {
         if (session.getStatus() != ActivityStatus.PUBLISHED) {
             throw conflict(BookingErrors.SESSION_NOT_PUBLISHED);
@@ -212,17 +307,26 @@ public class BookingService {
         }
     }
 
-    private void assertPendingMutable(Booking b) {
+    /**
+     * Unpaid bookings that are mutable from the UI.
+     * - PENDING: mutable
+     * - PAYING: locked (we don't want users changing seats mid-checkout)
+     * - COMPLETED: immutable
+     */
+    private void assertMutableUnpaid(Booking b) {
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
         if (b.getStatus() == BookingStatus.COMPLETED) {
             throw conflict(BookingErrors.BOOKING_IMMUTABLE_PAID);
         }
+        if (b.getStatus() == BookingStatus.PAYING) {
+            throw conflict("Payment in progress. Verify payment status first.");
+        }
         // only PENDING reaches here
     }
 
-    // ---------- expiry policy ----------
+    // ---------------- expiry policy ----------------
     // v1 policy:
     // - Holds expire after pendingMinutes (default 15)
     // - But never beyond cutoff (start - cutoffHours)
@@ -232,7 +336,7 @@ public class BookingService {
         return proposed.isAfter(latest) ? latest : proposed;
     }
 
-    // ---------- helpers ----------
+    // ---------------- helpers ----------------
     private ResponseStatusException bad(String msg) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
     }

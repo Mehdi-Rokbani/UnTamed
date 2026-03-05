@@ -11,11 +11,14 @@ import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.core.index.PartialIndexFilter;
 import org.springframework.data.mongodb.core.query.Criteria;
 
+import java.util.List;
+
 /**
  * Ensures MongoDB indexes are present at startup.
  *
  * Goal:
- * - A user can have at most ONE *PENDING* booking per (userId, sessionId) at a time.
+ * - A user can have at most ONE unpaid-active booking per (userId, sessionId) at a time.
+ *   unpaid-active = PENDING or PAYING
  * - Completed/Expired/Cancelled bookings are allowed historically (multiple over time).
  */
 @Configuration
@@ -24,16 +27,20 @@ public class MongoIndexesConfig {
     @Bean
     ApplicationRunner ensureBookingIndexes(MongoTemplate mongoTemplate) {
         return args -> {
-            Index uniqPendingBookingPerUserSession = new Index()
+
+            Index uniqUnpaidActiveBooking = new Index()
                     .on("userId", Direction.ASC)
                     .on("sessionId", Direction.ASC)
-                    .named("uniq_pending_booking_user_session")
+                    .named("uniq_unpaid_active_booking_user_session")
                     .unique()
                     .partial(PartialIndexFilter.of(
-                            Criteria.where("status").is(BookingStatus.PENDING)
+                            Criteria.where("status").in(List.of(
+                                    BookingStatus.PENDING,
+                                    BookingStatus.PAYING
+                            ))
                     ));
 
-            mongoTemplate.indexOps(Booking.class).ensureIndex(uniqPendingBookingPerUserSession);
+            mongoTemplate.indexOps(Booking.class).ensureIndex(uniqUnpaidActiveBooking);
         };
     }
 }
