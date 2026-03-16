@@ -42,7 +42,7 @@ public class KonnectPaymentService {
                 .provider(PaymentProvider.KONNECT)
                 .status(PaymentAttemptStatus.CREATED)
                 .amount(amountMillimes)
-                .token(konnectProps.getToken())
+                .currency(konnectProps.getToken())
                 .idempotencyKey(idemKey)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())

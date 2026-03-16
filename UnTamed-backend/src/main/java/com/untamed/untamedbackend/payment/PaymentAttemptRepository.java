@@ -11,4 +11,5 @@ public interface PaymentAttemptRepository extends MongoRepository<PaymentAttempt
     Optional<PaymentAttempt> findByProviderAndProviderRef(PaymentProvider provider, String providerRef);
 
     boolean existsByIdempotencyKey(String idempotencyKey);
+
 }

@@ -39,46 +39,34 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        // allow Spring error endpoint
                         .requestMatchers("/error").permitAll()
-
-                        // allow browser preflight (CORS)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ----------------------------
                         // Public endpoints
-                        // ----------------------------
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/geo/**").permitAll()
-
-                        // Public templates browse (GetYourGuide style)
                         .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
-
-                        // Public sessions browse + session details
                         .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
 
-                        // ----------------------------
-                        // GUIDE-only endpoints
-                        // ----------------------------
+                        // Stripe webhook must be public
+                        .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
 
-                        // Templates management
+                        // Stripe payment creation must be authenticated
+                        .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create/**").authenticated()
+
+                        // GUIDE-only endpoints
                         .requestMatchers(HttpMethod.GET, "/api/templates/mine").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.POST, "/api/templates/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.PATCH, "/api/templates/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.DELETE, "/api/templates/**").hasRole("GUIDE")
 
-                        // Sessions management
                         .requestMatchers(HttpMethod.POST, "/api/sessions/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.PATCH, "/api/sessions/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.DELETE, "/api/sessions/**").hasRole("GUIDE")
 
-                        // Users (authenticated)
                         .requestMatchers("/api/users/**").authenticated()
-
-                        // Guides (GUIDE only)
                         .requestMatchers("/api/guides/**").hasRole("GUIDE")
 
-                        // everything else
                         .anyRequest().authenticated()
                 )
 
@@ -91,9 +79,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // For dev
         config.setAllowedOriginPatterns(List.of("http://localhost:5173"));
-
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -108,8 +94,5 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
+
 }

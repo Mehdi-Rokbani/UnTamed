@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * Ensures MongoDB indexes are present at startup.
- *
+
  * Goal:
  * - A user can have at most ONE unpaid-active booking per (userId, sessionId) at a time.
  *   unpaid-active = PENDING or PAYING

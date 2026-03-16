@@ -31,7 +31,7 @@ public class PaymentAttempt {
 
     // Money
     private int amount;        // millimes for TND per Konnect docs
-    private String token;      // TND/EUR/USD
+    private String currency;      // TND/EUR/USD
 
     // Provider references
     @Indexed(sparse = true)
