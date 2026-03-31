@@ -4,13 +4,20 @@ import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.model.*;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
-import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
+import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +27,7 @@ public class ActivityTemplatePublicService {
     private final ActivitySessionRepository sessionRepo;
     private final UserRepository userRepo;
     private final AddressRepository addressRepo;
+    private final MongoTemplate mongo;
 
     public List<PublicTemplateCardResponse> list() {
         Instant now = Instant.now();
@@ -36,15 +44,126 @@ public class ActivityTemplatePublicService {
         return toCard(t, now);
     }
 
-    private PublicTemplateCardResponse toCard(ActivityTemplate t, Instant now) {
+    public List<PublicSessionDto> listUpcomingSessions(String templateId) {
+        templateRepo.findById(templateId)
+                .orElseThrow(() -> new IllegalArgumentException("Template not found"));
 
-        // ── Rating ──
+        Instant now = Instant.now();
+        return sessionRepo
+                .findByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
+                        templateId, ActivityStatus.PUBLISHED, now)
+                .stream()
+                .map(s -> new PublicSessionDto(
+                        s.getId(),
+                        s.getDate(),
+                        s.getCapacity(),
+                        s.getBookedCount()
+                ))
+                .toList();
+    }
+
+    public List<PublicTemplateCardResponse> search(TemplateSearchCriteria c) {
+        Query query = new Query();
+        List<Criteria> criteriaList = new ArrayList<>();
+
+        boolean hasAddressId = c.addressId() != null && !c.addressId().isBlank();
+        boolean hasQ = c.q() != null && !c.q().isBlank();
+
+        // Exact selected address from suggestions
+        if (hasAddressId) {
+            criteriaList.add(Criteria.where("address_id").is(c.addressId()));
+        }
+        // Typed address search by display name
+        else if (hasQ) {
+            List<String> addressIds = addressRepo
+                    .findTop10ByDisplayNameContainingIgnoreCaseOrderByUsesCountDesc(c.q())
+                    .stream()
+                    .map(Address::getId)
+                    .toList();
+
+            if (addressIds.isEmpty()) {
+                return List.of();
+            }
+
+            criteriaList.add(Criteria.where("address_id").in(addressIds));
+        }
+
+        if (c.categoryId() != null && !c.categoryId().isBlank()) {
+            criteriaList.add(Criteria.where("category_ids").is(c.categoryId()));
+        }
+
+        if (c.difficulty() != null) {
+            criteriaList.add(Criteria.where("difficulty").is(c.difficulty()));
+        }
+
+        if (c.minPrice() != null || c.maxPrice() != null) {
+            Criteria priceCriteria = Criteria.where("price");
+
+            if (c.minPrice() != null) {
+                priceCriteria.gte(c.minPrice());
+            }
+            if (c.maxPrice() != null) {
+                priceCriteria.lte(c.maxPrice());
+            }
+
+            criteriaList.add(priceCriteria);
+        }
+
+        // Date filtering is based on sessions, not templates
+        Set<String> templateIdsMatchingDate = findTemplateIdsMatchingDateRange(c.dateFrom(), c.dateTo());
+        if (templateIdsMatchingDate != null) {
+            if (templateIdsMatchingDate.isEmpty()) {
+                return List.of();
+            }
+            criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
+        }
+
+        if (!criteriaList.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])));
+        }
+
+        Instant now = Instant.now();
+
+        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class).stream()
+                .map(t -> toCard(t, now))
+                .filter(card -> card.nextSession() != null)
+                .toList();
+
+        return sortResults(cards, c.sort());
+    }
+
+    private Set<String> findTemplateIdsMatchingDateRange(Instant dateFrom, Instant dateTo) {
+        boolean hasDateFrom = dateFrom != null;
+        boolean hasDateTo = dateTo != null;
+
+        if (!hasDateFrom && !hasDateTo) {
+            return null;
+        }
+
+        List<ActivitySession> sessions;
+
+        if (hasDateFrom && hasDateTo) {
+            sessions = sessionRepo.findByStatusAndDateBetween(
+                    ActivityStatus.PUBLISHED, dateFrom, dateTo);
+        } else if (hasDateFrom) {
+            sessions = sessionRepo.findByStatusAndDateAfter(
+                    ActivityStatus.PUBLISHED, dateFrom);
+        } else {
+            sessions = sessionRepo.findByStatusAndDateBefore(
+                    ActivityStatus.PUBLISHED, dateTo);
+        }
+
+        return sessions.stream()
+                .map(ActivitySession::getTemplateId)
+                .collect(Collectors.toSet());
+    }
+
+    private PublicTemplateCardResponse toCard(ActivityTemplate t, Instant now) {
         RatingSummary r = t.getRating() == null
                 ? RatingSummary.builder().average(0.0).count(0).build()
                 : t.getRating();
         RatingSummaryDto ratingDto = new RatingSummaryDto(r.getAverage(), r.getCount());
 
-        // ── Cover URL ──
         String coverUrl = null;
         if (t.getImages() != null && !t.getImages().isEmpty()) {
             coverUrl = t.getImages().stream()
@@ -54,42 +173,45 @@ public class ActivityTemplatePublicService {
                     .orElse(t.getImages().get(0).getUrl());
         }
 
-        // ── Images list ──
-        List<ActivityImageDto> imageDtos = t.getImages() == null ? List.of() :
-                t.getImages().stream()
-                        .sorted(java.util.Comparator.comparingInt(ActivityImage::getOrder))
-                        .map(img -> new ActivityImageDto(
-                                img.getUrl(),
-                                img.getPublicId(),
-                                img.getAlt(),
-                                img.isCover(),
-                                img.getOrder()
-                        ))
-                        .toList();
+        List<ActivityImageDto> imageDtos = t.getImages() == null
+                ? List.of()
+                : t.getImages().stream()
+                .sorted(Comparator.comparingInt(ActivityImage::getOrder))
+                .map(img -> new ActivityImageDto(
+                        img.getUrl(),
+                        img.getPublicId(),
+                        img.getAlt(),
+                        img.isCover(),
+                        img.getOrder()
+                ))
+                .toList();
 
-        // ── Next session ──
         PublicNextSessionDto next = sessionRepo
                 .findFirstByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
                         t.getId(), ActivityStatus.PUBLISHED, now)
                 .map(s -> new PublicNextSessionDto(
-                        s.getId(), s.getDate(), s.getCapacity(), s.getBookedCount()))
+                        s.getId(),
+                        s.getDate(),
+                        s.getCapacity(),
+                        s.getBookedCount()
+                ))
                 .orElse(null);
 
-        // ── Total booked count ──
         int totalBookedCount = sessionRepo.findByTemplateId(t.getId())
                 .stream()
                 .mapToInt(ActivitySession::getBookedCount)
                 .sum();
 
-        // ── Guide ──
         PublicGuideDto guideDto = null;
         User guide = userRepo.findById(t.getGuideId()).orElse(null);
         if (guide != null) {
             User.GuideProfile gp = guide.getGuideProfile();
+
             RatingSummaryDto guideRating = (gp != null && gp.getRatingSummary() != null)
                     ? new RatingSummaryDto(
                     gp.getRatingSummary().getAverage(),
-                    gp.getRatingSummary().getCount())
+                    gp.getRatingSummary().getCount()
+            )
                     : new RatingSummaryDto(0.0, 0);
 
             guideDto = new PublicGuideDto(
@@ -102,18 +224,13 @@ public class ActivityTemplatePublicService {
             );
         }
 
-        // ── Address ──
         String addressDisplayName = null;
         String governorate = null;
         Double latitude = null;
         Double longitude = null;
 
         if (t.getAddressId() != null) {
-            addressRepo.findById(t.getAddressId()).ifPresent(addr -> {
-                // handled below via local vars workaround
-            });
-            // Using orElse pattern to avoid effectively-final issue in lambda
-            var addr = addressRepo.findById(t.getAddressId()).orElse(null);
+            Address addr = addressRepo.findById(t.getAddressId()).orElse(null);
             if (addr != null) {
                 addressDisplayName = addr.getDisplayName();
                 governorate = addr.getGovernorate();
@@ -143,17 +260,39 @@ public class ActivityTemplatePublicService {
         );
     }
 
-    public List<PublicSessionDto> listUpcomingSessions(String templateId) {
-        templateRepo.findById(templateId)
-                .orElseThrow(() -> new IllegalArgumentException("Template not found"));
+    private List<PublicTemplateCardResponse> sortResults(
+            List<PublicTemplateCardResponse> list,
+            String sort
+    ) {
+        if (sort == null || sort.isBlank()) {
+            return list;
+        }
 
-        Instant now = Instant.now();
-        return sessionRepo
-                .findByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
-                        templateId, ActivityStatus.PUBLISHED, now)
-                .stream()
-                .map(s -> new PublicSessionDto(
-                        s.getId(), s.getDate(), s.getCapacity(), s.getBookedCount()))
-                .toList();
+        return switch (sort) {
+            case "popular", "popularity" -> list.stream()
+                    .sorted(Comparator.comparing(PublicTemplateCardResponse::totalBookedCount).reversed())
+                    .toList();
+
+            case "priceAsc" -> list.stream()
+                    .sorted(Comparator.comparing(PublicTemplateCardResponse::price))
+                    .toList();
+
+            case "priceDesc" -> list.stream()
+                    .sorted(Comparator.comparing(PublicTemplateCardResponse::price).reversed())
+                    .toList();
+
+            case "rating" -> list.stream()
+                    .sorted(Comparator.comparing(
+                            (PublicTemplateCardResponse card) -> card.rating().average(),
+                            Comparator.reverseOrder()
+                    ))
+                    .toList();
+
+            case "soonest" -> list.stream()
+                    .sorted(Comparator.comparing(card -> card.nextSession().date()))
+                    .toList();
+
+            default -> list;
+        };
     }
 }

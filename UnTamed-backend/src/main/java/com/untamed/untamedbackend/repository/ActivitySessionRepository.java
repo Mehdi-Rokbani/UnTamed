@@ -22,7 +22,6 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
     // filters
     List<ActivitySession> findByStatus(ActivityStatus status);
 
-    List<ActivitySession> findByStatusAndDateAfter(ActivityStatus status, Instant date);
 
     // for "block delete template if sessions exist"
     boolean existsByTemplateId(String templateId);
@@ -40,4 +39,10 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
             ActivityStatus status,
             Instant now
     );
+
+    List<ActivitySession> findByStatusAndDateBetween(ActivityStatus status, Instant from, Instant to);
+
+    List<ActivitySession> findByStatusAndDateAfter(ActivityStatus status, Instant from);
+    List<ActivitySession> findByStatusAndDateBefore(ActivityStatus status, Instant to);
+
 }

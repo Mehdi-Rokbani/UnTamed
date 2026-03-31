@@ -18,4 +18,10 @@ public interface AddressRepository extends MongoRepository<Address, String> {
     List<Address> findTop20ByOrderByUsesCountDesc();
 
     List<Address> findTop10ByDisplayNameContainingIgnoreCaseOrderByUsesCountDesc(String q);
+    List<Address> findByGovernorateIgnoreCase(String governorate);
+    List<Address> findByGovernorateIgnoreCaseOrderByUsesCountDesc(String governorate);
+
+
+
+
 }
