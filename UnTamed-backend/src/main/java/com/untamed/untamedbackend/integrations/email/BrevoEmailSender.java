@@ -3,6 +3,7 @@ package com.untamed.untamedbackend.integrations.email;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public class BrevoEmailSender implements EmailSender {
     private final String fromName;
 
     public BrevoEmailSender(
-            @Value("${brevo.apiKey}") String apiKey,
+            @Value("${brevo.api.key}") String apiKey,
             @Value("${app.mailFromEmail}") String fromEmail,
             @Value("${app.mailFromName:UnTamed}") String fromName
     ) {
@@ -29,7 +30,6 @@ public class BrevoEmailSender implements EmailSender {
 
     @Override
     public void send(String toEmail, String subject, String body) {
-        // Brevo endpoint: POST /v3/smtp/email :contentReference[oaicite:3]{index=3}
         String url = "https://api.brevo.com/v3/smtp/email";
 
         Map<String, Object> payload = Map.of(
@@ -42,16 +42,20 @@ public class BrevoEmailSender implements EmailSender {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-        // Brevo auth header name is `api-key` :contentReference[oaicite:4]{index=4}
         headers.set("api-key", apiKey);
 
         HttpEntity<Map<String, Object>> req = new HttpEntity<>(payload, headers);
 
-        ResponseEntity<String> res = restTemplate.exchange(url, HttpMethod.POST, req, String.class);
-
-        if (!res.getStatusCode().is2xxSuccessful()) {
-            throw new IllegalStateException("Brevo send failed: " + res.getStatusCode());
+        try {
+            ResponseEntity<String> res = restTemplate.exchange(url, HttpMethod.POST, req, String.class);
+            System.out.println("BREVO SUCCESS: " + res.getBody());
+        } catch (HttpStatusCodeException e) {
+            System.out.println("BREVO ERROR STATUS: " + e.getStatusCode());
+            System.out.println("BREVO ERROR BODY: " + e.getResponseBodyAsString());
+            throw new IllegalStateException(
+                    "Brevo send failed: " + e.getStatusCode() + " - " + e.getResponseBodyAsString(),
+                    e
+            );
         }
     }
 }

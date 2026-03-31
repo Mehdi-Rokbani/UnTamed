@@ -1,4 +1,5 @@
 import { http } from "./http";
+import type { Participant } from "../types/guide";
 
 export type Certificate = {
   id: string;
@@ -46,5 +47,32 @@ export async function updateCertificate(certificateId: string, body: Partial<Omi
 
 export async function deleteCertificate(certificateId: string) {
   const { data } = await http.delete<GuideProfileResponse>(`/api/guides/me/certificates/${certificateId}`);
+  return data;
+}
+
+export async function getSessionParticipants(sessionId: string) {
+  const { data } = await http.get<Participant[]>(
+    `/api/guide/sessions/${sessionId}/participants`,
+    { withCredentials: true }
+  );
+  return data;
+}
+
+
+
+export async function getSessionBookings(sessionId: string) {
+  const { data } = await http.get<Participant[]>(
+    `/api/guide/sessions/${sessionId}/bookings`,
+    { withCredentials: true }
+  );
+  return data;
+}
+
+export async function cancelPendingBookingByGuide(bookingId: string) {
+  const { data } = await http.post<{ bookingId: string; status: string }>(
+    `/api/guide/sessions/bookings/${bookingId}/cancel-pending`,
+    null,
+    { withCredentials: true }
+  );
   return data;
 }

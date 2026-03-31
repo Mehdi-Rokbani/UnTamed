@@ -4,8 +4,8 @@
 .root {
   min-height: 100vh;
   background: var(--cream, #faf8f3);
-  padding: 100px 24px 60px;
-  max-width: 1100px;
+  padding: 100px 24px 72px;
+  max-width: 1060px;
   margin: 0 auto;
 }
 
@@ -15,7 +15,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 .pageTitle {
   font-family: 'Outfit', sans-serif;
@@ -26,7 +26,7 @@
   line-height: 1.15;
 }
 .pageSubtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted, #5a6c57);
   margin: 0;
 }
@@ -38,14 +38,17 @@
   background: var(--text-dark, #1a4d2e);
   color: #fff;
   border-radius: 50px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   transition: all 0.2s;
   flex-shrink: 0;
 }
-.exploreLink:hover { background: var(--forest-mid, #2d5f3e); transform: translateY(-1px); }
+.exploreLink:hover {
+  background: var(--forest-mid, #2d5f3e);
+  transform: translateY(-1px);
+}
 
 /* ── SECTION HEADER ── */
 .sections { display: flex; flex-direction: column; }
@@ -53,285 +56,444 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .sectionLabel {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--text-muted, #5a6c57);
 }
 .sectionCount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--text-dark, #1a4d2e);
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 /* ── GRID ── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
 }
 
-/* ── BOOKING CARD ── */
-.bookingCard {
+/* ── ACTIVITY GROUP CARD ── */
+.activityCard {
   background: #fff;
-  border-radius: 18px;
-  border: 1.5px solid var(--border-light, #d4d9d0);
+  border-radius: 20px;
+  border: 1.5px solid var(--border-light, #e0e4dc);
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(26,77,46,0.06);
+  box-shadow: 0 2px 16px rgba(26,77,46,0.05);
   transition: box-shadow 0.25s, transform 0.25s;
   display: flex;
   flex-direction: column;
 }
-.bookingCard:hover {
-  box-shadow: 0 8px 28px rgba(26,77,46,0.12);
+.activityCard:hover {
+  box-shadow: 0 8px 32px rgba(26,77,46,0.1);
   transform: translateY(-2px);
 }
 .cardDimmed {
-  opacity: 0.75;
-  filter: saturate(0.6);
+  opacity: 0.72;
+  filter: saturate(0.55);
 }
 .cardDimmed:hover {
-  opacity: 0.9;
-  filter: saturate(0.8);
+  opacity: 0.88;
+  filter: saturate(0.75);
 }
 
-/* ── CARD IMAGE ── */
-.cardImageWrap {
+/* ── ACTIVITY IMAGE ── */
+.activityImageWrap {
   position: relative;
-  height: 160px;
+  height: 148px;
   flex-shrink: 0;
   overflow: hidden;
-  background: linear-gradient(135deg, #e8ede6, #d4ddd0);
+  background: linear-gradient(135deg, #dde8da, #c8d8c4);
 }
-.cardImage {
+.activityImage {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.4s ease;
+  transition: transform 0.5s ease;
 }
-.bookingCard:hover .cardImage { transform: scale(1.04); }
-.cardImagePlaceholder {
+.activityCard:hover .activityImage { transform: scale(1.05); }
+.activityImagePlaceholder {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted, #5a6c57);
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
-/* ── STATUS BADGE (overlay) ── */
-.statusBadge {
+/* Gradient overlay on image bottom */
+.activityImageOverlay {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10,24,16,0.72) 0%, rgba(10,24,16,0.1) 55%, transparent 100%);
+  pointer-events: none;
+}
+
+.activityImageMeta {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+}
+.activityImageTitle {
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.activityImageLoc {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  backdrop-filter: blur(8px);
-}
-.statusPending {
-  background: rgba(255, 200, 100, 0.92);
-  color: #7a4a00;
-  border: 1px solid rgba(200, 140, 0, 0.3);
-}
-.statusConfirmed {
-  background: rgba(60, 180, 100, 0.9);
-  color: #fff;
-  border: 1px solid rgba(40, 150, 80, 0.3);
-}
-.statusCancelled {
-  background: rgba(220, 60, 50, 0.88);
-  color: #fff;
-  border: 1px solid rgba(180, 40, 30, 0.3);
+  color: rgba(255,255,255,0.78);
+  margin-top: 3px;
 }
 
-/* ── CARD BODY ── */
-.cardBody {
-  padding: 16px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  flex: 1;
-}
-.cardHeaderRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.cardTitle {
-  font-family: 'Outfit', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-dark, #1a4d2e);
-  margin: 0 0 2px;
-  line-height: 1.3;
-}
-.cardLocation {
-  font-size: 12px;
-  color: var(--text-muted, #5a6c57);
-}
-.cardOpenLink {
-  width: 30px;
-  height: 30px;
+.activityOpenLink {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
-  background: rgba(45,95,62,0.06);
-  border: 1px solid rgba(45,95,62,0.12);
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted, #5a6c57);
+  color: #fff;
   text-decoration: none;
-  flex-shrink: 0;
   transition: all 0.18s;
 }
-.cardOpenLink:hover { background: var(--text-dark, #1a4d2e); color: #fff; border-color: var(--text-dark, #1a4d2e); }
-
-/* ── CARD META ── */
-.cardMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 0;
-  border-top: 1px solid rgba(212,217,208,0.5);
-  border-bottom: 1px solid rgba(212,217,208,0.5);
+.activityOpenLink:hover {
+  background: rgba(255,255,255,0.32);
 }
-.cardMetaItem {
+
+.bookingCountBadge {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(10,24,16,0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.15);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.03em;
+}
+
+/* ── BOOKING ROWS LIST ── */
+.bookingRowsList {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── SINGLE BOOKING ROW ── */
+.bookingRow {
+  border-top: 1px solid var(--border-light, #eaeee8);
+  transition: background 0.15s;
+}
+.bookingRow:last-child:not(.rebookFooter) {
+  /* no bottom radius issue */
+}
+
+.bookingRowHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.bookingRowHeader:hover {
+  background: rgba(26,77,46,0.03);
+}
+.bookingRowExpanded .bookingRowHeader {
+  background: rgba(26,77,46,0.04);
+}
+
+.bookingRowLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Colored status dot */
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.statusPendingDot   { background: #e8a020; box-shadow: 0 0 0 2px rgba(232,160,32,0.2); }
+.statusConfirmedDot { background: #2eb86e; box-shadow: 0 0 0 2px rgba(46,184,110,0.2); }
+.statusCompletedDot { background: #2eb86e; box-shadow: 0 0 0 2px rgba(46,184,110,0.2); }
+.statusCancelledDot { background: #c4360c; box-shadow: 0 0 0 2px rgba(196,54,12,0.2); }
+
+.bookingRowInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.bookingRowDate {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
-  color: var(--text-muted, #5a6c57);
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dark, #1a4d2e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.cardMetaDot { width: 3px; height: 3px; border-radius: 50%; background: var(--border-light, #d4d9d0); flex-shrink: 0; }
+.bookingRowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bookingRowMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #5a6c57);
+}
+.bookingIdBadge {
+  padding: 2px 6px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  font-family: monospace;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #5a6c57) !important;
+}
 
-/* ── CARD FOOTER ── */
-.cardFooter {
+.bookingRowRight {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.countdownChip {
+  padding: 2px 7px;
+  background: rgba(232,160,32,0.12);
+  color: #9a6300;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── STATUS PILLS ── */
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.statusPending   { background: rgba(232,160,32,0.14); color: #8a5a00; }
+.statusConfirmed { background: rgba(46,184,110,0.14); color: #1a6b40; }
+.statusCompleted { background: rgba(46,184,110,0.14); color: #1a6b40; }
+.statusCancelled { background: rgba(196,54,12,0.12);  color: #9a2808; }
+
+.expandIcon {
+  color: var(--text-muted, #5a6c57);
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s;
+  opacity: 0.5;
+}
+.expandIconOpen {
+  transform: rotate(180deg);
+}
+
+/* ── BOOKING ROW ACTIONS (expanded) ── */
+.bookingRowActions {
+  padding: 0 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  background: rgba(26,77,46,0.02);
+  animation: slideDown 0.18s ease;
 }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .seatRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-top: 4px;
 }
 .seatLabel {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted, #5a6c57);
   font-weight: 500;
 }
 .seatStepper {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .stepBtn {
-  width: 28px; height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1.5px solid var(--border-light, #d4d9d0);
   background: #fff;
   color: var(--text-dark, #1a4d2e);
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.18s;
-  font-weight: 500;
-}
-.stepBtn:hover:not(:disabled) { border-color: var(--sunset-orange, #ff8c42); color: var(--sunset-orange, #ff8c42); }
-.stepBtn:disabled { opacity: 0.3; cursor: not-allowed; }
-.stepVal { font-size: 14px; font-weight: 700; color: var(--text-dark, #1a4d2e); min-width: 18px; text-align: center; }
-
-/* ── CARD ACTIONS ── */
-.cardActions {
   display: flex;
   align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+.stepBtn:hover:not(:disabled) {
+  border-color: var(--sunset-orange, #ff8c42);
+  color: var(--sunset-orange, #ff8c42);
+}
+.stepBtn:disabled { opacity: 0.28; cursor: not-allowed; }
+.stepVal {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dark, #1a4d2e);
+  min-width: 16px;
+  text-align: center;
+}
+
+.actionBtns {
+  display: flex;
   gap: 8px;
 }
-.cancelBtn {
-  flex: 1;
-  padding: 9px 14px;
-  background: #fff;
-  border: 1.5px solid rgba(196,54,44,0.3);
-  color: #b02f25;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s;
-  font-family: inherit;
-}
-.cancelBtn:hover:not(:disabled) { background: rgba(196,54,44,0.06); border-color: #b02f25; }
-.cancelBtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.rebookBtn {
+.confirmBtn {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   padding: 9px 14px;
   background: linear-gradient(135deg, var(--sunset-orange, #ff8c42), var(--sunset-peach, #ffa566));
   color: #fff;
   border: none;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s;
+  box-shadow: 0 2px 8px rgba(255,140,66,0.28);
+}
+.confirmBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255,140,66,0.4);
+}
+.confirmBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cancelRowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 14px;
+  background: #fff;
+  border: 1.5px solid rgba(196,54,44,0.28);
+  color: #b02f25;
+  border-radius: 10px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  text-decoration: none;
-  text-align: center;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(255,140,66,0.25);
+  font-family: inherit;
+  transition: all 0.15s;
 }
-.rebookBtn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255,140,66,0.4); }
+.cancelRowBtn:hover:not(:disabled) {
+  background: rgba(196,54,44,0.05);
+  border-color: #b02f25;
+}
+.cancelRowBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.bookingIdChip {
-  padding: 7px 10px;
-  background: rgba(0,0,0,0.04);
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted, #5a6c57);
-  font-family: monospace;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
+/* ── REBOOK FOOTER ── */
+.rebookFooter {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-light, #eaeee8);
+  display: flex;
+  justify-content: flex-end;
 }
+.rebookLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sunset-orange, #ff8c42);
+  text-decoration: none;
+  transition: gap 0.15s;
+}
+.rebookLink:hover { gap: 9px; }
 
 /* ── SKELETON ── */
 .skeletonImg {
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #eee 25%, #e0e0e0 50%, #eee 75%);
+  background: linear-gradient(90deg, #eee 25%, #e4e4e4 50%, #eee 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
 .skeletonLine {
   border-radius: 6px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e4e4e4 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   height: 14px;
   display: block;
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
+
+/* Skeleton card needs some padding */
+.activityContent {
+  padding: 16px 18px 18px;
+}
 
 /* ── EMPTY STATE ── */
 .emptyState {
@@ -344,8 +506,9 @@
   gap: 12px;
 }
 .emptyIcon {
-  width: 72px; height: 72px;
-  border-radius: 24px;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
   background: rgba(45,95,62,0.06);
   display: flex;
   align-items: center;
@@ -355,7 +518,7 @@
 }
 .emptyTitle {
   font-family: 'Outfit', sans-serif;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
   color: var(--text-dark, #1a4d2e);
   margin: 0;
@@ -384,46 +547,52 @@
   transition: all 0.25s;
   box-shadow: 0 4px 14px rgba(255,140,66,0.35);
 }
-.emptyBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255,140,66,0.45); }
+.emptyBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(255,140,66,0.45);
+}
 
 /* ── CANCEL MODAL ── */
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 20, 14, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(10, 20, 14, 0.62);
+  backdrop-filter: blur(5px);
   z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.18s ease;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
   background: #fff;
-  border-radius: 20px;
+  border-radius: 22px;
   padding: 32px 28px;
   max-width: 380px;
   width: 100%;
-  box-shadow: 0 24px 60px rgba(10,20,14,0.25);
+  box-shadow: 0 28px 64px rgba(10,20,14,0.24);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 12px;
-  animation: modalPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: modalPop 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 @keyframes modalPop {
   from { opacity: 0; transform: scale(0.9) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 .modalIcon {
-  width: 52px; height: 52px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: rgba(196,54,44,0.1);
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #c4360c;
   margin-bottom: 4px;
 }
@@ -447,31 +616,52 @@
   margin-top: 8px;
 }
 .modalKeep {
-  flex: 1; padding: 12px;
+  flex: 1;
+  padding: 12px;
   background: #fff;
   border: 1.5px solid var(--border-light, #d4d9d0);
   border-radius: 12px;
-  font-size: 14px; font-weight: 600;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-dark, #1a4d2e);
-  cursor: pointer; transition: all 0.18s;
+  cursor: pointer;
+  transition: all 0.15s;
   font-family: inherit;
 }
 .modalKeep:hover { border-color: var(--text-dark, #1a4d2e); }
 .modalCancel {
-  flex: 1; padding: 12px;
+  flex: 1;
+  padding: 12px;
   background: #c4360c;
-  border: none; border-radius: 12px;
-  font-size: 14px; font-weight: 700;
-  color: #fff; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: all 0.18s; font-family: inherit;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s;
+  font-family: inherit;
 }
 .modalCancel:hover:not(:disabled) { background: #a82d0a; }
 .modalCancel:disabled { opacity: 0.65; cursor: not-allowed; }
 .modalBusy { opacity: 0.75 !important; cursor: wait !important; }
 
 .btnSpinner {
-  width: 14px; height: 14px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.btnSpinnerSm {
+  width: 12px;
+  height: 12px;
   border: 2px solid rgba(255,255,255,0.35);
   border-top-color: #fff;
   border-radius: 50%;
@@ -482,9 +672,8 @@
 
 /* ── RESPONSIVE ── */
 @media (max-width: 640px) {
-  .root { padding: 90px 16px 40px; }
+  .root { padding: 90px 16px 48px; }
   .grid { grid-template-columns: 1fr; }
   .pageHeader { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .cardMeta { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .cardMetaDot { display: none; }
+  .bookingRowDate { font-size: 12px; }
 }

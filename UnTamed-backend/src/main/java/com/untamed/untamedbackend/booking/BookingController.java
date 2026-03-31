@@ -1,5 +1,6 @@
 package com.untamed.untamedbackend.booking;
 
+import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -64,4 +65,14 @@ public class BookingController {
         String userId = bookingService.requireUserId(auth);
         return ResponseEntity.ok(bookingService.listMine(userId));
     }
+
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<Booking> confirm(
+            @PathVariable String id,
+            Authentication auth
+    ) {
+        String userId = bookingService.requireUserId(auth);
+        return ResponseEntity.ok(bookingService.confirmBooking(id, userId));
+    }
+
 }

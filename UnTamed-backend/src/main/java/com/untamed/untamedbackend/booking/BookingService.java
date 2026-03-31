@@ -1,7 +1,11 @@
 package com.untamed.untamedbackend.booking;
 
+import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
+import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -19,6 +23,7 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final SessionSeatOps sessionSeatOps;
     private final BookingPolicyProperties policy;
+    private final UserRepository userRepository;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -347,5 +352,165 @@ public class BookingService {
 
     private ResponseStatusException notFound(String msg) {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, msg);
+    }
+    public Booking confirmBooking(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+
+        if (b.getStatus() == BookingStatus.COMPLETED) {
+            return b; // idempotent: already confirmed
+        }
+
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
+        }
+
+        if (b.getStatus() == BookingStatus.PAYING) {
+            throw conflict("Payment in progress. Cannot confirm booking now.");
+        }
+
+        if (b.getStatus() != BookingStatus.PENDING) {
+            throw conflict("Only pending bookings can be confirmed.");
+        }
+
+        if (b.getExpiresAt() != null && b.getExpiresAt().isBefore(Instant.now())) {
+            expireBooking(b.getId());
+            throw conflict("Booking expired");
+        }
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+        validateSessionChangeAllowed(session);
+
+        b.setStatus(BookingStatus.COMPLETED);
+        b.setExpiresAt(null);
+        b.setUpdatedAt(Instant.now());
+
+        return bookingRepository.save(b);
+    }
+
+
+
+    public String requireAuthenticatedDbUserId(Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BookingErrors.NOT_AUTHENTICATED);
+        }
+
+        System.out.println("=== REQUIRE AUTH DB ID START ===");
+        System.out.println("auth.getName(): " + auth.getName());
+        System.out.println("auth principal class: " + auth.getPrincipal().getClass().getName());
+        System.out.println("auth principal value: " + auth.getPrincipal());
+        System.out.println("=== REQUIRE AUTH DB ID END ===");
+
+        Object principal = auth.getPrincipal();
+        if (principal instanceof AuthenticatedUser authenticatedUser) {
+            System.out.println("Resolved authenticated DB user id: " + authenticatedUser.getId());
+            return authenticatedUser.getId();
+        }
+
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user ID not available.");
+    }
+
+    public List<GuideParticipantDto> listParticipantsForGuide(String sessionId, String guideId) {
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
+
+        if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You can only view participants for your own sessions.");
+        }
+
+        List<Booking> bookings = bookingRepository
+                .findBySessionIdAndStatusOrderByCreatedAtAsc(
+                        sessionId,
+                        BookingStatus.COMPLETED
+                );
+
+        return bookings.stream().map(booking -> {
+
+            User user = userRepository.findByEmail(booking.getUserId())
+                    .orElse(null);
+
+            return new GuideParticipantDto(
+                    booking.getId(),
+                    booking.getUserId(),
+                    user != null ? user.getUsername() : null,
+                    user != null ? user.getEmail() : null,
+                    user != null ? user.getProfileImageUrl() : null,
+                    booking.getNumberOfPeople(),
+                    booking.getStatus(),
+                    booking.getCreatedAt()
+            );
+
+        }).toList();
+    }
+
+    public List<GuideParticipantDto> listAllBookingsForGuide(String sessionId, String guideId) {
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
+
+        if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You can only view bookings for your own sessions."
+            );
+        }
+
+        List<Booking> bookings = bookingRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        return bookings.stream().map(booking -> {
+            User user = userRepository.findByEmail(booking.getUserId()).orElse(null);
+
+            return new GuideParticipantDto(
+                    booking.getId(),
+                    booking.getUserId(),
+                    user != null ? user.getUsername() : null,
+                    user != null ? user.getEmail() : booking.getUserId(),
+                    user != null ? user.getProfileImageUrl() : null,
+                    booking.getNumberOfPeople(),
+                    booking.getStatus(),
+                    booking.getCreatedAt()
+            );
+        }).toList();
+    }
+
+    public CancelBookingResponse cancelPendingBookingByGuide(String bookingId, String guideId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+
+        // guide can only manage bookings for their own session
+        if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You can only manage bookings for your own sessions."
+            );
+        }
+
+        // guide may cancel pending only
+        if (b.getStatus() != BookingStatus.PENDING) {
+            throw conflict("Only pending bookings can be cancelled by the guide.");
+        }
+
+        // keep same cutoff rule as other booking mutations
+        validateSessionChangeAllowed(session);
+
+        int toRelease = b.getNumberOfPeople();
+        if (toRelease > 0) {
+            sessionSeatOps.releaseSeats(b.getSessionId(), toRelease);
+        }
+
+        b.setNumberOfPeople(0);
+        b.setStatus(BookingStatus.CANCELLED);
+        b.setUpdatedAt(Instant.now());
+        b.setExpiresAt(null);
+
+        bookingRepository.save(b);
+
+        return CancelBookingResponse.builder()
+                .bookingId(b.getId())
+                .status(b.getStatus())
+                .build();
     }
 }

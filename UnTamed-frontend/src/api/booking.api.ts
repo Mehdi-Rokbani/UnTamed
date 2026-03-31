@@ -55,3 +55,11 @@ export async function cancelBooking(bookingId: string) {
   );
   return data;
 }
+export async function confirmBooking(bookingId: string) {
+  const { data } = await http.post<Booking>(
+    `/api/bookings/${bookingId}/confirm`,
+    null,
+    { withCredentials: true }
+  );
+  return data;
+}

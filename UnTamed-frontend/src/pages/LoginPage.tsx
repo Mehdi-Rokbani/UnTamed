@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import styles from "../style/login.module.css";
 import { BackButton } from "../components/BackButton";
 import { useAuth } from "../auth/auth.store";
+import { getErrorMessage } from "../utils/errorNessage";
 
 export function LoginPage() {
   const nav = useNavigate();
@@ -24,10 +25,11 @@ export function LoginPage() {
       await signIn(email.trim(), password);
       nav("/home", { replace: true });
     } catch (e: any) {
-      setErr(e?.message ?? "Login failed");
+      setErr(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
+
   }
 
   return (

@@ -45,7 +45,10 @@ public class JwtService {
     }
 
     public String extractEmail(String token) {
-        return parseClaims(token).getSubject();
+        Claims claims = parseClaims(token);
+        System.out.println("JWT SUBJECT EMAIL: " + claims.getSubject());
+        System.out.println("JWT userId CLAIM: " + claims.get("userId", String.class));
+        return claims.getSubject();
     }
 
     public boolean isValid(String token) {
@@ -73,6 +76,7 @@ public class JwtService {
 
         return Jwts.builder()
                 .setSubject(user.getEmail())
+                .claim("userId", user.getId())
                 .claim("role", user.getRole().name())
                 .claim("typ", type.name())
                 .setIssuedAt(now)
@@ -87,5 +91,10 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+    public String extractUserId(String token) {
+        Claims claims = parseClaims(token);
+        System.out.println("JWT CLAIMS: " + claims);
+        return claims.get("userId", String.class);
     }
 }

@@ -87,6 +87,7 @@ export default function GuideSidebar() {
 
   const displayName = user?.username ?? user?.email ?? "Guide";
   const initials = displayName.slice(0, 2).toUpperCase();
+  const avatarUrl = (user as any)?.profileImageUrl ?? null;
 
   return (
     <aside className={styles.sidebar}>
@@ -109,7 +110,20 @@ export default function GuideSidebar() {
 
       {/* User pill */}
       <div className={styles.userPill}>
-        <div className={styles.userAvatar}>{initials}</div>
+        <div className={styles.userAvatar}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              className={styles.userAvatarImg}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+                (e.currentTarget.nextSibling as HTMLElement).style.display = "flex";
+              }}
+            />
+          ) : null}
+          <span style={{ display: avatarUrl ? "none" : "flex" }}>{initials}</span>
+        </div>
         <div className={styles.userInfo}>
           <span className={styles.userName}>{displayName}</span>
           <span className={styles.userBadge}>Guide</span>
@@ -152,4 +166,4 @@ export default function GuideSidebar() {
       </div>
     </aside>
   );
-} 
+}

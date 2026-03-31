@@ -46,7 +46,7 @@ export default function App() {
             </RequireAuth>
           }
         />
-
+        
         <Route
           path="/activities/:id"
           element={

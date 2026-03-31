@@ -284,20 +284,28 @@ export function RegisterPage() {
                 {err && <div className={styles.errorBanner}>{err}</div>}
 
                 <div className={styles.successActions}>
-                  <button className={styles.regBtnSecondary} onClick={() => nav("/login")}>
-                    Go to login
-                  </button>
-                  <button className={styles.regBtnPrimary} onClick={onResend} disabled={loading}>
-                    {loading ? (
-                      <>
-                        <span className={styles.btnSpinner} />
-                        Sending...
-                      </>
-                    ) : (
-                      "Resend verification"
-                    )}
-                  </button>
-                </div>
+  <button
+    className={`${styles.regBtn} ${styles.regBtnSecondary}`}
+    onClick={() => nav("/login")}
+  >
+    Go to login
+  </button>
+
+  <button
+    className={`${styles.regBtn} ${styles.regBtnPrimary}`}
+    onClick={onResend}
+    disabled={loading}
+  >
+    {loading ? (
+      <>
+        <span className={styles.btnSpinner} />
+        Sending...
+      </>
+    ) : (
+      "Resend verification"
+    )}
+  </button>
+</div>
               </div>
             )}
 
@@ -323,7 +331,7 @@ export function RegisterPage() {
                       <div className={styles.roleSelector}>
                         <button
                           type="button"
-                          className={`role-card ${role === "USER" ? "selected" : ""}`}
+                          className={`${styles['roleCard']} ${role === "USER" ? styles.selected : ""}`}
                           onClick={() => setRole("USER")}
                         >
                           <div className={styles.roleIcon}>
@@ -338,7 +346,7 @@ export function RegisterPage() {
 
                         <button
                           type="button"
-                          className={`role-card ${role === "GUIDE" ? "selected" : ""}`}
+                          className={`${styles['roleCard']} ${role === "GUIDE" ? styles.selected : ""}`}
                           onClick={() => setRole("GUIDE")}
                         >
                           <div className={styles.roleIcon}>

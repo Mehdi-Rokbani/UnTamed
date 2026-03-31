@@ -33,3 +33,13 @@ export type GuideProfileResponse = {
 export type UpdateGuideProfileRequest = {
   experienceYears?: number | null;
 };
+export type Participant = {
+  bookingId: string;
+  userId: string;
+  username: string | null;
+  email: string | null;
+  profileImageUrl: string | null;
+  numberOfPeople: number;
+  status: "PENDING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+  createdAt: string;
+};
