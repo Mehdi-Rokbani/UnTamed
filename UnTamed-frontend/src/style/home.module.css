@@ -448,3 +448,17 @@
   outline: 2px solid var(--sunset-orange);
   outline-offset: 4px;
 }
+
+.heroSearchStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(100%, 980px);
+  margin: 32px auto 0;
+}
+
+@media (max-width: 980px) {
+  .heroSearchStack {
+    width: 100%;
+  }
+}

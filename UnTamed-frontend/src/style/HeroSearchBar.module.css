@@ -1,0 +1,232 @@
+/* ===== HERO SEARCH BAR — GetYourGuide-inspired ===== */
+
+.shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Unified pill bar ── */
+.pill {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) 1px 1fr 1px 1fr auto;
+  align-items: stretch;
+  min-height: 68px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 40, 0.1);
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.12);
+  overflow: visible;
+  transition: box-shadow 0.2s ease;
+}
+
+.pill:focus-within {
+  box-shadow: 0 16px 48px rgba(16, 24, 40, 0.18);
+}
+
+/* Dividers between segments */
+.divider {
+  width: 1px;
+  background: rgba(16, 24, 40, 0.1);
+  align-self: stretch;
+  margin: 12px 0;
+  flex-shrink: 0;
+}
+
+/* ── Segments ── */
+.segment {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px 22px;
+  cursor: text;
+  min-width: 0;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.segment:hover {
+  background: rgba(16, 24, 40, 0.03);
+}
+
+.segment:focus-within {
+  background: rgba(249, 115, 22, 0.04);
+}
+
+.segmentLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #1a2e20;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.segmentInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.97rem;
+  color: #122118;
+  width: 100%;
+  font-family: 'Poppins', sans-serif;
+}
+
+.segmentInput::placeholder {
+  color: #9aa89f;
+}
+
+/* Address segment extras */
+.addressWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.locationIcon {
+  color: #9aa89f;
+  flex-shrink: 0;
+}
+
+.clearBtn {
+  border: none;
+  background: transparent;
+  color: #9aa89f;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.clearBtn:hover {
+  color: #f97316;
+}
+
+.loadingDots {
+  color: #9aa89f;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* Search CTA button */
+.searchBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 6px 6px 0;
+  padding: 0 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.97rem;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
+}
+
+.searchBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.5);
+}
+
+.searchBtn:active {
+  transform: translateY(0);
+}
+
+/* Date input */
+.dateInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.97rem;
+  color: #122118;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  width: 100%;
+}
+
+.dateInput::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+/* ── Dropdown ── */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: -12px;
+  right: -12px;
+  z-index: 40;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  box-shadow: 0 20px 60px rgba(16, 24, 40, 0.16);
+}
+
+.option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: #ffffff;
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background 0.14s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.option:hover {
+  background: #f8faf8;
+}
+
+.optionIcon {
+  color: #c0cac4;
+  flex-shrink: 0;
+}
+
+.optionTitle {
+  display: block;
+  color: #122118;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .pill {
+    grid-template-columns: 1fr;
+    border-radius: 24px;
+    min-height: unset;
+  }
+
+  .divider {
+    width: auto;
+    height: 1px;
+    margin: 0 18px;
+  }
+
+  .segment {
+    padding: 14px 20px;
+    border-radius: 0;
+  }
+
+  .searchBtn {
+    margin: 8px 12px 12px;
+    padding: 16px;
+    border-radius: 14px;
+  }
+}

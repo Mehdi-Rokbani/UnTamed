@@ -88,10 +88,15 @@ public class ActivityTemplatePublicService {
             criteriaList.add(Criteria.where("address_id").in(addressIds));
         }
 
-        if (c.categoryId() != null && !c.categoryId().isBlank()) {
-            criteriaList.add(Criteria.where("category_ids").is(c.categoryId()));
-        }
+        if (c.categoryIds() != null && !c.categoryIds().isEmpty()) {
+            List<String> cleanedCategoryIds = c.categoryIds().stream()
+                    .filter(id -> id != null && !id.isBlank())
+                    .toList();
 
+            if (!cleanedCategoryIds.isEmpty()) {
+                criteriaList.add(Criteria.where("category_ids").in(cleanedCategoryIds));
+            }
+        }
         if (c.difficulty() != null) {
             criteriaList.add(Criteria.where("difficulty").is(c.difficulty()));
         }

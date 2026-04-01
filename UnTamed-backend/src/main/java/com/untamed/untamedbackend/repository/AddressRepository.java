@@ -22,6 +22,6 @@ public interface AddressRepository extends MongoRepository<Address, String> {
     List<Address> findByGovernorateIgnoreCaseOrderByUsesCountDesc(String governorate);
 
 
-
+    List<Address> findAllByProviderAndProviderPlaceId(String provider, String providerPlaceId);
 
 }

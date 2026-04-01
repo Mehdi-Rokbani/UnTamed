@@ -30,7 +30,7 @@ public class ActivityTemplatePublicController {
     public List<PublicTemplateCardResponse> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String addressId,
-            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) List<String> categoryIds,
             @RequestParam(required = false) Double minPrice,
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) Difficulty difficulty,
@@ -41,7 +41,7 @@ public class ActivityTemplatePublicController {
         return publicService.search(new TemplateSearchCriteria(
                 q,
                 addressId,
-                categoryId,
+                categoryIds,
                 minPrice,
                 maxPrice,
                 difficulty,

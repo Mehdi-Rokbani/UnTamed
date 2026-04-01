@@ -49,7 +49,6 @@ public class ActivityTemplateService {
         User guide = getGuideByEmail(authEmail);
 
         Address address = geoService.resolveUpsertAndBumpUses(req.address());
-        incrementUsesCount(address.getId());
 
         GeoJsonPoint loc = address.getLocation();
         if (loc == null && address.getLongitude() != null && address.getLatitude() != null) {

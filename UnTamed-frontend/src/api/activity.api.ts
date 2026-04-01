@@ -9,6 +9,7 @@ import type {
   ActivitySessionResponse,
   PublicTemplateCard,
   PublicSession,
+  Difficulty,
 } from "../types/activity";
 
 /** ---------------------------
@@ -16,8 +17,32 @@ import type {
  *  ---------------------------
  */
 
+export type AddressSuggestion = {
+  id: string;
+  displayName: string;
+};
+
+export type SearchPublicTemplatesParams = {
+  q?: string;
+  addressId?: string;
+  categoryIds?: string[];
+  minPrice?: number;
+  maxPrice?: number;
+  difficulty?: Difficulty;
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: "popular" | "soonest" | "priceAsc" | "priceDesc";
+};
+
 export async function listPublicTemplates() {
   const { data } = await http.get<PublicTemplateCard[]>("/api/templates/public");
+  return data;
+}
+
+export async function searchPublicTemplates(params: SearchPublicTemplatesParams) {
+  const { data } = await http.get<PublicTemplateCard[]>("/api/templates/public/search", {
+    params,
+  });
   return data;
 }
 
@@ -31,6 +56,12 @@ export async function listPublicTemplateSessions(id: string) {
   return data;
 }
 
+export async function suggestPublicAddresses(q?: string) {
+  const { data } = await http.get<AddressSuggestion[]>("/api/addresses/public/suggest", {
+    params: q?.trim() ? { q: q.trim() } : undefined,
+  });
+  return data;
+}
 
 /** ---------------------------
  *  SESSIONS (public)
@@ -145,7 +176,6 @@ export async function listMySessions() {
   return data;
 }
 
-// create a session under a template
 export async function createSession(templateId: string, body: ActivitySessionCreatePayload) {
   const { data } = await http.post<ActivitySessionResponse>(
     `/api/sessions/template/${templateId}`,
@@ -164,7 +194,6 @@ export async function updateSession(id: string, body: ActivitySessionUpdatePaylo
   return data;
 }
 
-// preferred
 export async function setSessionStatus(id: string, status: ActivityStatus) {
   const { data } = await http.patch<ActivitySessionResponse>(
     `/api/sessions/${id}/status`,
@@ -174,7 +203,6 @@ export async function setSessionStatus(id: string, status: ActivityStatus) {
   return data;
 }
 
-// optional compatibility toggle
 export async function setSessionPublished(id: string, published: boolean) {
   const { data } = await http.patch<ActivitySessionResponse>(
     `/api/sessions/${id}/published`,
@@ -182,9 +210,12 @@ export async function setSessionPublished(id: string, published: boolean) {
     { params: { published }, withCredentials: true }
   );
   return data;
-
 }
 
+/** ---------------------------
+ *  BOOKINGS
+ *  ---------------------------
+ */
 
 export type CreateBookingRequest = {
   sessionId: string;
@@ -205,7 +236,7 @@ export type BookingResponse = {
 
 export async function createBooking(body: CreateBookingRequest) {
   const { data } = await http.post<BookingResponse>("/api/bookings", body, {
-    withCredentials: true, // cookie auth
+    withCredentials: true,
   });
   return data;
 }

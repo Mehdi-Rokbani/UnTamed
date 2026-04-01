@@ -58,28 +58,23 @@ export function Header() {
 
         {/* Empty nav — kept for mobile menu structure */}
         <nav className={`${styles.headerNav} ${mobileMenuOpen ? styles.active : ""}`}>
-          {user && (
-            <div className={styles.mobileOnly}>
-              <Link to="/profile" className={styles.navLink} onClick={closeMobileMenu}>Profile</Link>
-              {user.role === "GUIDE" && (
-                <Link to="/guide" className={styles.navLink} onClick={closeMobileMenu}>Dashboard</Link>
-              )}
-              <button className={`${styles.navLink} ${styles.mobileLogout}`} onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          )}
+
         </nav>
 
         {/* Actions */}
         <div className={styles.headerActions}>
           {!user ? (
-            <Link to="/register" className={styles.headerCta}>
-              Get Started
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 12L10 8L6 4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </Link>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <Link to="/login" className={styles.headerLogin}>
+                Log in
+              </Link>
+              <Link to="/register" className={styles.headerCta}>
+                Get Started
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 12L10 8L6 4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
+            </div>
           ) : (
             <div className={styles.profileWrapper} ref={dropdownRef}>
               {/* Profile button — opens dropdown */}
@@ -159,15 +154,15 @@ export function Header() {
                     </Link>
                   )}
                   <Link
-  to="/my-bookings"
-  className={styles.dropdownItem}
-  onClick={() => setDropdownOpen(false)}
->
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-  </svg>
-  My bookings
-</Link>
+                    to="/my-bookings"
+                    className={styles.dropdownItem}
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                    </svg>
+                    My bookings
+                  </Link>
 
                   <div className={styles.dropdownDivider} />
 
@@ -190,8 +185,8 @@ export function Header() {
           aria-label="Toggle menu"
         >
           <Link to="/my-bookings" className={styles.navLink} onClick={closeMobileMenu}>
-  My bookings
-</Link>
+            My bookings
+          </Link>
           <span />
           <span />
           <span />
