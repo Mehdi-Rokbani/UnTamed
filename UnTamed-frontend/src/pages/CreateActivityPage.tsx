@@ -114,7 +114,7 @@ const DIFFICULTY_OPTIONS = [
 
 export default function CreateActivityPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>(2);
+  const [step, setStep] = useState<Step>(1);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

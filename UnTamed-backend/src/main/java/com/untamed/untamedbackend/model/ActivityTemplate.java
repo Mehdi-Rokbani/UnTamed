@@ -77,4 +77,6 @@ public class ActivityTemplate {
 
     @LastModifiedDate
     private Instant updatedAt;
+
+
 }

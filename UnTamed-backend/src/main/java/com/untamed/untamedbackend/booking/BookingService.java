@@ -5,12 +5,18 @@ import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.untamed.untamedbackend.model.ActivityTemplate;
+import com.untamed.untamedbackend.model.Review;
+import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
+import com.untamed.untamedbackend.repository.ReviewRepository;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +30,8 @@ public class BookingService {
     private final SessionSeatOps sessionSeatOps;
     private final BookingPolicyProperties policy;
     private final UserRepository userRepository;
+    private final ActivityTemplateRepository activityTemplateRepository;
+    private final ReviewRepository reviewRepository;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -307,8 +315,24 @@ public class BookingService {
     }
 
     private void assertOwned(Booking b, String userId) {
-        if (b.getUserId() == null || !b.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, BookingErrors.BOOKING_NOT_OWNED);
+        System.out.println("=== ASSERT OWNED DEBUG ===");
+        System.out.println("Incoming userId = " + userId);
+        System.out.println("Booking id = " + b.getId());
+
+        // Replace getUserId() with the real field from Booking
+        System.out.println("Booking owner = " + b.getUserId());
+
+        if (b.getUserId() != null) {
+            System.out.println("Booking owner class = " + b.getUserId().getClass().getName());
+            System.out.println("owner.equals(userId) = " + b.getUserId().equals(userId));
+            System.out.println("String.valueOf(owner).equals(userId) = " + String.valueOf(b.getUserId()).equals(userId));
+        }
+
+        System.out.println("userId class = " + (userId != null ? userId.getClass().getName() : "null"));
+        System.out.println("=== END ASSERT OWNED DEBUG ===");
+
+        if (b.getUserId() == null || !String.valueOf(b.getUserId()).equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Not your booking");
         }
     }
 
@@ -397,15 +421,11 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BookingErrors.NOT_AUTHENTICATED);
         }
 
-        System.out.println("=== REQUIRE AUTH DB ID START ===");
-        System.out.println("auth.getName(): " + auth.getName());
-        System.out.println("auth principal class: " + auth.getPrincipal().getClass().getName());
-        System.out.println("auth principal value: " + auth.getPrincipal());
-        System.out.println("=== REQUIRE AUTH DB ID END ===");
+
 
         Object principal = auth.getPrincipal();
         if (principal instanceof AuthenticatedUser authenticatedUser) {
-            System.out.println("Resolved authenticated DB user id: " + authenticatedUser.getId());
+
             return authenticatedUser.getId();
         }
 
@@ -429,7 +449,7 @@ public class BookingService {
 
         return bookings.stream().map(booking -> {
 
-            User user = userRepository.findByEmail(booking.getUserId())
+            User user = userRepository.findById(booking.getUserId())
                     .orElse(null);
 
             return new GuideParticipantDto(
@@ -459,7 +479,7 @@ public class BookingService {
         List<Booking> bookings = bookingRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
 
         return bookings.stream().map(booking -> {
-            User user = userRepository.findByEmail(booking.getUserId()).orElse(null);
+            User user = userRepository.findById(booking.getUserId()).orElse(null);
 
             return new GuideParticipantDto(
                     booking.getId(),
@@ -513,4 +533,124 @@ public class BookingService {
                 .status(b.getStatus())
                 .build();
     }
+
+    public Booking markAttendanceAbsent(String bookingId, String guideId, boolean absent) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+
+        if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You can only manage attendance for your own sessions."
+            );
+        }
+
+        if (b.getStatus() != BookingStatus.COMPLETED) {
+            throw conflict("Only completed bookings can have attendance marked.");
+        }
+
+        b.setAttendanceMarkedAbsent(absent);
+        b.setAttendanceMarkedAt(Instant.now());
+        b.setAttendanceMarkedByGuideId(guideId);
+
+        return bookingRepository.save(b);
+    }
+    public ReviewEligibilityResponse getReviewEligibility(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        // ===== DEBUG START =====
+        System.out.println("=== REVIEW ELIGIBILITY DEBUG ===");
+        System.out.println("bookingId param = " + bookingId);
+        System.out.println("userId param = " + userId);
+        System.out.println("Booking found = " + (b != null));
+        System.out.println("Booking object = " + b);
+
+        // Print all possible owner-related fields (keep only the ones that exist in Booking)
+        System.out.println("b.getId() = " + b.getId());
+        System.out.println("b.getUserId() = " + b.getUserId());
+
+        System.out.println("b.getSessionId() = " + b.getSessionId());
+
+        if (b.getUserId() != null) {
+            System.out.println("b.getUserId() class = " + b.getUserId().getClass().getName());
+            System.out.println("b.getUserId().equals(userId) = " + b.getUserId().equals(userId));
+            System.out.println("String.valueOf(b.getUserId()).equals(userId) = " + String.valueOf(b.getUserId()).equals(userId));
+        }
+
+        if (userId != null) {
+            System.out.println("userId class = " + userId.getClass().getName());
+        }
+
+        System.out.println("=== END REVIEW ELIGIBILITY DEBUG ===");
+        // ===== DEBUG END =====
+
+        assertOwned(b, userId);
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+
+        ActivityTemplate template = activityTemplateRepository.findById(session.getTemplateId())
+                .orElseThrow(() -> notFound("Activity template not found"));
+
+        if (template.getGuideId() != null && template.getGuideId().equals(userId)) {
+            return ReviewEligibilityResponse.builder()
+                    .eligible(false)
+                    .alreadyReviewed(false)
+                    .activityTemplateId(template.getId())
+                    .reason("Guide cannot review their own activity.")
+                    .build();
+        }
+
+        if (b.getStatus() != BookingStatus.COMPLETED) {
+            return ReviewEligibilityResponse.builder()
+                    .eligible(false)
+                    .alreadyReviewed(false)
+                    .activityTemplateId(template.getId())
+                    .reason("Only completed bookings can be reviewed.")
+                    .build();
+        }
+
+        if (b.isAttendanceMarkedAbsent()) {
+            return ReviewEligibilityResponse.builder()
+                    .eligible(false)
+                    .alreadyReviewed(false)
+                    .activityTemplateId(template.getId())
+                    .reason("Absent participants cannot leave reviews.")
+                    .build();
+        }
+
+        if (session.getDate() == null || !session.getDate().isBefore(Instant.now())) {
+            return ReviewEligibilityResponse.builder()
+                    .eligible(false)
+                    .alreadyReviewed(false)
+                    .activityTemplateId(template.getId())
+                    .reason("You can review only after the session date has passed.")
+                    .build();
+        }
+
+        Review existing = reviewRepository
+                .findByReviewerIdAndActivityTemplateId(userId, template.getId())
+                .orElse(null);
+
+        if (existing != null) {
+            return ReviewEligibilityResponse.builder()
+                    .eligible(true)
+                    .alreadyReviewed(true)
+                    .existingReviewId(existing.getId())
+                    .activityTemplateId(template.getId())
+                    .reason("You already reviewed this activity.")
+                    .build();
+        }
+
+        return ReviewEligibilityResponse.builder()
+                .eligible(true)
+                .alreadyReviewed(false)
+                .existingReviewId(null)
+                .activityTemplateId(template.getId())
+                .reason("Eligible to review.")
+                .build();
+    }
+
 }

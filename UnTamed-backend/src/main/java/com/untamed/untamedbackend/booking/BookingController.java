@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestBody;
+import com.untamed.untamedbackend.booking.MarkAttendanceRequest;
 
 import java.util.List;
 
@@ -20,7 +22,7 @@ public class BookingController {
             @RequestBody CreateBookingRequest request,
             Authentication auth
     ) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
 
         Booking booking = bookingService.createOrIncreaseBooking(
                 userId,
@@ -37,7 +39,7 @@ public class BookingController {
             @RequestParam int delta,
             Authentication auth
     ) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.increaseSeats(id, userId, delta));
     }
 
@@ -47,7 +49,7 @@ public class BookingController {
             @RequestParam int delta,
             Authentication auth
     ) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.decreaseSeats(id, userId, delta));
     }
 
@@ -56,13 +58,13 @@ public class BookingController {
             @PathVariable String id,
             Authentication auth
     ) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.cancelBooking(id, userId));
     }
 
     @GetMapping("/mine")
     public ResponseEntity<List<Booking>> mine(Authentication auth) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.listMine(userId));
     }
 
@@ -71,8 +73,9 @@ public class BookingController {
             @PathVariable String id,
             Authentication auth
     ) {
-        String userId = bookingService.requireUserId(auth);
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.confirmBooking(id, userId));
     }
+
 
 }

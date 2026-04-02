@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.untamed.untamedbackend.booking.Booking;
 
 import java.util.List;
 
@@ -40,5 +41,17 @@ public class GuideBookingController {
     ) {
         String guideId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.cancelPendingBookingByGuide(bookingId, guideId));
+    }
+
+    @PutMapping("/bookings/{bookingId}/attendance")
+    public ResponseEntity<Booking> markAttendance(
+            @PathVariable String bookingId,
+            @RequestBody MarkAttendanceRequest req,
+            Authentication auth
+    ) {
+        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(
+                bookingService.markAttendanceAbsent(bookingId, guideId, req.isAbsent())
+        );
     }
 }

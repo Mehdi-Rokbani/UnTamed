@@ -41,7 +41,7 @@ public class ActivitySessionService {
         // visibility rule like you had:
         if (s.getStatus() != ActivityStatus.PUBLISHED) {
             if (authEmailOrNull == null) throw new IllegalArgumentException("Session not found");
-            User u = userRepo.findByEmail(authEmailOrNull)
+            User u = userRepo.findById(authEmailOrNull)
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
             if (!s.getGuideId().equals(u.getId())) throw new IllegalArgumentException("Session not found");
         }

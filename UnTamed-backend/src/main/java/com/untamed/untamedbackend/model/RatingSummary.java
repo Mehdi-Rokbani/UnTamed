@@ -1,4 +1,3 @@
-// src/main/java/com/untamed/untamedbackend/model/RatingSummary.java
 package com.untamed.untamedbackend.model;
 
 import lombok.*;

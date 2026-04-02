@@ -4,6 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.Instant;
 
@@ -40,4 +41,13 @@ public class Booking {
 
     @Builder.Default
     private boolean refundRequested = false;
+    @Builder.Default
+    @Field("attendance_marked_absent")
+    private boolean attendanceMarkedAbsent = false;
+
+    @Field("attendance_marked_at")
+    private Instant attendanceMarkedAt;
+
+    @Field("attendance_marked_by_guide_id")
+    private String attendanceMarkedByGuideId;
 }

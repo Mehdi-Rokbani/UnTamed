@@ -197,7 +197,7 @@ export default function LocationPicker({ value, onChange, label = "Location" }: 
                 loadPopularIfEmpty();
               }}
               placeholder="Start typing an address..."
-              className={`location-input ${value ? "location-input--selected" : ""}`}
+              className={`${styles["locationInput"]} ${value ? styles["location-input--selected"] : ""}`}
               aria-autocomplete="list"
               aria-expanded={open}
             />
