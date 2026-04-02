@@ -1,7 +1,8 @@
 // src/pages/ActivityDetailsPage.tsx
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PublicSession, PublicTemplateCard } from "../types/activity";
+import type { Review } from "../types/review";
 import styles from "../style/activity-details.module.css";
 import {
   getPublicTemplateById,
@@ -10,6 +11,8 @@ import {
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
+import * as ReviewApi from "../api/review.api";
+import ReviewList from "../components/review/ReviewList";
 
 type LoadState = "loading" | "error" | "done" | "notfound";
 type BookingStep = "idle" | "selecting" | "confirming" | "success";
@@ -17,17 +20,6 @@ type BookingStep = "idle" | "selecting" | "confirming" | "success";
 function formatPrice(price: number) {
   if (Number.isNaN(price)) return "";
   return price === 0 ? "Free" : `${price} TND`;
-}
-function formatPriceNum(price: number) {
-  return price === 0 ? "Free" : `${price} TND`;
-}
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric",
-    year: "numeric", hour: "2-digit", minute: "2-digit",
-  });
 }
 function formatDateShort(iso: string) {
   const d = new Date(iso);
@@ -62,7 +54,6 @@ const IcoTrend = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="no
 const IcoSparkle = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>);
 const IcoDollar = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>);
 const IcoClock = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>);
-const IcoConfetti = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3.17 21.83L8 8l13.83 4.83L3.17 21.83z" /><line x1="8" y1="8" x2="12" y2="2" /><line x1="8" y1="8" x2="2" y2="12" /></svg>);
 const IcoBookmark = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>);
 const IcoArrowRight = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>);
 const IcoFire = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c0 0-5 4-5 10a5 5 0 0010 0c0-6-5-10-5-10zm0 14a3 3 0 01-3-3c0-3 3-6 3-6s3 3 3 6a3 3 0 01-3 3z" /></svg>);
@@ -72,6 +63,7 @@ const StarIcon = ({ state }: { state: "full" | "half" | "empty" }) => (
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   </svg>
 );
+
 function StarRating({ average, count }: { average: number; count: number }) {
   return (
     <span className={styles.starRow}>
@@ -87,7 +79,6 @@ function StarRating({ average, count }: { average: number; count: number }) {
 
 const DIFF_LABELS: Record<string, string> = { EASY: "Easy", MEDIUM: "Medium", HARD: "Hard" };
 
-// ── Confetti burst component ──
 function ConfettiBurst() {
   const pieces = Array.from({ length: 18 }, (_, i) => i);
   const colors = ["#ff8c42", "#ffa566", "#1a4d2e", "#2d5f3e", "#fff176", "#f48fb1"];
@@ -103,20 +94,206 @@ function ConfettiBurst() {
             "--color": colors[i % colors.length],
             "--delay": `${Math.random() * 0.2}s`,
             "--size": `${5 + Math.random() * 5}px`,
-          } as React.CSSProperties}
+          } as CSSProperties}
         />
       ))}
     </div>
   );
 }
 
-// ── Skeleton loader ──
-function SidebarSkeleton() {
+type ReviewModalProps = {
+  open: boolean;
+  mode: "create" | "edit";
+  submitting: boolean;
+  initialRating: number;
+  initialComment: string;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (payload: { rating: number; comment: string }) => Promise<void>;
+};
+
+function ReviewModal({
+  open,
+  mode,
+  submitting,
+  initialRating,
+  initialComment,
+  error,
+  onClose,
+  onSubmit,
+}: ReviewModalProps) {
+  const [rating, setRating] = useState(initialRating);
+  const [comment, setComment] = useState(initialComment);
+
+  useEffect(() => {
+    if (!open) return;
+    setRating(initialRating);
+    setComment(initialComment);
+  }, [open, initialRating, initialComment]);
+
+  if (!open) return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = comment.trim();
+    if (!rating) return;
+    if (!trimmed) return;
+    await onSubmit({ rating, comment: trimmed });
+  }
+
+  const overlayStyle: CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: 16,
+  };
+
+  const modalStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: 560,
+    background: "#fff",
+    borderRadius: 20,
+    boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
+    padding: 24,
+  };
+
+  const titleStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 800,
+    color: "#2f241f",
+  };
+
+  const subStyle: CSSProperties = {
+    marginTop: 6,
+    marginBottom: 18,
+    color: "#7a6b61",
+    fontSize: 14,
+  };
+
+  const starsWrapStyle: CSSProperties = {
+    display: "flex",
+    gap: 10,
+    marginBottom: 16,
+  };
+
+  const starBtnStyle = (active: boolean): CSSProperties => ({
+    fontSize: 30,
+    lineHeight: 1,
+    background: "transparent",
+    border: "none",
+    cursor: submitting ? "default" : "pointer",
+    color: active ? "#f5a623" : "#d8cfc8",
+    padding: 0,
+  });
+
+  const textareaStyle: CSSProperties = {
+    width: "100%",
+    minHeight: 130,
+    resize: "vertical",
+    borderRadius: 14,
+    border: "1px solid #ddd2c8",
+    padding: 14,
+    fontSize: 15,
+    outline: "none",
+    color: "#2f241f",
+    background: "#fffdfb",
+  };
+
+  const footerStyle: CSSProperties = {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 18,
+  };
+
+  const ghostBtnStyle: CSSProperties = {
+    padding: "10px 16px",
+    borderRadius: 12,
+    border: "1px solid #d8cfc8",
+    background: "#fff",
+    fontWeight: 700,
+    cursor: submitting ? "default" : "pointer",
+  };
+
+  const primaryBtnStyle: CSSProperties = {
+    padding: "10px 16px",
+    borderRadius: 12,
+    border: "none",
+    background: "#1a4d2e",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: submitting ? "default" : "pointer",
+    opacity: submitting ? 0.7 : 1,
+  };
+
   return (
-    <div className={styles.sidebarCard}>
-      {[80, 40, 120, 50, 50, 200].map((w, i) => (
-        <div key={i} className={styles.skeletonLine} style={{ width: `${w}%` === "120%" ? "100%" : `${w}%`, marginBottom: i === 1 ? 20 : 10 }} />
-      ))}
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        <h3 style={titleStyle}>{mode === "edit" ? "Edit your review" : "Write a review"}</h3>
+        <p style={subStyle}>
+          {mode === "edit"
+            ? "Update your rating and comment for this adventure."
+            : "Share your experience with other explorers."}
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div style={starsWrapStyle}>
+            {Array.from({ length: 5 }, (_, i) => {
+              const value = i + 1;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => !submitting && setRating(value)}
+                  style={starBtnStyle(value <= rating)}
+                  aria-label={`Rate ${value} star${value > 1 ? "s" : ""}`}
+                >
+                  ★
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Tell people what made this activity special..."
+            style={textareaStyle}
+            disabled={submitting}
+            maxLength={1000}
+          />
+
+          {error && (
+            <p style={{ marginTop: 12, color: "#b42318", fontWeight: 600 }}>
+              {error}
+            </p>
+          )}
+
+          <div style={footerStyle}>
+            <button type="button" onClick={onClose} style={ghostBtnStyle} disabled={submitting}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={primaryBtnStyle}
+              disabled={submitting || !rating || !comment.trim()}
+            >
+              {submitting
+                ? mode === "edit"
+                  ? "Saving..."
+                  : "Posting..."
+                : mode === "edit"
+                  ? "Save changes"
+                  : "Post review"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -133,24 +310,34 @@ export default function ActivityDetailsPage() {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
-  // Booking state
   const [people, setPeople] = useState(1);
   const [bookingStep, setBookingStep] = useState<BookingStep>("idle");
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccessId, setBookingSuccessId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
-  // Live clock for countdown
+  const [myReview, setMyReview] = useState<Review | null>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewReloadKey, setReviewReloadKey] = useState(0);
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
 
   const loadAll = useCallback(async () => {
-    if (!id) { setState("notfound"); return; }
+    if (!id) {
+      setState("notfound");
+      return;
+    }
     setState("loading");
     try {
-      const [tpl, sess] = await Promise.all([getPublicTemplateById(id), listPublicTemplateSessions(id)]);
+      const [tpl, sess] = await Promise.all([
+        getPublicTemplateById(id),
+        listPublicTemplateSessions(id),
+      ]);
       setTemplate(tpl);
       setSessions(sess ?? []);
       setSelectedSessionId(tpl?.nextSession?.id ?? sess?.[0]?.id ?? null);
@@ -160,30 +347,71 @@ export default function ActivityDetailsPage() {
     }
   }, [id]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  const loadMyReview = useCallback(async () => {
+    if (!id || !user) {
+      setMyReview(null);
+      return;
+    }
+    try {
+      const data = await ReviewApi.getMyReviewForTemplate(id);
+      setMyReview(data);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        setMyReview(null);
+        return;
+      }
+      setMyReview(null);
+    }
+  }, [id, user]);
 
-  const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
-  const spotsLeft = useMemo(() => selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null, [selectedSession]);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      loadMyReview();
+    }
+  }, [authLoading, loadMyReview]);
+
+  const selectedSession = useMemo(
+    () => sessions.find((s) => s.id === selectedSessionId) ?? null,
+    [sessions, selectedSessionId]
+  );
+
+  const spotsLeft = useMemo(
+    () => (selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null),
+    [selectedSession]
+  );
 
   useEffect(() => {
     if (spotsLeft == null || spotsLeft <= 0) return;
     if (people > spotsLeft) setPeople(spotsLeft);
     if (people <= 0) setPeople(1);
-  }, [spotsLeft, selectedSessionId]);
+  }, [spotsLeft, selectedSessionId, people]);
 
   const allImages = useMemo(() => {
     if (!template) return [];
     const imgs = (template as any).images ?? [];
     if (imgs.length > 0) return imgs;
-    if ((template as any).coverImageUrl) return [{ url: (template as any).coverImageUrl, cover: true, order: 0, alt: (template as any).title }];
+    if ((template as any).coverImageUrl) {
+      return [{ url: (template as any).coverImageUrl, cover: true, order: 0, alt: (template as any).title }];
+    }
     return [];
   }, [template]);
 
   const guideOwnerId = useMemo(() => {
-    return ((selectedSession as any)?.guideId ?? (template as any)?.guideId ?? (template as any)?.guide?.id ?? null) as string | null;
+    return ((selectedSession as any)?.guideId ??
+      (template as any)?.guideId ??
+      (template as any)?.guide?.id ??
+      null) as string | null;
   }, [selectedSession, template]);
 
-  const isGuideOwner = useMemo(() => !!(user && guideOwnerId && user.id === guideOwnerId), [user, guideOwnerId]);
+  const isGuideOwner = useMemo(
+    () => !!(user && guideOwnerId && user.id === guideOwnerId),
+    [user, guideOwnerId]
+  );
 
   const cutoffMs = useMemo(() => {
     if (!selectedSession) return null;
@@ -192,8 +420,15 @@ export default function ActivityDetailsPage() {
     return start - now;
   }, [selectedSession, now]);
 
-  const isWithinCutoff = useMemo(() => cutoffMs !== null && cutoffMs < 5 * 3600000, [cutoffMs]);
-  const isWarnCutoff = useMemo(() => cutoffMs !== null && cutoffMs >= 0 && cutoffMs < 8 * 3600000 && !isWithinCutoff, [cutoffMs, isWithinCutoff]);
+  const isWithinCutoff = useMemo(
+    () => cutoffMs !== null && cutoffMs < 5 * 3600000,
+    [cutoffMs]
+  );
+
+  const isWarnCutoff = useMemo(
+    () => cutoffMs !== null && cutoffMs >= 0 && cutoffMs < 8 * 3600000 && !isWithinCutoff,
+    [cutoffMs, isWithinCutoff]
+  );
 
   const canBook = useMemo(() => {
     if (authLoading || !user || !selectedSessionId || !selectedSession) return false;
@@ -204,21 +439,28 @@ export default function ActivityDetailsPage() {
   const price = Number((template as any)?.price ?? 0);
   const totalPrice = price * people;
 
-  // Find most-booked session (for "popular" badge)
   const mostBookedSessionId = useMemo(() => {
     if (!sessions.length) return null;
     return sessions.reduce((a, b) => (b.bookedCount > a.bookedCount ? b : a)).id;
   }, [sessions]);
+
+  const canWriteOrEditReview = !!user && !isGuideOwner && !!template;
 
   async function onBook() {
     if (!canBook || !selectedSessionId) return;
     setBookingError(null);
     setBookingStep("confirming");
     try {
-      const res = await BookingApi.createOrIncreaseBooking({ sessionId: selectedSessionId, numberOfPeople: people });
+      const res = await BookingApi.createOrIncreaseBooking({
+        sessionId: selectedSessionId,
+        numberOfPeople: people,
+      });
       setBookingSuccessId(res.id);
       setBookingStep("success");
-      const [tpl, sess] = await Promise.all([getPublicTemplateById(id!), listPublicTemplateSessions(id!)]);
+      const [tpl, sess] = await Promise.all([
+        getPublicTemplateById(id!),
+        listPublicTemplateSessions(id!),
+      ]);
       setTemplate(tpl);
       setSessions(sess ?? []);
     } catch (e: any) {
@@ -234,33 +476,69 @@ export default function ActivityDetailsPage() {
     setBookingError(null);
   }
 
-  // ── Render loading/error states ──
-  if (state === "loading") return (
-    <>
-      <Header />
-      <main className={styles.detailsRoot}>
-        <div className={styles.loadingState}>
-          <div className={styles.spinner} />
-          <p>Loading adventure...</p>
-        </div>
-      </main>
-    </>
-  );
+  async function handleReviewSubmit(payload: { rating: number; comment: string }) {
+    if (!template?.id) return;
 
-  if (state === "notfound" || state === "error" || !template) return (
-    <>
-      <Header />
-      <main className={styles.detailsRoot}>
-        <div className={styles.errorState}>
-          <h2>{state === "notfound" ? "Adventure Not Found" : "Something Went Wrong"}</h2>
-          <p>{state === "notfound" ? "This experience doesn't exist or has been removed." : "We couldn't load this adventure."}</p>
-          {state === "notfound"
-            ? <Link to="/home" className={styles.btnPrimary}>Explore Adventures</Link>
-            : <button className={styles.btnPrimary} onClick={() => nav(0)} type="button">Try Again</button>}
-        </div>
-      </main>
-    </>
-  );
+    setReviewError(null);
+    setReviewSubmitting(true);
+
+    try {
+      if (myReview?.id) {
+        await ReviewApi.updateReview(myReview.id, payload);
+      } else {
+        await ReviewApi.createReviewForTemplate(template.id, payload);
+      }
+
+      setReviewModalOpen(false);
+      await Promise.all([loadAll(), loadMyReview()]);
+      setReviewReloadKey((v) => v + 1);
+    } catch (err: any) {
+      setReviewError(err?.response?.data?.message || err?.message || "Failed to submit review.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+
+  if (state === "loading") {
+    return (
+      <>
+        <Header />
+        <main className={styles.detailsRoot}>
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+            <p>Loading adventure...</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (state === "notfound" || state === "error" || !template) {
+    return (
+      <>
+        <Header />
+        <main className={styles.detailsRoot}>
+          <div className={styles.errorState}>
+            <h2>{state === "notfound" ? "Adventure Not Found" : "Something Went Wrong"}</h2>
+            <p>
+              {state === "notfound"
+                ? "This experience doesn't exist or has been removed."
+                : "We couldn't load this adventure."}
+            </p>
+            {state === "notfound" ? (
+              <Link to="/home" className={styles.btnPrimary}>
+                Explore Adventures
+              </Link>
+            ) : (
+              <button className={styles.btnPrimary} onClick={() => nav(0)} type="button">
+                Try Again
+              </button>
+            )}
+          </div>
+        </main>
+      </>
+    );
+  }
 
   const safeDiff = (template as any).difficulty ?? "EASY";
   const totalBooked = (template as any).totalBookedCount ?? 0;
@@ -269,53 +547,96 @@ export default function ActivityDetailsPage() {
     <>
       <Header />
 
-      {/* Lightbox */}
       {galleryOpen && allImages.length > 0 && (
         <div className={styles.lightboxOverlay} onClick={() => setGalleryOpen(false)}>
           <button className={styles.lightboxClose} onClick={() => setGalleryOpen(false)} type="button">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
-          <button className={`${styles.lightboxNav} ${styles.lbPrev}`} onClick={(e) => { e.stopPropagation(); setActiveImageIdx((i) => (i - 1 + allImages.length) % allImages.length); }} type="button">
+          <button
+            className={`${styles.lightboxNav} ${styles.lbPrev}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveImageIdx((i) => (i - 1 + allImages.length) % allImages.length);
+            }}
+            type="button"
+          >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <img src={allImages[activeImageIdx]?.url} alt={allImages[activeImageIdx]?.alt ?? ""} className={styles.lightboxImg} onClick={(e) => e.stopPropagation()} />
-          <button className={`${styles.lightboxNav} ${styles.lbNext}`} onClick={(e) => { e.stopPropagation(); setActiveImageIdx((i) => (i + 1) % allImages.length); }} type="button">
+          <img
+            src={allImages[activeImageIdx]?.url}
+            alt={allImages[activeImageIdx]?.alt ?? ""}
+            className={styles.lightboxImg}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className={`${styles.lightboxNav} ${styles.lbNext}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveImageIdx((i) => (i + 1) % allImages.length);
+            }}
+            type="button"
+          >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
           </button>
-          <div className={styles.lightboxCounter}>{activeImageIdx + 1} / {allImages.length}</div>
+          <div className={styles.lightboxCounter}>
+            {activeImageIdx + 1} / {allImages.length}
+          </div>
         </div>
       )}
 
       <main className={styles.detailsRoot}>
         <div className={styles.topBar}>
-          <Link to="/home" className={styles.backBtn}><IcoArrowLeft /> Back to adventures</Link>
+          <Link to="/home" className={styles.backBtn}>
+            <IcoArrowLeft /> Back to adventures
+          </Link>
         </div>
 
-        {/* Gallery */}
         {allImages.length > 0 && (
           <div className={styles.galleryGrid}>
-            <div className={styles.galleryMain} onClick={() => { setActiveImageIdx(0); setGalleryOpen(true); }}>
+            <div
+              className={styles.galleryMain}
+              onClick={() => {
+                setActiveImageIdx(0);
+                setGalleryOpen(true);
+              }}
+            >
               <img src={allImages[0]?.url} alt={allImages[0]?.alt ?? (template as any).title} />
             </div>
+
             <div className={styles.galleryThumbs}>
               {allImages.slice(1, 5).map((img: any, idx: number) => (
-                <div key={img.url} className={`${styles.galleryThumb} ${idx === 1 ? styles.thumbTR : ""} ${idx === 3 ? styles.thumbBR : ""}`} onClick={() => { setActiveImageIdx(idx + 1); setGalleryOpen(true); }}>
+                <div
+                  key={img.url}
+                  className={`${styles.galleryThumb} ${idx === 1 ? styles.thumbTR : ""} ${idx === 3 ? styles.thumbBR : ""}`}
+                  onClick={() => {
+                    setActiveImageIdx(idx + 1);
+                    setGalleryOpen(true);
+                  }}
+                >
                   <img src={img.url} alt={img.alt ?? ""} />
-                  {idx === 3 && allImages.length > 5 && <div className={styles.moreOverlay}>+{allImages.length - 5}</div>}
+                  {idx === 3 && allImages.length > 5 && (
+                    <div className={styles.moreOverlay}>+{allImages.length - 5}</div>
+                  )}
                 </div>
               ))}
             </div>
+
             {allImages.length > 1 && (
-              <button className={styles.showAllBtn} onClick={() => { setActiveImageIdx(0); setGalleryOpen(true); }} type="button">
+              <button
+                className={styles.showAllBtn}
+                onClick={() => {
+                  setActiveImageIdx(0);
+                  setGalleryOpen(true);
+                }}
+                type="button"
+              >
                 <IcoPhoto /> Show all {allImages.length} photos
               </button>
             )}
           </div>
         )}
 
-        {/* Body */}
         <div className={styles.contentGrid}>
-          {/* ══ LEFT ══ */}
           <div className={styles.leftCol}>
             <div className={styles.titleBlock}>
               <div className={styles.badgeRow}>
@@ -323,34 +644,57 @@ export default function ActivityDetailsPage() {
                   <IcoMountain /> {DIFF_LABELS[safeDiff] ?? safeDiff}
                 </span>
                 {(template as any).tags?.slice(0, 3).map((t: string) => (
-                  <span key={t} className={styles.tagChip}><IcoTag /> {t}</span>
+                  <span key={t} className={styles.tagChip}>
+                    <IcoTag /> {t}
+                  </span>
                 ))}
               </div>
+
               <h1 className={styles.activityTitle}>{(template as any).title}</h1>
+
               <div className={styles.metaRow}>
-                <StarRating average={(template as any).rating?.average ?? 0} count={(template as any).rating?.count ?? 0} />
+                <StarRating
+                  average={(template as any).rating?.average ?? 0}
+                  count={(template as any).rating?.count ?? 0}
+                />
                 <span className={styles.dot}>·</span>
                 {totalBooked > 0 ? (
-                  <span className={styles.bookedPill}><IcoTrend /> {totalBooked} booked</span>
+                  <span className={styles.bookedPill}>
+                    <IcoTrend /> {totalBooked} booked
+                  </span>
                 ) : (
-                  <span className={styles.firstPill}><IcoSparkle /> Be the first to book</span>
+                  <span className={styles.firstPill}>
+                    <IcoSparkle /> Be the first to book
+                  </span>
                 )}
                 {((template as any).upcomingSessionsCount ?? 0) > 0 && (
-                  <><span className={styles.dot}>·</span><span className={styles.metaText}>{(template as any).upcomingSessionsCount} upcoming dates</span></>
+                  <>
+                    <span className={styles.dot}>·</span>
+                    <span className={styles.metaText}>
+                      {(template as any).upcomingSessionsCount} upcoming dates
+                    </span>
+                  </>
                 )}
               </div>
             </div>
 
             <div className={styles.divider} />
 
-            {/* Available dates */}
             <section className={styles.datesSection}>
               <div className={styles.datesSectionHead}>
                 <h2 className={styles.sectionTitle}>Available dates</h2>
-                {sessions.length > 0 && <span className={styles.datesCountBadge}>{sessions.length} date{sessions.length !== 1 ? "s" : ""}</span>}
+                {sessions.length > 0 && (
+                  <span className={styles.datesCountBadge}>
+                    {sessions.length} date{sessions.length !== 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
+
               {sessions.length === 0 ? (
-                <div className={styles.noDates}><IcoCalendar /><span>No upcoming dates. Check back soon.</span></div>
+                <div className={styles.noDates}>
+                  <IcoCalendar />
+                  <span>No upcoming dates. Check back soon.</span>
+                </div>
               ) : (
                 <div className={styles.sessionGrid}>
                   {sessions.map((s) => {
@@ -359,18 +703,40 @@ export default function ActivityDetailsPage() {
                     const soldOut = left === 0;
                     const scarce = !soldOut && left <= 3;
                     const popular = s.id === mostBookedSessionId && s.bookedCount > 0;
+
                     return (
-                      <button key={s.id} type="button" disabled={soldOut} onClick={() => !soldOut && onSessionSelect(s.id)}
-                        className={`${styles.sessionCard} ${active ? styles.sessionActive : ""} ${soldOut ? styles.sessionSoldOut : ""}`}>
-                        {popular && !soldOut && <span className={styles.popularBadge}><IcoFire /> Popular</span>}
-                        {active && <span className={styles.sessionCheckmark}><IcoCheck /></span>}
+                      <button
+                        key={s.id}
+                        type="button"
+                        disabled={soldOut}
+                        onClick={() => !soldOut && onSessionSelect(s.id)}
+                        className={`${styles.sessionCard} ${active ? styles.sessionActive : ""} ${soldOut ? styles.sessionSoldOut : ""}`}
+                      >
+                        {popular && !soldOut && (
+                          <span className={styles.popularBadge}>
+                            <IcoFire /> Popular
+                          </span>
+                        )}
+                        {active && (
+                          <span className={styles.sessionCheckmark}>
+                            <IcoCheck />
+                          </span>
+                        )}
                         {scarce && !soldOut && <span className={styles.scarcePulse} />}
                         <div className={styles.sessionDateLine}>{formatDateShort(s.date)}</div>
                         <div className={styles.sessionTimeLine}>{formatTime(s.date)}</div>
                         <div className={styles.sessionSpotsLine}>
-                          {soldOut ? <span className={styles.tagSoldOut}>Sold out</span>
-                            : scarce ? <span className={styles.tagScarce}>{left} spot{left > 1 ? "s" : ""} left</span>
-                              : <span className={styles.tagOk}>{left}/{s.capacity} spots</span>}
+                          {soldOut ? (
+                            <span className={styles.tagSoldOut}>Sold out</span>
+                          ) : scarce ? (
+                            <span className={styles.tagScarce}>
+                              {left} spot{left > 1 ? "s" : ""} left
+                            </span>
+                          ) : (
+                            <span className={styles.tagOk}>
+                              {left}/{s.capacity} spots
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
@@ -381,24 +747,50 @@ export default function ActivityDetailsPage() {
 
             <div className={styles.divider} />
 
-            {/* Guide */}
             {(template as any).guide && (
               <div className={styles.guideCard}>
                 <div className={styles.guideAvatarWrap}>
-                  {(template as any).guide.profileImageUrl
-                    ? <img src={(template as any).guide.profileImageUrl} alt={(template as any).guide.username} className={styles.guideImg} />
-                    : <div className={styles.guidePlaceholder}>{String((template as any).guide.username ?? "?")[0].toUpperCase()}</div>}
-                  {(template as any).guide.verifiedBadge && <div className={styles.guideBadgeRing}><IcoShield /></div>}
+                  {(template as any).guide.profileImageUrl ? (
+                    <img
+                      src={(template as any).guide.profileImageUrl}
+                      alt={(template as any).guide.username}
+                      className={styles.guideImg}
+                    />
+                  ) : (
+                    <div className={styles.guidePlaceholder}>
+                      {String((template as any).guide.username ?? "?")[0].toUpperCase()}
+                    </div>
+                  )}
+                  {(template as any).guide.verifiedBadge && (
+                    <div className={styles.guideBadgeRing}>
+                      <IcoShield />
+                    </div>
+                  )}
                 </div>
+
                 <div className={styles.guideInfo}>
                   <div className={styles.guideLabel}>Your guide</div>
                   <div className={styles.guideName}>
                     {(template as any).guide.username}
-                    {(template as any).guide.verifiedBadge && <span className={styles.verifiedChip}><IcoCheck /> Verified</span>}
+                    {(template as any).guide.verifiedBadge && (
+                      <span className={styles.verifiedChip}>
+                        <IcoCheck /> Verified
+                      </span>
+                    )}
                   </div>
                   <div className={styles.guideMeta}>
-                    {(template as any).guide.experienceYears != null && <span>{(template as any).guide.experienceYears} yrs experience</span>}
-                    {(template as any).guide.rating?.count > 0 && <><span className={styles.dot}>·</span><span>{(template as any).guide.rating.average.toFixed(1)} rating ({(template as any).guide.rating.count})</span></>}
+                    {(template as any).guide.experienceYears != null && (
+                      <span>{(template as any).guide.experienceYears} yrs experience</span>
+                    )}
+                    {(template as any).guide.rating?.count > 0 && (
+                      <>
+                        <span className={styles.dot}>·</span>
+                        <span>
+                          {(template as any).guide.rating.average.toFixed(1)} rating (
+                          {(template as any).guide.rating.count})
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -412,10 +804,43 @@ export default function ActivityDetailsPage() {
             </section>
 
             <div className={styles.quickGrid}>
-              <div className={styles.quickItem}><div className={styles.quickIcon}><IcoMountain /></div><div><div className={styles.quickLabel}>Difficulty</div><div className={styles.quickVal}>{DIFF_LABELS[safeDiff]}</div></div></div>
-              <div className={styles.quickItem}><div className={styles.quickIcon}><IcoDollar /></div><div><div className={styles.quickLabel}>Price</div><div className={styles.quickVal}>{formatPrice(price)}</div></div></div>
-              {selectedSession && <div className={styles.quickItem}><div className={styles.quickIcon}><IcoUsers /></div><div><div className={styles.quickLabel}>Spots left</div><div className={styles.quickVal}>{spotsLeft}/{selectedSession.capacity}</div></div></div>}
-              {(template as any).addressDisplayName && <div className={styles.quickItem}><div className={styles.quickIcon}><IcoMapPin /></div><div><div className={styles.quickLabel}>Location</div><div className={styles.quickVal}>{(template as any).governorate ?? (template as any).addressDisplayName}</div></div></div>}
+              <div className={styles.quickItem}>
+                <div className={styles.quickIcon}><IcoMountain /></div>
+                <div>
+                  <div className={styles.quickLabel}>Difficulty</div>
+                  <div className={styles.quickVal}>{DIFF_LABELS[safeDiff]}</div>
+                </div>
+              </div>
+
+              <div className={styles.quickItem}>
+                <div className={styles.quickIcon}><IcoDollar /></div>
+                <div>
+                  <div className={styles.quickLabel}>Price</div>
+                  <div className={styles.quickVal}>{formatPrice(price)}</div>
+                </div>
+              </div>
+
+              {selectedSession && (
+                <div className={styles.quickItem}>
+                  <div className={styles.quickIcon}><IcoUsers /></div>
+                  <div>
+                    <div className={styles.quickLabel}>Spots left</div>
+                    <div className={styles.quickVal}>{spotsLeft}/{selectedSession.capacity}</div>
+                  </div>
+                </div>
+              )}
+
+              {(template as any).addressDisplayName && (
+                <div className={styles.quickItem}>
+                  <div className={styles.quickIcon}><IcoMapPin /></div>
+                  <div>
+                    <div className={styles.quickLabel}>Location</div>
+                    <div className={styles.quickVal}>
+                      {(template as any).governorate ?? (template as any).addressDisplayName}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className={styles.divider} />
@@ -427,9 +852,16 @@ export default function ActivityDetailsPage() {
                   <div className={styles.locationIconBox}><IcoMapPin /></div>
                   <div>
                     <div className={styles.locationName}>{(template as any).addressDisplayName}</div>
-                    {(template as any).governorate && <div className={styles.locationSub}>{(template as any).governorate}</div>}
+                    {(template as any).governorate && (
+                      <div className={styles.locationSub}>{(template as any).governorate}</div>
+                    )}
                     {(template as any).latitude && (template as any).longitude && (
-                      <a href={`https://www.google.com/maps?q=${(template as any).latitude},${(template as any).longitude}`} target="_blank" rel="noopener noreferrer" className={styles.mapLink}>
+                      <a
+                        href={`https://www.google.com/maps?q=${(template as any).latitude},${(template as any).longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.mapLink}
+                      >
                         View on Google Maps <IcoLink />
                       </a>
                     )}
@@ -438,14 +870,36 @@ export default function ActivityDetailsPage() {
               </section>
             )}
 
+            <div className={styles.divider} />
+
+            <section className={styles.section} id="reviews-section">
+              {!user && (
+                <p className={styles.noCharge} style={{ marginBottom: 14 }}>
+                  Login to write a review.
+                </p>
+              )}
+
+              {user && isGuideOwner && (
+                <p className={styles.noCharge} style={{ marginBottom: 14 }}>
+                  Guides cannot review their own activity.
+                </p>
+              )}
+
+              <ReviewList
+                key={reviewReloadKey}
+                templateId={template.id}
+                currentUserId={user?.id ?? null}
+                guideOwnerId={guideOwnerId}
+                canReview={canWriteOrEditReview}
+                userReviewId={myReview?.id ?? null}
+              />
+            </section>
+
             <div style={{ height: 80 }} />
           </div>
 
-          {/* ══ SIDEBAR ══ */}
           <aside className={styles.sidebar}>
             <div className={styles.sidebarCard}>
-
-              {/* ── SUCCESS STATE ── */}
               {bookingStep === "success" && bookingSuccessId ? (
                 <div className={styles.successState}>
                   <ConfettiBurst />
@@ -467,55 +921,68 @@ export default function ActivityDetailsPage() {
                   <Link to="/my-bookings" className={styles.successBtn}>
                     <IcoBookmark /> View my bookings <IcoArrowRight />
                   </Link>
-                  <button className={styles.successSecondary} type="button" onClick={() => { setBookingStep("idle"); setBookingSuccessId(null); }}>
+                  <button
+                    className={styles.successSecondary}
+                    type="button"
+                    onClick={() => {
+                      setBookingStep("idle");
+                      setBookingSuccessId(null);
+                    }}
+                  >
                     Book another date
                   </button>
                 </div>
               ) : (
                 <>
-                  {/* Price header */}
                   <div className={styles.sidebarTop}>
                     <span className={styles.sidebarPrice}>{formatPrice(price)}</span>
                     {price > 0 && <span className={styles.sidebarPriceUnit}> / person</span>}
                   </div>
-                  <StarRating average={(template as any).rating?.average ?? 0} count={(template as any).rating?.count ?? 0} />
+
+                  <StarRating
+                    average={(template as any).rating?.average ?? 0}
+                    count={(template as any).rating?.count ?? 0}
+                  />
 
                   <div className={styles.sidebarDivider} />
 
-                  {/* Cutoff warning */}
                   {isWarnCutoff && cutoffMs !== null && (
                     <div className={styles.cutoffWarning}>
                       <IcoClock />
-                      <span>Booking closes in <strong>{formatCountdown(cutoffMs - 5 * 3600000 + 5 * 3600000)}</strong> — book soon!</span>
+                      <span>
+                        Booking closes in <strong>{formatCountdown(cutoffMs - 5 * 3600000 + 5 * 3600000)}</strong> — book soon!
+                      </span>
                     </div>
                   )}
 
-                  {/* Fields */}
                   <div className={styles.sidebarFields}>
-                    {/* Date */}
                     <div className={styles.sidebarField}>
                       <span className={styles.sidebarFieldLabel}><IcoCalendar /> Date</span>
-                      <span className={styles.sidebarFieldVal}>{selectedSession ? formatDateShort(selectedSession.date) : "—"}</span>
+                      <span className={styles.sidebarFieldVal}>
+                        {selectedSession ? formatDateShort(selectedSession.date) : "—"}
+                      </span>
                     </div>
-                    {/* Time */}
+
                     {selectedSession && (
                       <div className={styles.sidebarField}>
                         <span className={styles.sidebarFieldLabel}><IcoClock /> Time</span>
                         <span className={styles.sidebarFieldVal}>{formatTime(selectedSession.date)}</span>
                       </div>
                     )}
-                    {/* Availability */}
+
                     <div className={styles.sidebarField}>
                       <span className={styles.sidebarFieldLabel}><IcoUsers /> Availability</span>
                       <span className={styles.sidebarFieldVal}>
-                        {spotsLeft == null ? "—"
-                          : spotsLeft === 0 ? <span className={styles.tagSoldOut}>Sold out</span>
-                            : spotsLeft <= 3 ? <span className={styles.tagScarce}>{spotsLeft} spots left</span>
-                              : `${spotsLeft} spots`}
+                        {spotsLeft == null ? "—" : spotsLeft === 0 ? (
+                          <span className={styles.tagSoldOut}>Sold out</span>
+                        ) : spotsLeft <= 3 ? (
+                          <span className={styles.tagScarce}>{spotsLeft} spots left</span>
+                        ) : (
+                          `${spotsLeft} spots`
+                        )}
                       </span>
                     </div>
 
-                    {/* People stepper */}
                     <div className={styles.sidebarField}>
                       <span className={styles.sidebarFieldLabel}><IcoUsers /> Guests</span>
                       <div className={styles.peopleStepper}>
@@ -524,19 +991,22 @@ export default function ActivityDetailsPage() {
                           type="button"
                           onClick={() => setPeople((p) => Math.max(1, p - 1))}
                           disabled={people <= 1 || !selectedSession || (spotsLeft ?? 0) <= 0}
-                        >−</button>
+                        >
+                          −
+                        </button>
                         <span className={styles.stepperVal}>{people}</span>
                         <button
                           className={styles.stepperBtn}
                           type="button"
                           onClick={() => setPeople((p) => Math.min(Math.min(10, spotsLeft ?? 10), p + 1))}
                           disabled={people >= Math.min(10, spotsLeft ?? 10) || !selectedSession || (spotsLeft ?? 0) <= 0}
-                        >+</button>
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Live price summary */}
                   {price > 0 && selectedSession && (spotsLeft ?? 0) > 0 && (
                     <div className={styles.priceSummary}>
                       <div className={styles.priceSummaryRow}>
@@ -551,14 +1021,19 @@ export default function ActivityDetailsPage() {
                   )}
 
                   <div className={styles.sidebarBookedRow}>
-                    {totalBooked > 0
-                      ? <span className={styles.bookedPill}><IcoTrend /> {totalBooked} people booked this</span>
-                      : <span className={styles.firstPill}><IcoSparkle /> Be the first to book</span>}
+                    {totalBooked > 0 ? (
+                      <span className={styles.bookedPill}>
+                        <IcoTrend /> {totalBooked} people booked this
+                      </span>
+                    ) : (
+                      <span className={styles.firstPill}>
+                        <IcoSparkle /> Be the first to book
+                      </span>
+                    )}
                   </div>
 
                   <div className={styles.sidebarDivider} />
 
-                  {/* Book button */}
                   <button
                     className={`${styles.bookBtn} ${bookingStep === "confirming" ? styles.bookBtnLoading : ""}`}
                     type="button"
@@ -566,25 +1041,41 @@ export default function ActivityDetailsPage() {
                     onClick={onBook}
                   >
                     {bookingStep === "confirming" ? (
-                      <><div className={styles.bookBtnSpinner} /><span>Confirming...</span></>
+                      <>
+                        <div className={styles.bookBtnSpinner} />
+                        <span>Confirming...</span>
+                      </>
                     ) : (
-                      <span>Book This Adventure{price > 0 && selectedSession && (spotsLeft ?? 0) > 0 ? ` · ${totalPrice} TND` : ""}</span>
+                      <span>
+                        Book This Adventure
+                        {price > 0 && selectedSession && (spotsLeft ?? 0) > 0 ? ` · ${totalPrice} TND` : ""}
+                      </span>
                     )}
                   </button>
 
-                  {/* Status messages */}
                   {!authLoading && !user && <p className={styles.noCharge}>Login to book</p>}
                   {user && isGuideOwner && <p className={styles.noCharge}>You can't book your own activity.</p>}
-                  {user && isWithinCutoff && <p className={styles.noCharge} style={{ color: "#c4360c" }}>⏰ Booking closed — starts within 5 hours.</p>}
+                  {user && isWithinCutoff && (
+                    <p className={styles.noCharge} style={{ color: "#c4360c" }}>
+                      ⏰ Booking closed — starts within 5 hours.
+                    </p>
+                  )}
                   {bookingError && <p className={styles.bookingError}>{bookingError}</p>}
                   {!bookingError && !isWithinCutoff && <p className={styles.noCharge}>You won't be charged yet</p>}
 
-                  {/* Guide */}
                   {(template as any).guide && (
                     <div className={styles.sidebarGuide}>
-                      {(template as any).guide.profileImageUrl
-                        ? <img src={(template as any).guide.profileImageUrl} alt={(template as any).guide.username} className={styles.sidebarGuideImg} />
-                        : <div className={styles.sidebarGuidePlaceholder}>{String((template as any).guide.username ?? "?")[0].toUpperCase()}</div>}
+                      {(template as any).guide.profileImageUrl ? (
+                        <img
+                          src={(template as any).guide.profileImageUrl}
+                          alt={(template as any).guide.username}
+                          className={styles.sidebarGuideImg}
+                        />
+                      ) : (
+                        <div className={styles.sidebarGuidePlaceholder}>
+                          {String((template as any).guide.username ?? "?")[0].toUpperCase()}
+                        </div>
+                      )}
                       <div>
                         <div className={styles.sidebarGuideLabel}>Guided by</div>
                         <div className={styles.sidebarGuideName}>{(template as any).guide.username}</div>

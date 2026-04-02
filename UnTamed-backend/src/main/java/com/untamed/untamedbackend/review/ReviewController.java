@@ -73,4 +73,14 @@ public class ReviewController {
         String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.getReviewEligibility(bookingId, userId));
     }
+
+    @PostMapping("/template/{templateId}")
+    public ResponseEntity<ReviewResponse> createReviewForTemplate(
+            @PathVariable String templateId,
+            @Valid @RequestBody CreateTemplateReviewRequest req,
+            Authentication auth
+    ) {
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(reviewService.createReviewForTemplate(userId, templateId, req));
+    }
 }

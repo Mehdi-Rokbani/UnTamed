@@ -18,9 +18,13 @@ import com.untamed.untamedbackend.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.review.ReviewUserDto;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class ReviewService {
     private final BookingRepository bookingRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
+    private final UserRepository userRepository;
 
     public ReviewResponse createReview(String currentUserId, CreateReviewRequest req) {
         Booking booking = bookingRepository.findByIdAndUserId(req.getBookingId(), currentUserId)
@@ -166,6 +171,9 @@ public class ReviewService {
     }
 
     private ReviewResponse toResponse(Review review) {
+        User reviewerUser = userRepository.findById(review.getReviewerId()).orElse(null);
+        User guideUser = userRepository.findById(review.getGuideId()).orElse(null);
+
         return ReviewResponse.builder()
                 .id(review.getId())
                 .activityTemplateId(review.getActivityTemplateId())
@@ -176,11 +184,76 @@ public class ReviewService {
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .status(review.getStatus())
+
+                .reviewer(toReviewUserDto(reviewerUser))
+                .guide(toReviewUserDto(guideUser))
+
                 .replyText(review.getReplyText())
                 .replyCreatedAt(review.getReplyCreatedAt())
                 .replyUpdatedAt(review.getReplyUpdatedAt())
                 .createdAt(review.getCreatedAt())
                 .updatedAt(review.getUpdatedAt())
                 .build();
+    }
+
+    private ReviewUserDto toReviewUserDto(User user) {
+        if (user == null) return null;
+
+        return ReviewUserDto.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .role(user.getRole() != null ? user.getRole().name() : null)
+                .profileImageUrl(user.getProfileImageUrl())
+                .build();
+    }
+
+    public ReviewResponse createReviewForTemplate(String currentUserId, String templateId, CreateTemplateReviewRequest req) {
+        ActivityTemplate template = activityTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new IllegalArgumentException("Activity template not found"));
+
+        if (template.getGuideId().equals(currentUserId)) {
+            throw new IllegalArgumentException("Guide cannot review their own activity");
+        }
+
+        if (reviewRepository.existsByReviewerIdAndActivityTemplateId(currentUserId, templateId)) {
+            throw new IllegalArgumentException("You already reviewed this activity");
+        }
+
+        List<Booking> completedBookings = bookingRepository
+                .findByUserIdAndStatusOrderByCreatedAtDesc(currentUserId, BookingStatus.COMPLETED);
+
+        Instant now = Instant.now();
+
+        Booking eligibleBooking = completedBookings.stream()
+                .filter(b -> !b.isAttendanceMarkedAbsent())
+                .map(b -> {
+                    ActivitySession s = activitySessionRepository.findById(b.getSessionId()).orElse(null);
+                    if (s == null) return null;
+                    if (!templateId.equals(s.getTemplateId())) return null;
+                    if (s.getDate() == null || !s.getDate().isBefore(now)) return null;
+                    return b;
+                })
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No eligible completed booking found for this activity"));
+
+        ActivitySession session = activitySessionRepository.findById(eligibleBooking.getSessionId())
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+
+        Review review = Review.builder()
+                .activityTemplateId(templateId)
+                .sessionId(session.getId())
+                .bookingId(eligibleBooking.getId())
+                .reviewerId(currentUserId)
+                .guideId(template.getGuideId())
+                .rating(req.getRating())
+                .comment(req.getComment().trim())
+                .status(ReviewStatus.VISIBLE)
+                .build();
+
+        Review saved = reviewRepository.save(review);
+        recomputeTemplateRating(templateId);
+
+        return toResponse(saved);
     }
 }

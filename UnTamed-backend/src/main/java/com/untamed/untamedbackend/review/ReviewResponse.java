@@ -18,9 +18,14 @@ public class ReviewResponse {
     private int rating;
     private String comment;
     private ReviewStatus status;
+
+    private ReviewUserDto reviewer;
+    private ReviewUserDto guide;
+
     private String replyText;
     private Instant replyCreatedAt;
     private Instant replyUpdatedAt;
+
     private Instant createdAt;
     private Instant updatedAt;
 }
