@@ -140,7 +140,7 @@ export function ProfilePage() {
               {!isGuide && (
                 <>
                   <div className={styles.statItem}>
-                    <div className={styles.statValue}>0</div>
+                    <div className={styles.statValue}>{user.confirmedTripsCount}</div>
                     <div className={styles.statLabel}>Trips</div>
                   </div>
 

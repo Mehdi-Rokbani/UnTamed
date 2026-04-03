@@ -14,6 +14,7 @@ public record UserResponse(
         String profileImageUrl,
         String phoneNumber,
         List<String> preferences,
+        int confirmedTripsCount,
         String bio,
         Boolean verified,
         Boolean enabled,

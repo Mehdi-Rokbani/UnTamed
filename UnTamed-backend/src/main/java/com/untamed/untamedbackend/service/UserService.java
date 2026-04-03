@@ -159,6 +159,7 @@ public class UserService {
                 u.getProfileImageUrl(),
                 u.getPhoneNumber(),
                 u.getPreferences(),
+                u.getConfirmedTripsCount(),
                 u.getBio(),
                 u.isVerified(),
                 u.isEnabled(),

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Header } from "../components/Header";
 import * as BookingApi from "../api/booking.api";
 import * as ActivityApi from "../api/activity.api";
+import { useAuth } from "../auth/auth.store";
 import styles from "../style/my-bookings.module.css";
 
 type LoadState = "loading" | "done" | "error";
@@ -349,6 +350,7 @@ export default function MyBookingsPage() {
   const [templatesById, setTemplatesById] = useState<Record<string, any>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const { refreshMe } = useAuth();
 
   const loadAll = async () => {
     setState("loading");
@@ -449,6 +451,7 @@ export default function MyBookingsPage() {
     try {
       const updated = await BookingApi.confirmBooking(id);
       setBookings((prev) => prev.map((x) => (x.id === id ? updated : x)));
+      await refreshMe();
     } finally { setBusyId(null); }
   }
 

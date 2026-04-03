@@ -244,12 +244,18 @@ public class BookingService {
      * Important: once COMPLETED, booking is immutable.
      */
     public Booking markCompleted(String bookingId) {
+
         Booking b = bookingRepository.findById(bookingId).orElse(null);
-        if (b == null) return null;
 
-        if (b.getStatus() == BookingStatus.COMPLETED) return b; // idempotent
+        if (b == null) {
+            return null;
+        }
 
-        // If booking already released, payment came too late; caller decides refund/ignore policy.
+
+        if (b.getStatus() == BookingStatus.COMPLETED) {
+            return b;
+        }
+
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
             return b;
         }
@@ -257,7 +263,10 @@ public class BookingService {
         b.setStatus(BookingStatus.COMPLETED);
         b.setExpiresAt(null);
         b.setUpdatedAt(Instant.now());
-        return bookingRepository.save(b);
+
+        Booking savedBooking = bookingRepository.save(b);
+        incrementConfirmedTripsCount(savedBooking.getUserId());
+        return savedBooking;
     }
 
     /**
@@ -315,22 +324,6 @@ public class BookingService {
     }
 
     private void assertOwned(Booking b, String userId) {
-        System.out.println("=== ASSERT OWNED DEBUG ===");
-        System.out.println("Incoming userId = " + userId);
-        System.out.println("Booking id = " + b.getId());
-
-        // Replace getUserId() with the real field from Booking
-        System.out.println("Booking owner = " + b.getUserId());
-
-        if (b.getUserId() != null) {
-            System.out.println("Booking owner class = " + b.getUserId().getClass().getName());
-            System.out.println("owner.equals(userId) = " + b.getUserId().equals(userId));
-            System.out.println("String.valueOf(owner).equals(userId) = " + String.valueOf(b.getUserId()).equals(userId));
-        }
-
-        System.out.println("userId class = " + (userId != null ? userId.getClass().getName() : "null"));
-        System.out.println("=== END ASSERT OWNED DEBUG ===");
-
         if (b.getUserId() == null || !String.valueOf(b.getUserId()).equals(userId)) {
             throw new org.springframework.security.access.AccessDeniedException("Not your booking");
         }
@@ -377,41 +370,54 @@ public class BookingService {
     private ResponseStatusException notFound(String msg) {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, msg);
     }
+
     public Booking confirmBooking(String bookingId, String userId) {
+
+
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
 
         if (b.getStatus() == BookingStatus.COMPLETED) {
-            return b; // idempotent: already confirmed
+            return b;
         }
 
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
 
         if (b.getStatus() == BookingStatus.PAYING) {
+
             throw conflict("Payment in progress. Cannot confirm booking now.");
         }
 
         if (b.getStatus() != BookingStatus.PENDING) {
+
             throw conflict("Only pending bookings can be confirmed.");
         }
 
         if (b.getExpiresAt() != null && b.getExpiresAt().isBefore(Instant.now())) {
+
             expireBooking(b.getId());
             throw conflict("Booking expired");
         }
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+
         validateSessionChangeAllowed(session);
 
         b.setStatus(BookingStatus.COMPLETED);
         b.setExpiresAt(null);
         b.setUpdatedAt(Instant.now());
 
-        return bookingRepository.save(b);
+        Booking savedBooking = bookingRepository.save(b);
+
+        incrementConfirmedTripsCount(savedBooking.getUserId());
+
+
+        return savedBooking;
     }
 
 
@@ -557,35 +563,12 @@ public class BookingService {
 
         return bookingRepository.save(b);
     }
+
     public ReviewEligibilityResponse getReviewEligibility(String bookingId, String userId) {
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
-        // ===== DEBUG START =====
-        System.out.println("=== REVIEW ELIGIBILITY DEBUG ===");
-        System.out.println("bookingId param = " + bookingId);
-        System.out.println("userId param = " + userId);
-        System.out.println("Booking found = " + (b != null));
-        System.out.println("Booking object = " + b);
 
-        // Print all possible owner-related fields (keep only the ones that exist in Booking)
-        System.out.println("b.getId() = " + b.getId());
-        System.out.println("b.getUserId() = " + b.getUserId());
-
-        System.out.println("b.getSessionId() = " + b.getSessionId());
-
-        if (b.getUserId() != null) {
-            System.out.println("b.getUserId() class = " + b.getUserId().getClass().getName());
-            System.out.println("b.getUserId().equals(userId) = " + b.getUserId().equals(userId));
-            System.out.println("String.valueOf(b.getUserId()).equals(userId) = " + String.valueOf(b.getUserId()).equals(userId));
-        }
-
-        if (userId != null) {
-            System.out.println("userId class = " + userId.getClass().getName());
-        }
-
-        System.out.println("=== END REVIEW ELIGIBILITY DEBUG ===");
-        // ===== DEBUG END =====
 
         assertOwned(b, userId);
 
@@ -651,6 +634,25 @@ public class BookingService {
                 .activityTemplateId(template.getId())
                 .reason("Eligible to review.")
                 .build();
+    }
+
+    private void incrementConfirmedTripsCount(String userId) {
+
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> notFound("User not found"));
+
+        user.setConfirmedTripsCount(user.getConfirmedTripsCount() + 1);
+
+        User savedUser = userRepository.save(user);
+    }
+
+    private void decrementConfirmedTripsCount(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> notFound("User not found"));
+
+        user.setConfirmedTripsCount(Math.max(0, user.getConfirmedTripsCount() - 1));
+        userRepository.save(user);
     }
 
 }

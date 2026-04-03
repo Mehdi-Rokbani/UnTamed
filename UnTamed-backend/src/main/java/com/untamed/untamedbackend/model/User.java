@@ -59,10 +59,13 @@ public class User {
     @Size(max = 500)
     private String bio;
 
+    @Builder.Default
+    private int confirmedTripsCount = 0;
+
 
     // Optional
     private Level level;                 // enum (BEGINNER..)
-    private List<String> preferences;    // tags like: "hiking", "history", "budget"
+    private List<String> preferences= new ArrayList<>();   // tags like: "hiking", "history", "budget"
 
     // Only relevant if role == GUIDE (still optional)
     private GuideProfile guideProfile;

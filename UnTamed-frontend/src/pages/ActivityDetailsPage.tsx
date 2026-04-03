@@ -301,7 +301,7 @@ function ReviewModal({
 export default function ActivityDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading,refreshMe } = useAuth();
 
   const [state, setState] = useState<LoadState>("loading");
   const [template, setTemplate] = useState<PublicTemplateCard | null>(null);
@@ -457,6 +457,9 @@ export default function ActivityDetailsPage() {
       });
       setBookingSuccessId(res.id);
       setBookingStep("success");
+
+        await refreshMe();
+
       const [tpl, sess] = await Promise.all([
         getPublicTemplateById(id!),
         listPublicTemplateSessions(id!),
@@ -1091,3 +1094,4 @@ export default function ActivityDetailsPage() {
     </>
   );
 }
+
