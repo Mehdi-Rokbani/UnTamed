@@ -152,7 +152,8 @@ public class ActivitySessionService {
                     t.getGuideId(),
                     t.getTags(),
                     // cover image url (optional)
-                    t.getImages() == null ? null : t.getImages().stream().filter(ActivityImage::isCover).findFirst().map(ActivityImage::getUrl).orElse(null)
+                    t.getImages() == null ? null : t.getImages().stream().filter(ActivityImage::isCover).findFirst().map(ActivityImage::getUrl).orElse(null),
+                    t.getCategoryIds()
             );
         }
 

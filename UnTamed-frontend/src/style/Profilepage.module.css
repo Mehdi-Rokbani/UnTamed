@@ -587,3 +587,52 @@
     border-radius: 8px;
   }
 }
+
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.categoryCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #f7f7f5;
+}
+
+.categoryIcon,
+.categoryFallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.categoryFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9efe8;
+  font-size: 18px;
+}
+
+.categoryMeta {
+  display: flex;
+  flex-direction: column;
+}
+
+.categoryName {
+  font-weight: 600;
+}
+
+.categoryCount {
+  color: #777;
+}
+
+.empty {
+  color: #777;
+}

@@ -3,11 +3,23 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/auth.store";
 import * as GuideApi from "../api/guide.api";
 import type { GuideProfileResponse } from "../api/guide.api";
+import * as BookingApi from "../api/booking.api";
+import * as ActivityApi from "../api/activity.api";
+import * as CategoryApi from "../api/category.api";
+import type { Category } from "../types/category";
 import styles from "../style/ProfilePage.module.css";
 import { Header } from "../components/Header";
 import { ActivityTab } from "../components/ActivityTab";
+import { TopCategories } from '../components/TopCategories';
 
 type TabType = "about" | "guide" | "activity" | "posts";
+
+type TopCategory = {
+  id: string;
+  name: string;
+  count: number;
+  iconUrl?: string;
+};
 
 export function ProfilePage() {
   const { user, loading } = useAuth();
@@ -15,13 +27,13 @@ export function ProfilePage() {
   const [guideLoading, setGuideLoading] = useState(false);
   const [guideErr, setGuideErr] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("about");
+  const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
 
   const location = useLocation();
   const navigate = useNavigate();
 
   const isGuide = user?.role === "GUIDE";
 
-  // Sync active tab from URL hash
   useEffect(() => {
     const hash = location.hash.replace("#", "") as TabType;
     if (hash && ["about", "guide", "activity", "posts"].includes(hash)) {
@@ -29,7 +41,6 @@ export function ProfilePage() {
     }
   }, [location.hash]);
 
-  // Load guide profile if applicable
   useEffect(() => {
     let alive = true;
 
@@ -38,8 +49,10 @@ export function ProfilePage() {
         setGuide(null);
         return;
       }
+
       setGuideLoading(true);
       setGuideErr(null);
+
       try {
         const gp = await GuideApi.getGuideMe();
         if (alive) setGuide(gp);
@@ -51,10 +64,124 @@ export function ProfilePage() {
     }
 
     loadGuide();
+
     return () => {
       alive = false;
     };
   }, [isGuide]);
+
+  useEffect(() => {
+    let alive = true;
+
+    function extractCategoryIds(templateLike: any): string[] {
+      if (!templateLike) return [];
+
+      if (Array.isArray(templateLike.categoryIds) && templateLike.categoryIds.length > 0) {
+        return templateLike.categoryIds.filter((id: unknown): id is string => typeof id === "string");
+      }
+
+      if (Array.isArray(templateLike.categories) && templateLike.categories.length > 0) {
+        return templateLike.categories
+          .map((c: any) => (typeof c === "string" ? c : c?.id))
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
+      }
+
+      if (typeof templateLike.categoryId === "string" && templateLike.categoryId.length > 0) {
+        return [templateLike.categoryId];
+      }
+
+      if (Array.isArray(templateLike.tags) && templateLike.tags.length > 0) {
+        return templateLike.tags.filter((id: unknown): id is string => typeof id === "string");
+      }
+
+      return [];
+    }
+
+    async function computeCategories() {
+      try {
+        const [bookings, categories] = await Promise.all([
+          BookingApi.listMyBookings(),
+          CategoryApi.listCategories({ activeOnly: true }),
+        ]);
+
+        const validBookings = bookings.filter(
+          (b: BookingApi.Booking) =>
+            b.status === "COMPLETED" || (b.status as string) === "CONFIRMED"
+        );
+
+        const templateLikes = await Promise.all(
+          validBookings.map(async (b: BookingApi.Booking) => {
+            try {
+              const session = await ActivityApi.getSessionById(b.sessionId);
+              console.log("SESSION", session);
+
+              if ((session as any).template) {
+                console.log("USING SESSION.TEMPLATE", (session as any).template);
+                return (session as any).template;
+              }
+
+              const templateId =
+                (session as any).templateId ||
+                (session as any).activityTemplateId;
+
+              console.log("TEMPLATE ID", templateId);
+
+              if (!templateId) return null;
+
+              const template = await ActivityApi.getPublicTemplateById(templateId);
+              console.log("FETCHED TEMPLATE", template);
+              return template;
+            } catch (err) {
+              console.error("Template fetch failed for booking", b.id, err);
+              return null;
+            }
+          })
+        );
+
+        console.log("TEMPLATE LIKES", templateLikes);
+
+        const counter = new Map<string, number>();
+
+        templateLikes.forEach((templateLike: any) => {
+          if (!templateLike) return;
+
+          console.log("ONE TEMPLATE", templateLike);
+
+          const ids = extractCategoryIds(templateLike);
+          console.log("CATEGORY IDS USED", ids);
+
+          ids.forEach((id: string) => {
+            counter.set(id, (counter.get(id) ?? 0) + 1);
+          });
+        });
+
+        console.log("COUNTER", Array.from(counter.entries()));
+        console.log("CATEGORIES API", categories);
+
+        const result: TopCategory[] = categories
+          .map((c: Category) => ({
+            id: c.id,
+            name: c.name,
+            count: counter.get(c.id) ?? 0,
+            iconUrl: c.iconUrl ?? undefined,
+          }))
+          .filter((c: TopCategory) => c.count > 0)
+          .sort((a: TopCategory, b: TopCategory) => b.count - a.count)
+          .slice(0, 5);
+
+        if (alive) setTopCategories(result);
+      } catch (err) {
+        console.error("Failed to compute categories", err);
+        if (alive) setTopCategories([]);
+      }
+    }
+
+    computeCategories();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const displayName = useMemo(() => {
     if (!user) return "";
@@ -74,11 +201,8 @@ export function ProfilePage() {
       <Header />
 
       <div className={styles.pageWrapper}>
-        {/* ── Fixed top section ──────────────────────────────────────── */}
         <div className={styles.fixedHeader}>
           <div className={styles.headerContainer}>
-
-            {/* Profile card */}
             <div className={styles.profileCard}>
               <div className={styles.avatarSection}>
                 {user.profileImageUrl ? (
@@ -92,6 +216,7 @@ export function ProfilePage() {
                     {displayName.slice(0, 1).toUpperCase()}
                   </div>
                 )}
+
                 {user.role === "GUIDE" && user.verified && (
                   <div className={styles.verifiedIcon}>
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -106,7 +231,6 @@ export function ProfilePage() {
                 <p className={styles.userRole}>{user.role}</p>
               </div>
 
-              {/* Stats */}
               <div className={styles.statsGrid}>
                 {isGuide && guide ? (
                   <>
@@ -154,7 +278,6 @@ export function ProfilePage() {
               </div>
             </div>
 
-            {/* Tab navigation */}
             <nav className={styles.tabsNav}>
               <button
                 className={`${styles.tab} ${activeTab === "about" ? styles.tabActive : ""}`}
@@ -189,11 +312,8 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Dynamic content section ────────────────────────────────── */}
         <div className={styles.contentWrapper}>
           <div className={styles.contentContainer}>
-
-            {/* About tab */}
             {activeTab === "about" && (
               <div className={styles.tabContent}>
                 <div className={styles.sectionHeader}>
@@ -258,10 +378,14 @@ export function ProfilePage() {
                     </div>
                   </div>
                 )}
+
+                <TopCategories
+                  topCategories={topCategories}
+                  onSeeAll={() => router.push('/categories')} // optional
+                />
               </div>
             )}
 
-            {/* Guide profile tab */}
             {activeTab === "guide" && isGuide && (
               <div className={styles.tabContent}>
                 <div className={styles.sectionHeader}>
@@ -350,14 +474,12 @@ export function ProfilePage() {
               </div>
             )}
 
-            {/* ✅ Activity tab — unified trips + reviews with segmented control */}
             {activeTab === "activity" && (
               <div className={styles.tabContent}>
                 <ActivityTab />
               </div>
             )}
 
-            {/* Posts tab — coming soon */}
             {activeTab === "posts" && (
               <div className={styles.tabContent}>
                 <div className={styles.comingSoon}>

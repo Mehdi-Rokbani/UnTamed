@@ -12,5 +12,6 @@ public record ActivityTemplateMiniDto(
         Difficulty difficulty,
         String guideId,
         List<String> tags,
-        String coverImageUrl
+        String coverImageUrl,
+        List<String> categoryIds
 ) {}
