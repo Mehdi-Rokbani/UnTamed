@@ -60,6 +60,7 @@ public class UserController {
                 u.getPhoneNumber(),
                 u.getPreferences(),
                 u.getConfirmedTripsCount(),
+                u.getReviewsWrittenCount(),
                 u.getBio(),
                 u.isVerified(),
                 u.isEnabled(),

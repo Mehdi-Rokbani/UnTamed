@@ -17,4 +17,5 @@ public interface ReviewRepository extends MongoRepository<Review, String> {
             String activityTemplateId,
             ReviewStatus status
     );
+    List<Review> findByReviewerIdOrderByCreatedAtDesc(String reviewerId);
 }

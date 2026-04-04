@@ -46,3 +46,8 @@ export async function createReviewForTemplate(
   const { data } = await http.post(`/api/reviews/template/${templateId}`, payload);
   return data;
 }
+
+export async function getMyReviews() {
+  const { data } = await http.get<Review[]>("/api/reviews/me");
+  return data;
+}

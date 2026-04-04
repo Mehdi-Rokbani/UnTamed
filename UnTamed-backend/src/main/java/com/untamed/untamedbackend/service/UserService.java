@@ -160,6 +160,7 @@ public class UserService {
                 u.getPhoneNumber(),
                 u.getPreferences(),
                 u.getConfirmedTripsCount(),
+                u.getReviewsWrittenCount(),
                 u.getBio(),
                 u.isVerified(),
                 u.isEnabled(),

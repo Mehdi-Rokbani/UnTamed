@@ -17,10 +17,13 @@ import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.review.ReviewUserDto;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +39,7 @@ public class ReviewService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
 
+    @Transactional
     public ReviewResponse createReview(String currentUserId, CreateReviewRequest req) {
         Booking booking = bookingRepository.findByIdAndUserId(req.getBookingId(), currentUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
@@ -79,8 +83,10 @@ public class ReviewService {
                 .build();
 
         Review saved;
+
         try {
             saved = reviewRepository.save(review);
+            incrementReviewsWrittenCount(currentUserId);
         } catch (DuplicateKeyException e) {
             throw new IllegalArgumentException("You already reviewed this activity");
         }
@@ -256,4 +262,19 @@ public class ReviewService {
 
         return toResponse(saved);
     }
+
+    public List<ReviewResponse> listMyReviews(String userId) {
+        return reviewRepository.findByReviewerIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private void incrementReviewsWrittenCount(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        user.setReviewsWrittenCount(user.getReviewsWrittenCount() + 1);
+        userRepository.save(user);
+    }
+
 }

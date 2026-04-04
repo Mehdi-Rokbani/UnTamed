@@ -52,6 +52,7 @@ public class AuthService {
                 user.getPhoneNumber(),
                 user.getPreferences(),
                 user.getConfirmedTripsCount(),
+                        user.getReviewsWrittenCount(),
                 user.getBio(),
                 user.isVerified(),
                 user.isEnabled(),

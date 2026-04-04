@@ -83,4 +83,10 @@ public class ReviewController {
         String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(reviewService.createReviewForTemplate(userId, templateId, req));
     }
+    @GetMapping("/me")
+    public ResponseEntity<List<ReviewResponse>> myReviews(Authentication auth) {
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(reviewService.listMyReviews(userId));
+    }
+
 }

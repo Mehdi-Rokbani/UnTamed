@@ -1,0 +1,250 @@
+/* ── ActivityTab.module.css ──────────────────────────────────────────────── */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ── Feed header ─────────────────────────────────────────────────────────── */
+
+.feedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ── Segmented control ───────────────────────────────────────────────────── */
+
+.segmentedControl {
+  display: inline-flex;
+  background: #f3f3f0;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.segment:hover {
+  color: #444;
+}
+
+.segmentActive {
+  background: #fff;
+  color: #1a1a18;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.segmentCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #e8e8e4;
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: 0;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.segmentCountActive {
+  background: #1a1a18;
+  color: #fff;
+}
+
+/* ── Skeleton for segmented control ─────────────────────────────────────── */
+
+.segmentedControlSkeleton {
+  display: inline-flex;
+  background: #f3f3f0;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.segmentSkeleton {
+  height: 36px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #ebebeb 25%, #e4e4e0 50%, #ebebeb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ── Grid ────────────────────────────────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* ── Load more ───────────────────────────────────────────────────────────── */
+
+.loadMoreWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.loadMoreButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: #fff;
+  border: 1.5px solid #e0e0dc;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a18;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  font-family: inherit;
+}
+
+.loadMoreButton svg {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.18s ease;
+}
+
+.loadMoreButton:hover {
+  border-color: #1a1a18;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.loadMoreButton:hover svg {
+  transform: translateY(2px);
+}
+
+.remainingCount {
+  font-size: 12px;
+  color: #aaa;
+  font-weight: 500;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.emptyIllustration {
+  width: 72px;
+  height: 72px;
+  color: #c8c8b8;
+  margin-bottom: 24px;
+}
+
+.emptyIllustration svg {
+  width: 100%;
+  height: 100%;
+}
+
+.emptyTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 10px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  letter-spacing: -0.02em;
+}
+
+.emptyText {
+  font-size: 14px;
+  color: #999;
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.65;
+}
+
+/* ── Error state ─────────────────────────────────────────────────────────── */
+
+.errorState {
+  padding: 20px 24px;
+  background: #fff8f6;
+  border-radius: 10px;
+  border: 1px solid #f5d0c8;
+  color: #c13515;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Skeleton cards ──────────────────────────────────────────────────────── */
+
+.skeletonCard {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ebebeb;
+  background: #fff;
+}
+
+.skeletonImage {
+  height: 200px;
+  background: linear-gradient(90deg, #f0f0ee 25%, #e8e8e4 50%, #f0f0ee 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeletonLine {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0ee 25%, #e8e8e4 50%, #f0f0ee 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

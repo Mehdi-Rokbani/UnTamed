@@ -15,6 +15,7 @@ public record UserResponse(
         String phoneNumber,
         List<String> preferences,
         int confirmedTripsCount,
+        int reviewsWrittenCount,
         String bio,
         Boolean verified,
         Boolean enabled,

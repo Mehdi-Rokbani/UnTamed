@@ -62,6 +62,9 @@ public class User {
     @Builder.Default
     private int confirmedTripsCount = 0;
 
+    @Builder.Default
+    private int reviewsWrittenCount = 0;
+
 
     // Optional
     private Level level;                 // enum (BEGINNER..)

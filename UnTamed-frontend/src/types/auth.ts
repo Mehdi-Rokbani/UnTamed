@@ -12,6 +12,7 @@ export type AuthUser = {
 
   phoneNumber: string | null;
   confirmedTripsCount: number;
+  reviewsWrittenCount: number;
   bio: string | null;
   level: Level | null;
   preferences: string[];

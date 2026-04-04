@@ -1,0 +1,92 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.feedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reviewCount {
+  font-size: 14px;
+  font-weight: 700;
+  color: #355e3b;
+  background: #eef6ef;
+  border: 1px solid #dcebdd;
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.emptyState,
+.errorState {
+  background: #fff;
+  border: 1px solid #ece7e2;
+  border-radius: 24px;
+  padding: 40px 24px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+}
+
+.emptyIcon {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.emptyTitle {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #2f241f;
+}
+
+.emptyText {
+  margin: 0;
+  color: #7a6b61;
+  font-size: 15px;
+}
+
+.skeletonCard {
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid #ece7e2;
+  background: #fff;
+}
+
+.skeletonImage {
+  height: 180px;
+  background: linear-gradient(90deg, #f2ede8 25%, #ebe4dd 37%, #f2ede8 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.skeletonBody {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonLine {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f2ede8 25%, #ebe4dd 37%, #f2ede8 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
