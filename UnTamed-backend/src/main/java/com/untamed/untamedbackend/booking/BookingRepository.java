@@ -3,6 +3,7 @@ package com.untamed.untamedbackend.booking;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,5 +35,7 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     Optional<Booking> findByIdAndUserId(String id, String userId);
     List<Booking> findByUserIdAndStatusOrderByCreatedAtDesc(String userId, BookingStatus status);
 
-
+    List<Booking> findBySessionIdAndStatus(String sessionId, BookingStatus status);
+    List<Booking> findByUserId(String userId);
+    List<Booking> findBySessionIdInAndStatusIn(Collection<String> sessionIds, Collection<BookingStatus> statuses);
 }

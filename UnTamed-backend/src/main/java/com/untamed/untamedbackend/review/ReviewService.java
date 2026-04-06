@@ -3,25 +3,22 @@ package com.untamed.untamedbackend.review;
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingRepository;
 import com.untamed.untamedbackend.booking.BookingStatus;
-import com.untamed.untamedbackend.review.CreateReviewRequest;
-import com.untamed.untamedbackend.review.ReplyReviewRequest;
-import com.untamed.untamedbackend.review.ReviewResponse;
-import com.untamed.untamedbackend.review.UpdateReviewRequest;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.RatingSummary;
 import com.untamed.untamedbackend.model.Review;
 import com.untamed.untamedbackend.model.ReviewStatus;
+import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.ReviewRepository;
+import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.review.ReviewUserDto;
+import com.untamed.untamedbackend.service.UserInsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import com.untamed.untamedbackend.model.User;
-import com.untamed.untamedbackend.repository.UserRepository;
-import com.untamed.untamedbackend.review.ReviewUserDto;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -38,6 +35,7 @@ public class ReviewService {
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
+    private final UserInsightService userInsightService;
 
     @Transactional
     public ReviewResponse createReview(String currentUserId, CreateReviewRequest req) {
@@ -86,7 +84,10 @@ public class ReviewService {
 
         try {
             saved = reviewRepository.save(review);
+
             incrementReviewsWrittenCount(currentUserId);
+            userInsightService.onReviewCreated(saved);
+
         } catch (DuplicateKeyException e) {
             throw new IllegalArgumentException("You already reviewed this activity");
         }
@@ -162,7 +163,6 @@ public class ReviewService {
         if (count > 0) {
             int sum = reviews.stream().mapToInt(Review::getRating).sum();
             average = (double) sum / count;
-
             average = Math.round(average * 10.0) / 10.0;
         }
 
@@ -190,10 +190,8 @@ public class ReviewService {
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .status(review.getStatus())
-
                 .reviewer(toReviewUserDto(reviewerUser))
                 .guide(toReviewUserDto(guideUser))
-
                 .replyText(review.getReplyText())
                 .replyCreatedAt(review.getReplyCreatedAt())
                 .replyUpdatedAt(review.getReplyUpdatedAt())
@@ -257,9 +255,18 @@ public class ReviewService {
                 .status(ReviewStatus.VISIBLE)
                 .build();
 
-        Review saved = reviewRepository.save(review);
-        recomputeTemplateRating(templateId);
+        Review saved;
+        try {
+            saved = reviewRepository.save(review);
 
+            incrementReviewsWrittenCount(currentUserId);
+            userInsightService.onReviewCreated(saved);
+
+        } catch (DuplicateKeyException e) {
+            throw new IllegalArgumentException("You already reviewed this activity");
+        }
+
+        recomputeTemplateRating(templateId);
         return toResponse(saved);
     }
 
@@ -276,5 +283,4 @@ public class ReviewService {
         user.setReviewsWrittenCount(user.getReviewsWrittenCount() + 1);
         userRepository.save(user);
     }
-
 }

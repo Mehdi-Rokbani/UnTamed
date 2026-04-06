@@ -9,13 +9,11 @@ import java.util.Optional;
 
 public interface ReviewRepository extends MongoRepository<Review, String> {
 
-    Optional<Review> findByReviewerIdAndActivityTemplateId(String reviewerId, String activityTemplateId);
-
     boolean existsByReviewerIdAndActivityTemplateId(String reviewerId, String activityTemplateId);
 
-    List<Review> findByActivityTemplateIdAndStatusOrderByCreatedAtDesc(
-            String activityTemplateId,
-            ReviewStatus status
-    );
+    Optional<Review> findByReviewerIdAndActivityTemplateId(String reviewerId, String activityTemplateId);
+
+    List<Review> findByActivityTemplateIdAndStatusOrderByCreatedAtDesc(String activityTemplateId, ReviewStatus status);
+
     List<Review> findByReviewerIdOrderByCreatedAtDesc(String reviewerId);
 }

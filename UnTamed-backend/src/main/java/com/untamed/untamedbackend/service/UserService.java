@@ -22,13 +22,20 @@ public class UserService {
     private final BCryptPasswordEncoder encoder;
     private final CloudinaryService cloudinaryService;
     private final EmailVerificationService emailVerificationService;
+    private final UserInsightService userInsightService;
 
-    public UserService(UserRepository repo, BCryptPasswordEncoder encoder, CloudinaryService cloudinaryService, EmailVerificationService emailVerificationService) {
+    public UserService(
+            UserRepository repo,
+            BCryptPasswordEncoder encoder,
+            CloudinaryService cloudinaryService,
+            EmailVerificationService emailVerificationService,
+            UserInsightService userInsightService
+    ) {
         this.repo = repo;
         this.encoder = encoder;
         this.cloudinaryService = cloudinaryService;
         this.emailVerificationService = emailVerificationService;
-
+        this.userInsightService = userInsightService;
     }
 
     public UserResponse register(RegisterRequest req) {
@@ -44,7 +51,6 @@ public class UserService {
         if (repo.existsByEmail(email)) throw new IllegalArgumentException("Email already used");
         if (repo.existsByUsername(username)) throw new IllegalArgumentException("Username already used");
 
-        // Allow only USER or GUIDE during self-registration
         Role safeRole = (req.role() == Role.GUIDE) ? Role.GUIDE : Role.USER;
 
         User.UserBuilder builder = User.builder()
@@ -57,10 +63,8 @@ public class UserService {
                 .bio(null)
                 .preferences(List.of());
 
-        // level only for USER
         builder.level(safeRole == Role.USER ? req.level() : null);
 
-        // guideProfile only for GUIDE (if your User model has it)
         if (safeRole == Role.GUIDE) {
             builder.guideProfile(
                     User.GuideProfile.builder()
@@ -97,7 +101,6 @@ public class UserService {
         User user = repo.findByEmail(authEmail)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        // username (optional)
         if (req.getUsername() != null) {
             String newUsername = normalizeUsername(req.getUsername());
             if (newUsername == null || newUsername.isBlank()) {
@@ -110,7 +113,6 @@ public class UserService {
             user.setUsername(newUsername);
         }
 
-        // level is only for USER
         if (req.getLevel() != null) {
             if (user.getRole() != Role.USER) {
                 throw new IllegalArgumentException("Level is only allowed for USER");
@@ -118,23 +120,20 @@ public class UserService {
             user.setLevel(req.getLevel());
         }
 
-        // bio (optional)
         if (req.getBio() != null) {
             String bio = req.getBio().trim();
             user.setBio(bio.isEmpty() ? null : bio);
         }
-        // phone number
+
         if (req.getPhoneNumber() != null) {
             String phoneNumber = req.getPhoneNumber().trim();
             user.setPhoneNumber(phoneNumber.isEmpty() ? null : phoneNumber);
         }
 
-        // preferences (optional; replace if provided)
         if (req.getPreferences() != null) {
             user.setPreferences(sanitizePreferences(req.getPreferences()));
         }
 
-        // profileImageUrl (optional)
         if (req.getProfileImageUrl() != null) {
             String url = req.getProfileImageUrl().trim();
             if (url.isBlank()) {
@@ -146,6 +145,8 @@ public class UserService {
         }
 
         User saved = repo.save(user);
+        userInsightService.onProfileUpdated(saved);
+
         return toUserResponse(saved);
     }
 
@@ -203,10 +204,8 @@ public class UserService {
         User user = repo.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        // delete old
         cloudinaryService.deleteByPublicId(user.getProfileImagePublicId());
 
-        // upload new
         String folder = "untamed/users/" + user.getId() + "/avatar";
         CloudinaryService.UploadResult up = cloudinaryService.uploadAvatar(file, folder);
 
@@ -214,5 +213,10 @@ public class UserService {
         user.setProfileImagePublicId(up.publicId());
 
         return repo.save(user);
+    }
+
+    public User getUserByEmail(String email) {
+        return repo.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
     }
 }

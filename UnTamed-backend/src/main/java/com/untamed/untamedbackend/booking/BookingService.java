@@ -3,24 +3,26 @@ package com.untamed.untamedbackend.booking;
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
+import com.untamed.untamedbackend.model.ActivityTemplate;
+import com.untamed.untamedbackend.model.Review;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.repository.ActivitySessionRepository;
+import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
+import com.untamed.untamedbackend.repository.ReviewRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
+import com.untamed.untamedbackend.service.UserInsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.untamed.untamedbackend.model.ActivityTemplate;
-import com.untamed.untamedbackend.model.Review;
-import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
-import com.untamed.untamedbackend.repository.ReviewRepository;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,8 @@ public class BookingService {
     private final UserRepository userRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
     private final ReviewRepository reviewRepository;
+    private final ActivitySessionRepository activitySessionRepository;
+    private final UserInsightService userInsightService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -47,45 +51,30 @@ public class BookingService {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BookingErrors.NOT_AUTHENTICATED);
         }
-        return auth.getName(); // your system currently uses email as name (fine)
+        return auth.getName();
     }
 
-    /**
-     * v1 behaviour (payment-ready):
-     * - If a PAYING booking exists for (userId, sessionId) => block and force verify flow.
-     * - If a PENDING booking exists for (userId, sessionId) => increase seats on that PENDING booking.
-     * - If not, create a NEW PENDING booking (even if old COMPLETED bookings exist).
-     *
-     * This pairs with a DB partial unique index:
-     *   unique(userId, sessionId) WHERE status IN (PENDING, PAYING)
-     */
     public Booking createOrIncreaseBooking(String userId, String sessionId, int people) {
         if (people < 1) throw bad(BookingErrors.INVALID_PEOPLE);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
         validateSessionBookable(session, userId);
 
-        // 1) If payment is in progress, do not create a new booking (force /payments/verify)
         var payingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
                 userId, sessionId, BookingStatus.PAYING
         );
         if (payingOpt.isPresent()) {
-            // helpful message for frontend behaviour
             throw conflict("Payment in progress. Please verify payment status.");
         }
 
-        // 2) Only reuse PENDING booking (never reuse COMPLETED)
         var pendingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
                 userId, sessionId, BookingStatus.PENDING
         );
 
         if (pendingOpt.isPresent()) {
-            // NOTE: this refreshes expiresAt (your current behavior).
-            // If later you want "expiresAt fixed from first hold", we can change this.
             return increaseSeats(pendingOpt.get().getId(), userId, people);
         }
 
-        // 3) Reserve seats atomically
         boolean reserved = sessionSeatOps.tryReserveSeats(sessionId, people);
         if (!reserved) throw conflict(BookingErrors.SOLD_OUT);
 
@@ -100,7 +89,10 @@ public class BookingService {
                 .expiresAt(computeExpiresAt(session.getDate(), now))
                 .build();
 
-        return bookingRepository.save(booking);
+        Booking savedBooking = bookingRepository.save(booking);
+        userInsightService.onBookingCreated(savedBooking);
+
+        return savedBooking;
     }
 
     public Booking increaseSeats(String bookingId, String userId, int delta) {
@@ -110,7 +102,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
+        assertMutableUnpaid(b);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionBookable(session, userId);
@@ -132,14 +124,13 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
+        assertMutableUnpaid(b);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
 
         int current = b.getNumberOfPeople();
         if (delta >= current) {
-            // decreasing to 0 => cancel
             cancelBooking(bookingId, userId);
             return bookingRepository.findById(bookingId)
                     .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
@@ -159,10 +150,13 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
-        assertMutableUnpaid(b); // COMPLETED immutable; PAYING locked for changes too
+        assertMutableForCancel(b);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
+
+        boolean wasCompletedAndPresent =
+                b.getStatus() == BookingStatus.COMPLETED && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
 
         int toRelease = b.getNumberOfPeople();
         if (toRelease > 0) {
@@ -174,20 +168,22 @@ public class BookingService {
         b.setUpdatedAt(Instant.now());
         b.setExpiresAt(null);
 
-        bookingRepository.save(b);
+        Booking savedBooking = bookingRepository.save(b);
+        userInsightService.onBookingCancelled(savedBooking);
+
+        if (wasCompletedAndPresent) {
+            decrementConfirmedTripsCount(savedBooking.getUserId());
+        }
 
         return CancelBookingResponse.builder()
-                .bookingId(b.getId())
-                .status(b.getStatus())
+                .bookingId(savedBooking.getId())
+                .status(savedBooking.getStatus())
                 .build();
     }
 
-    /** Called by job */
     public void expireBooking(String bookingId) {
         Booking b = bookingRepository.findById(bookingId).orElse(null);
         if (b == null) return;
-
-        // Expiration job only targets PENDING, keep that rule strict.
         if (b.getStatus() != BookingStatus.PENDING) return;
         if (b.getExpiresAt() == null) return;
         if (!b.getExpiresAt().isBefore(Instant.now())) return;
@@ -208,12 +204,6 @@ public class BookingService {
         return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
-    // ---------------- PAYMENT HOOKS (to be called by PaymentService) ----------------
-
-    /**
-     * Move PENDING -> PAYING when /payments/create happens.
-     * If already PAYING, returns as-is (idempotent).
-     */
     public Booking markPaying(String bookingId, String userId) {
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
@@ -225,7 +215,6 @@ public class BookingService {
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
 
-        // If already timed out, expire it immediately
         if (b.getExpiresAt() != null && b.getExpiresAt().isBefore(Instant.now())) {
             expireBooking(b.getId());
             throw conflict("Booking expired");
@@ -239,18 +228,12 @@ public class BookingService {
         return bookingRepository.save(b);
     }
 
-    /**
-     * Payment success: PAYING -> COMPLETED (idempotent).
-     * Important: once COMPLETED, booking is immutable.
-     */
     public Booking markCompleted(String bookingId) {
-
         Booking b = bookingRepository.findById(bookingId).orElse(null);
 
         if (b == null) {
             return null;
         }
-
 
         if (b.getStatus() == BookingStatus.COMPLETED) {
             return b;
@@ -265,30 +248,27 @@ public class BookingService {
         b.setUpdatedAt(Instant.now());
 
         Booking savedBooking = bookingRepository.save(b);
+        userInsightService.onBookingCompleted(savedBooking);
         incrementConfirmedTripsCount(savedBooking.getUserId());
+
         return savedBooking;
     }
 
-    /**
-     * Payment failure: if hold deadline passed => EXPIRED + seats released; else => back to PENDING.
-     */
     public Booking handlePaymentFailed(String bookingId) {
         Booking b = bookingRepository.findById(bookingId).orElse(null);
         if (b == null) return null;
 
-        if (b.getStatus() == BookingStatus.COMPLETED) return b; // already paid
+        if (b.getStatus() == BookingStatus.COMPLETED) return b;
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) return b;
 
         Instant now = Instant.now();
         Instant exp = b.getExpiresAt();
 
         if (exp != null && exp.isBefore(now)) {
-            // expire + release seats
             expireBooking(b.getId());
             return bookingRepository.findById(b.getId()).orElse(null);
         }
 
-        // back to PENDING if we were PAYING
         if (b.getStatus() == BookingStatus.PAYING) {
             b.setStatus(BookingStatus.PENDING);
             b.setUpdatedAt(now);
@@ -298,15 +278,12 @@ public class BookingService {
         return b;
     }
 
-    // ---------------- rules ----------------
-
     private void validateSessionBookable(ActivitySession session, String userId) {
         if (session.getStatus() != ActivityStatus.PUBLISHED) {
             throw conflict(BookingErrors.SESSION_NOT_PUBLISHED);
         }
         validateSessionChangeAllowed(session);
 
-        // guide cannot book own session
         if (session.getGuideId() != null && session.getGuideId().equals(userId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, BookingErrors.GUIDE_CANNOT_BOOK_OWN);
         }
@@ -317,7 +294,6 @@ public class BookingService {
         Instant start = session.getDate();
         if (start == null) return;
 
-        // block if now is on/after (start - cutoff)
         if (!now.isBefore(start.minus(cutoff()))) {
             throw conflict(BookingErrors.SESSION_CUTOFF);
         }
@@ -329,12 +305,6 @@ public class BookingService {
         }
     }
 
-    /**
-     * Unpaid bookings that are mutable from the UI.
-     * - PENDING: mutable
-     * - PAYING: locked (we don't want users changing seats mid-checkout)
-     * - COMPLETED: immutable
-     */
     private void assertMutableUnpaid(Booking b) {
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
@@ -345,20 +315,23 @@ public class BookingService {
         if (b.getStatus() == BookingStatus.PAYING) {
             throw conflict("Payment in progress. Verify payment status first.");
         }
-        // only PENDING reaches here
     }
 
-    // ---------------- expiry policy ----------------
-    // v1 policy:
-    // - Holds expire after pendingMinutes (default 15)
-    // - But never beyond cutoff (start - cutoffHours)
+    private void assertMutableForCancel(Booking b) {
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
+        }
+        if (b.getStatus() == BookingStatus.PAYING) {
+            throw conflict("Payment in progress. Verify payment status first.");
+        }
+    }
+
     private Instant computeExpiresAt(Instant sessionDate, Instant now) {
         Instant proposed = now.plus(pendingHold());
         Instant latest = sessionDate.minus(cutoff());
         return proposed.isAfter(latest) ? latest : proposed;
     }
 
-    // ---------------- helpers ----------------
     private ResponseStatusException bad(String msg) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
     }
@@ -372,8 +345,6 @@ public class BookingService {
     }
 
     public Booking confirmBooking(String bookingId, String userId) {
-
-
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
@@ -384,28 +355,23 @@ public class BookingService {
         }
 
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
-
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
 
         if (b.getStatus() == BookingStatus.PAYING) {
-
             throw conflict("Payment in progress. Cannot confirm booking now.");
         }
 
         if (b.getStatus() != BookingStatus.PENDING) {
-
             throw conflict("Only pending bookings can be confirmed.");
         }
 
         if (b.getExpiresAt() != null && b.getExpiresAt().isBefore(Instant.now())) {
-
             expireBooking(b.getId());
             throw conflict("Booking expired");
         }
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
-
         validateSessionChangeAllowed(session);
 
         b.setStatus(BookingStatus.COMPLETED);
@@ -413,25 +379,19 @@ public class BookingService {
         b.setUpdatedAt(Instant.now());
 
         Booking savedBooking = bookingRepository.save(b);
-
+        userInsightService.onBookingCompleted(savedBooking);
         incrementConfirmedTripsCount(savedBooking.getUserId());
-
 
         return savedBooking;
     }
-
-
 
     public String requireAuthenticatedDbUserId(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BookingErrors.NOT_AUTHENTICATED);
         }
 
-
-
         Object principal = auth.getPrincipal();
         if (principal instanceof AuthenticatedUser authenticatedUser) {
-
             return authenticatedUser.getId();
         }
 
@@ -439,7 +399,6 @@ public class BookingService {
     }
 
     public List<GuideParticipantDto> listParticipantsForGuide(String sessionId, String guideId) {
-
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
 
         if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
@@ -448,15 +407,10 @@ public class BookingService {
         }
 
         List<Booking> bookings = bookingRepository
-                .findBySessionIdAndStatusOrderByCreatedAtAsc(
-                        sessionId,
-                        BookingStatus.COMPLETED
-                );
+                .findBySessionIdAndStatusOrderByCreatedAtAsc(sessionId, BookingStatus.COMPLETED);
 
         return bookings.stream().map(booking -> {
-
-            User user = userRepository.findById(booking.getUserId())
-                    .orElse(null);
+            User user = userRepository.findById(booking.getUserId()).orElse(null);
 
             return new GuideParticipantDto(
                     booking.getId(),
@@ -468,7 +422,6 @@ public class BookingService {
                     booking.getStatus(),
                     booking.getCreatedAt()
             );
-
         }).toList();
     }
 
@@ -506,7 +459,6 @@ public class BookingService {
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
 
-        // guide can only manage bookings for their own session
         if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -514,12 +466,10 @@ public class BookingService {
             );
         }
 
-        // guide may cancel pending only
         if (b.getStatus() != BookingStatus.PENDING) {
             throw conflict("Only pending bookings can be cancelled by the guide.");
         }
 
-        // keep same cutoff rule as other booking mutations
         validateSessionChangeAllowed(session);
 
         int toRelease = b.getNumberOfPeople();
@@ -532,11 +482,12 @@ public class BookingService {
         b.setUpdatedAt(Instant.now());
         b.setExpiresAt(null);
 
-        bookingRepository.save(b);
+        Booking savedBooking = bookingRepository.save(b);
+        userInsightService.onBookingCancelled(savedBooking);
 
         return CancelBookingResponse.builder()
-                .bookingId(b.getId())
-                .status(b.getStatus())
+                .bookingId(savedBooking.getId())
+                .status(savedBooking.getStatus())
                 .build();
     }
 
@@ -557,18 +508,26 @@ public class BookingService {
             throw conflict("Only completed bookings can have attendance marked.");
         }
 
+        boolean wasAbsent = Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
+
         b.setAttendanceMarkedAbsent(absent);
         b.setAttendanceMarkedAt(Instant.now());
         b.setAttendanceMarkedByGuideId(guideId);
 
-        return bookingRepository.save(b);
+        Booking savedBooking = bookingRepository.save(b);
+
+        if (!wasAbsent && absent) {
+            decrementConfirmedTripsCount(savedBooking.getUserId());
+        } else if (wasAbsent && !absent) {
+            incrementConfirmedTripsCount(savedBooking.getUserId());
+        }
+
+        return savedBooking;
     }
 
     public ReviewEligibilityResponse getReviewEligibility(String bookingId, String userId) {
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
-
-
 
         assertOwned(b, userId);
 
@@ -637,14 +596,11 @@ public class BookingService {
     }
 
     private void incrementConfirmedTripsCount(String userId) {
-
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> notFound("User not found"));
 
         user.setConfirmedTripsCount(user.getConfirmedTripsCount() + 1);
-
-        User savedUser = userRepository.save(user);
+        userRepository.save(user);
     }
 
     private void decrementConfirmedTripsCount(String userId) {
@@ -655,4 +611,32 @@ public class BookingService {
         userRepository.save(user);
     }
 
+    public ParticipantsPreviewResponse getParticipantsPreview(String sessionId) {
+        ActivitySession session = activitySessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+
+        List<Booking> confirmedBookings = bookingRepository.findBySessionIdAndStatus(sessionId, BookingStatus.COMPLETED);
+
+        List<ParticipantPreviewItem> participants = confirmedBookings.stream()
+                .map(booking -> userRepository.findById(booking.getUserId()).orElse(null))
+                .filter(Objects::nonNull)
+                .limit(5)
+                .map(user -> ParticipantPreviewItem.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .profileImageUrl(user.getProfileImageUrl())
+                        .level(user.getLevel() != null ? user.getLevel().name() : null)
+                        .build())
+                .toList();
+
+        int totalConfirmed = confirmedBookings.size();
+        int capacity = session.getCapacity();
+        int seatsLeft = Math.max(capacity - totalConfirmed, 0);
+
+        return ParticipantsPreviewResponse.builder()
+                .totalConfirmed(totalConfirmed)
+                .seatsLeft(seatsLeft)
+                .participants(participants)
+                .build();
+    }
 }

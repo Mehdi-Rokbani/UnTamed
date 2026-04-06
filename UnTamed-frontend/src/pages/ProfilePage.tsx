@@ -381,7 +381,7 @@ export function ProfilePage() {
 
                 <TopCategories
                   topCategories={topCategories}
-                  onSeeAll={() => router.push('/categories')} // optional
+                
                 />
               </div>
             )}

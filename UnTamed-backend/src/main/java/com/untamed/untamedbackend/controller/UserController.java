@@ -3,6 +3,8 @@ package com.untamed.untamedbackend.controller;
 import com.untamed.untamedbackend.dto.UpdateProfileRequest;
 import com.untamed.untamedbackend.dto.UserResponse;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.model.UserInsight;
+import com.untamed.untamedbackend.service.UserInsightService;
 import com.untamed.untamedbackend.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -18,9 +20,11 @@ import java.security.Principal;
 public class UserController {
 
     private final UserService users;
+    private final UserInsightService userInsightService;
 
-    public UserController(UserService users) {
+    public UserController(UserService users, UserInsightService userInsightService) {
         this.users = users;
+        this.userInsightService = userInsightService;
     }
 
     @GetMapping("/me")
@@ -44,9 +48,35 @@ public class UserController {
             Principal principal,
             @RequestPart("file") MultipartFile file
     ) {
-        String email = principal.getName(); // must be set by your security
+        String email = principal.getName();
         User updated = users.updateMyProfilePicture(email, file);
         return toResponse(updated);
+    }
+
+    // 🔥 NEW — GET INSIGHTS
+    @GetMapping("/me/insights")
+    public UserInsight getMyInsights(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new AccessDeniedException("Not authenticated");
+        }
+
+        String email = auth.getName();
+        User user = users.getUserByEmail(email); // 👈 we’ll add this method
+
+        return userInsightService.getByUserId(user.getId());
+    }
+
+    // 🔥 NEW — REBUILD INSIGHTS
+    @PostMapping("/me/insights/rebuild")
+    public UserInsight rebuildMyInsights(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new AccessDeniedException("Not authenticated");
+        }
+
+        String email = auth.getName();
+        User user = users.getUserByEmail(email);
+
+        return userInsightService.rebuildForUser(user.getId());
     }
 
     private UserResponse toResponse(User u) {

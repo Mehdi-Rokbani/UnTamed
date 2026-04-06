@@ -44,5 +44,6 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
 
     List<ActivitySession> findByStatusAndDateAfter(ActivityStatus status, Instant from);
     List<ActivitySession> findByStatusAndDateBefore(ActivityStatus status, Instant to);
+    List<ActivitySession> findByTemplateIdOrderByDateAsc(String templateId);
 
 }
