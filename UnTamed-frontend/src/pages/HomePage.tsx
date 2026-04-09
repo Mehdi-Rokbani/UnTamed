@@ -3,6 +3,8 @@ import type { Difficulty, PublicTemplateCard } from "../types/activity";
 import type { Category } from "../types/category";
 import { ActivityCard } from "../components/ActivityCard";
 import { Header } from "../components/Header";
+import RecommendedActivities from "../components/RecommendedActivities";
+import { useAuth } from "../auth/auth.store";
 import styles from "../style/home.module.css";
 import { searchPublicTemplates, type AddressSuggestion } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
@@ -13,6 +15,8 @@ import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
 type LoadState = "idle" | "loading" | "error" | "done";
 
 export default function HomePage() {
+  const { user } = useAuth();
+
   const [state, setState] = useState<LoadState>("idle");
   const [templates, setTemplates] = useState<PublicTemplateCard[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -31,6 +35,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
         const data = await listCategories();
@@ -40,7 +45,10 @@ export default function HomePage() {
         console.error("Failed to load categories", error);
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const categoryOptions = useMemo(
@@ -50,15 +58,23 @@ export default function HomePage() {
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
-      addressInput.trim() || selectedAddressId || dateFrom || dateTo ||
-      categoryIds.length > 0 || minPrice || maxPrice || difficulty !== "All"
+      addressInput.trim() ||
+        selectedAddressId ||
+        dateFrom ||
+        dateTo ||
+        categoryIds.length > 0 ||
+        minPrice ||
+        maxPrice ||
+        difficulty !== "All"
     );
   }, [addressInput, selectedAddressId, dateFrom, dateTo, categoryIds, minPrice, maxPrice, difficulty]);
 
   useEffect(() => {
     let cancelled = false;
+
     const handle = window.setTimeout(async () => {
       setState("loading");
+
       try {
         const data = await searchPublicTemplates({
           addressId: selectedAddressId || undefined,
@@ -71,7 +87,9 @@ export default function HomePage() {
           dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
           sort,
         });
+
         if (cancelled) return;
+
         setTemplates(data ?? []);
         setState("done");
       } catch (error) {
@@ -79,7 +97,11 @@ export default function HomePage() {
         if (!cancelled) setState("error");
       }
     }, 260);
-    return () => { cancelled = true; window.clearTimeout(handle); };
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
   }, [addressInput, selectedAddressId, categoryIds, minPrice, maxPrice, difficulty, dateFrom, dateTo, sort]);
 
   const handleAddressSelect = (address: AddressSuggestion) => {
@@ -93,9 +115,7 @@ export default function HomePage() {
   };
 
   const handleToggleCategory = (id: string) => {
-    setCategoryIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const handleClearFilters = () => {
@@ -113,15 +133,16 @@ export default function HomePage() {
   return (
     <>
       <Header />
-      <main className={styles.home}>
 
-        {/* ── Hero ── */}
+      <main className={styles.home}>
         <section className={styles.homeHero}>
           <div className={styles.heroBackground} />
+
           <div className={styles.heroContent}>
             <h1 className={styles.homeTitle}>
               Find your next <span className={styles.accent}>UnTamed</span> adventure
             </h1>
+
             <p className={styles.homeSubtitle}>
               Browse curated outdoor experiences posted by expert guides.
               <br />
@@ -140,7 +161,6 @@ export default function HomePage() {
                 onDateToChange={setDateTo}
               />
 
-              {/* Active chips: address + date only (category/price/sort live in sticky bar) */}
               <ActiveFilterChips
                 addressInput={addressInput}
                 selectedAddressId={selectedAddressId}
@@ -151,7 +171,10 @@ export default function HomePage() {
                 minPrice={minPrice}
                 maxPrice={maxPrice}
                 categories={categoryOptions}
-                onClearAddress={() => { setAddressInput(""); setSelectedAddressId(null); }}
+                onClearAddress={() => {
+                  setAddressInput("");
+                  setSelectedAddressId(null);
+                }}
                 onClearDateFrom={() => setDateFrom("")}
                 onClearDateTo={() => setDateTo("")}
                 onClearDifficulty={() => setDifficulty("All")}
@@ -167,6 +190,7 @@ export default function HomePage() {
                     <span className={styles.statNumber}>{templates.length}</span>
                     <span className={styles.statLabel}>Showing</span>
                   </div>
+
                   {hasActiveFilters && (
                     <>
                       <div className={styles.statDivider} />
@@ -182,7 +206,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Sticky filter bar — OUTSIDE hero so position:sticky works ── */}
         <ExperienceFiltersBar
           difficulty={difficulty}
           categoryIds={categoryIds}
@@ -198,7 +221,14 @@ export default function HomePage() {
           onClearAll={handleClearFilters}
         />
 
-        {/* ── Results ── */}
+        {user && (
+          <section className={styles.activitiesSection}>
+            <div className={styles.container}>
+              <RecommendedActivities title="Recommended for you" limit={6} />
+            </div>
+          </section>
+        )}
+
         <section className={styles.activitiesSection}>
           <div className={styles.container}>
             {state === "loading" && (
@@ -232,9 +262,11 @@ export default function HomePage() {
                 <div className={styles.sectionHeader}>
                   <h2 className={styles.sectionTitle}>Available Experiences</h2>
                   <p className={styles.sectionSubtitle}>
-                    {templates.length} {templates.length === 1 ? "experience" : "experiences"} waiting for you
+                    {templates.length} {templates.length === 1 ? "experience" : "experiences"} waiting
+                    for you
                   </p>
                 </div>
+
                 <div className={styles.activityGrid}>
                   {templates.map((t, index) => (
                     <ActivityCard key={t.id} activity={t} index={index} />
@@ -244,7 +276,6 @@ export default function HomePage() {
             )}
           </div>
         </section>
-
       </main>
     </>
   );
