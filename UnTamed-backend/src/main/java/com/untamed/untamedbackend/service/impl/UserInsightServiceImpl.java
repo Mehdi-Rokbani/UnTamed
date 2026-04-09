@@ -7,6 +7,7 @@ import com.untamed.untamedbackend.booking.BookingStatus;
 import com.untamed.untamedbackend.model.Review;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.model.UserInsight;
+import com.untamed.untamedbackend.recommendation.n8n.N8nWebhookService;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.booking.BookingRepository;
@@ -31,6 +32,17 @@ public class UserInsightServiceImpl implements UserInsightService {
     private final ReviewRepository reviewRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
+    private final N8nWebhookService n8nWebhookService;
+
+    @Override
+    public UserInsight save(UserInsight insight) {
+        if (insight == null) {
+            throw new IllegalArgumentException("UserInsight cannot be null");
+        }
+
+        insight.setUpdatedAt(Instant.now());
+        return userInsightRepository.save(insight);
+    }
 
     @Override
     public UserInsight getOrCreate(String userId) {
@@ -105,6 +117,8 @@ public class UserInsightServiceImpl implements UserInsightService {
 
         finalizeInsight(insight);
         userInsightRepository.save(insight);
+
+        triggerUserEmbeddingSafely(booking.getUserId());
     }
 
     @Override
@@ -116,6 +130,8 @@ public class UserInsightServiceImpl implements UserInsightService {
 
         finalizeInsight(insight);
         userInsightRepository.save(insight);
+
+        // usually not worth retriggering user embedding for cancellation noise
     }
 
     @Override
@@ -145,6 +161,8 @@ public class UserInsightServiceImpl implements UserInsightService {
 
         finalizeInsight(insight);
         userInsightRepository.save(insight);
+
+        triggerUserEmbeddingSafely(review.getReviewerId());
     }
 
     @Override
@@ -164,6 +182,8 @@ public class UserInsightServiceImpl implements UserInsightService {
 
         finalizeInsight(insight);
         userInsightRepository.save(insight);
+
+        triggerUserEmbeddingSafely(user.getId());
     }
 
     @Override
@@ -183,12 +203,12 @@ public class UserInsightServiceImpl implements UserInsightService {
         }
 
         finalizeInsight(insight);
-        return userInsightRepository.save(insight);
-    }
+        UserInsight saved = userInsightRepository.save(insight);
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
+        triggerUserEmbeddingSafely(userId);
+
+        return saved;
+    }
 
     private void rebuildFromBooking(UserInsight insight, Booking booking) {
         insight.setTotalBookings(insight.getTotalBookings() + 1);
@@ -413,5 +433,17 @@ public class UserInsightServiceImpl implements UserInsightService {
         insight.setLastCompletedTripAt(null);
         insight.setLastReviewAt(null);
         insight.setUpdatedAt(Instant.now());
+    }
+
+    private void triggerUserEmbeddingSafely(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        try {
+            n8nWebhookService.triggerUserEmbedding(userId);
+        } catch (Exception e) {
+            System.out.println("user embedding trigger failed: " + e.getMessage());
+        }
     }
 }

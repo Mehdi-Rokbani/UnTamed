@@ -24,4 +24,6 @@ public interface UserInsightService {
     void onProfileUpdated(User user);
 
     UserInsight rebuildForUser(String userId);
+    
+    UserInsight save(UserInsight insight);
 }

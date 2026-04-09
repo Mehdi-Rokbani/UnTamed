@@ -79,4 +79,7 @@ public class ActivityTemplate {
     private Instant updatedAt;
 
 
+    private String embeddingText;
+    private List<Double> embeddingVector;
+    private Instant embeddingUpdatedAt;
 }

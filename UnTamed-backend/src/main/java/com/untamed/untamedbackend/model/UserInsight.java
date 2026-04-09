@@ -45,4 +45,9 @@ public class UserInsight {
     private Instant lastCompletedTripAt;
     private Instant lastReviewAt;
     private Instant updatedAt;
+
+
+    private String embeddingProfileText;
+    private List<Double> embeddingVector;
+    private Instant embeddingUpdatedAt;
 }

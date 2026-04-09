@@ -2,6 +2,7 @@ package com.untamed.untamedbackend.service;
 
 import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.model.*;
+import com.untamed.untamedbackend.recommendation.n8n.N8nWebhookService;
 import com.untamed.untamedbackend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -12,20 +13,24 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.*;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class ActivityTemplateService {
 
     private final ActivityTemplateRepository templateRepo;
-    private final ActivitySessionRepository sessionRepo; // used for delete blocking
+    private final ActivitySessionRepository sessionRepo;
     private final UserRepository userRepo;
     private final AddressRepository addressRepo;
     private final MongoTemplate mongo;
     private final CloudinaryService cloudinaryService;
     private final GeoService geoService;
+    private final N8nWebhookService n8nWebhookService;
 
     // -------- Reads --------
 
@@ -69,7 +74,11 @@ public class ActivityTemplateService {
                 .rating(RatingSummary.builder().average(0.0).count(0).build())
                 .build();
 
-        return toTemplateResponse(templateRepo.save(t));
+        ActivityTemplate saved = templateRepo.save(t);
+
+        n8nWebhookService.triggerTemplateEmbedding(saved.getId());
+
+        return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse updateTemplate(String templateId, ActivityTemplateUpdateRequest req, String authEmail) {
@@ -99,7 +108,6 @@ public class ActivityTemplateService {
 
         if (req.tags() != null) t.setTags(req.tags());
 
-        // address + location sync
         if (req.address() != null) {
             Address newAddress = getOrCreateAddress(req.address());
 
@@ -116,7 +124,11 @@ public class ActivityTemplateService {
             t.setLocation(newLoc);
         }
 
-        return toTemplateResponse(templateRepo.save(t));
+        ActivityTemplate saved = templateRepo.save(t);
+
+        n8nWebhookService.triggerTemplateEmbedding(saved.getId());
+
+        return toTemplateResponse(saved);
     }
 
     public void deleteTemplate(String templateId, String authEmail) {
@@ -125,23 +137,16 @@ public class ActivityTemplateService {
         ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        // BLOCK delete if sessions exist (your rule)
         if (sessionRepo.existsByTemplateId(templateId)) {
             throw new IllegalStateException("Cannot delete template with existing sessions");
         }
 
-        // clean address uses
         if (t.getAddressId() != null) decrementUsesCount(t.getAddressId());
-
-        // optional: delete cloudinary images too (if you want hard cleanup)
-        // for (ActivityImage img : Optional.ofNullable(t.getImages()).orElse(List.of())) {
-        //     if (img.getPublicId() != null) cloudinaryService.deleteByPublicId(img.getPublicId());
-        // }
 
         templateRepo.deleteById(t.getId());
     }
 
-    // -------- Images (Cloudinary) now operate on TEMPLATE --------
+    // -------- Images --------
 
     public ActivityTemplateResponse addImage(String templateId, MultipartFile file, boolean cover, String alt, String authEmail) {
         User guide = getGuideByEmail(authEmail);
@@ -163,16 +168,21 @@ public class ActivityTemplateService {
                 .build();
 
         if (cover) {
-            for (ActivityImage i : imgs) i.setCover(false);
+            for (ActivityImage i : imgs) {
+                i.setCover(false);
+            }
         } else {
             boolean hasCover = imgs.stream().anyMatch(ActivityImage::isCover);
-            if (!hasCover) newImg.setCover(true);
+            if (!hasCover) {
+                newImg.setCover(true);
+            }
         }
 
         imgs.add(newImg);
         t.setImages(imgs);
 
-        return toTemplateResponse(templateRepo.save(t));
+        ActivityTemplate saved = templateRepo.save(t);
+        return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse deleteImage(String templateId, String publicId, String authEmail) {
@@ -181,7 +191,9 @@ public class ActivityTemplateService {
         ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        if (publicId == null || publicId.isBlank()) throw new IllegalArgumentException("publicId is required");
+        if (publicId == null || publicId.isBlank()) {
+            throw new IllegalArgumentException("publicId is required");
+        }
 
         List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
         ActivityImage target = imgs.stream()
@@ -195,13 +207,19 @@ public class ActivityTemplateService {
         imgs.remove(target);
 
         if (wasCover && !imgs.isEmpty()) {
-            ActivityImage first = imgs.stream().min(Comparator.comparingInt(ActivityImage::getOrder)).orElseThrow();
-            for (ActivityImage i : imgs) i.setCover(false);
+            ActivityImage first = imgs.stream()
+                    .min(Comparator.comparingInt(ActivityImage::getOrder))
+                    .orElseThrow();
+            for (ActivityImage i : imgs) {
+                i.setCover(false);
+            }
             first.setCover(true);
         }
 
         t.setImages(imgs);
-        return toTemplateResponse(templateRepo.save(t));
+
+        ActivityTemplate saved = templateRepo.save(t);
+        return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse setCoverImage(String templateId, String publicId, String authEmail) {
@@ -216,12 +234,19 @@ public class ActivityTemplateService {
         for (ActivityImage i : imgs) {
             boolean isTarget = publicId.equals(i.getPublicId());
             i.setCover(isTarget);
-            if (isTarget) found = true;
+            if (isTarget) {
+                found = true;
+            }
         }
-        if (!found) throw new IllegalArgumentException("Image not found");
+
+        if (!found) {
+            throw new IllegalArgumentException("Image not found");
+        }
 
         t.setImages(imgs);
-        return toTemplateResponse(templateRepo.save(t));
+
+        ActivityTemplate saved = templateRepo.save(t);
+        return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse reorderImages(String templateId, List<String> publicIdsInOrder, String authEmail) {
@@ -231,10 +256,18 @@ public class ActivityTemplateService {
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
         List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
-        if (imgs.isEmpty()) return toTemplateResponse(t);
+        if (imgs.isEmpty()) {
+            return toTemplateResponse(t);
+        }
 
-        List<String> existingIds = imgs.stream().map(ActivityImage::getPublicId).filter(Objects::nonNull).toList();
-        List<String> wanted = publicIdsInOrder.stream().filter(Objects::nonNull).toList();
+        List<String> existingIds = imgs.stream()
+                .map(ActivityImage::getPublicId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<String> wanted = publicIdsInOrder == null
+                ? List.of()
+                : publicIdsInOrder.stream().filter(Objects::nonNull).toList();
 
         if (existingIds.size() != wanted.size() || !existingIds.containsAll(wanted)) {
             throw new IllegalArgumentException("Invalid reorder list");
@@ -251,21 +284,28 @@ public class ActivityTemplateService {
         }
 
         t.setImages(imgs);
-        return toTemplateResponse(templateRepo.save(t));
+
+        ActivityTemplate saved = templateRepo.save(t);
+        return toTemplateResponse(saved);
     }
 
-    // -------- Helpers (copied from your service) --------
+    // -------- Helpers --------
 
     private User getGuideByEmail(String authEmail) {
-        User u = userRepo.findByEmail(authEmail).orElseThrow(() -> new IllegalArgumentException("User not found"));
-        if (u.getRole() != Role.GUIDE) throw new IllegalArgumentException("Only GUIDE can manage activities");
+        User u = userRepo.findByEmail(authEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (u.getRole() != Role.GUIDE) {
+            throw new IllegalArgumentException("Only GUIDE can manage activities");
+        }
         return u;
     }
 
     private Address getOrCreateAddress(AddressPickDto dto) {
         if (dto == null) throw new IllegalArgumentException("Address is required");
         if (dto.provider() == null || dto.provider().isBlank()) throw new IllegalArgumentException("provider is required");
-        if (dto.providerPlaceId() == null || dto.providerPlaceId().isBlank()) throw new IllegalArgumentException("providerPlaceId is required");
+        if (dto.providerPlaceId() == null || dto.providerPlaceId().isBlank()) {
+            throw new IllegalArgumentException("providerPlaceId is required");
+        }
 
         String provider = dto.provider();
 
@@ -299,8 +339,11 @@ public class ActivityTemplateService {
 
     private void incrementUsesCount(String addressId) {
         if (addressId == null || addressId.isBlank()) return;
-        mongo.updateFirst(Query.query(Criteria.where("_id").is(addressId)),
-                new Update().inc("usesCount", 1), Address.class);
+        mongo.updateFirst(
+                Query.query(Criteria.where("_id").is(addressId)),
+                new Update().inc("usesCount", 1),
+                Address.class
+        );
     }
 
     private void decrementUsesCount(String addressId) {
@@ -335,7 +378,10 @@ public class ActivityTemplateService {
     }
 
     private ActivityTemplateResponse toTemplateResponse(ActivityTemplate t) {
-        RatingSummary r = t.getRating() == null ? RatingSummary.builder().average(0.0).count(0).build() : t.getRating();
+        RatingSummary r = t.getRating() == null
+                ? RatingSummary.builder().average(0.0).count(0).build()
+                : t.getRating();
+
         RatingSummaryDto ratingDto = new RatingSummaryDto(r.getAverage(), r.getCount());
 
         return new ActivityTemplateResponse(
@@ -358,7 +404,11 @@ public class ActivityTemplateService {
     private List<ActivityImageDto> toImageDtos(List<ActivityImage> models) {
         if (models == null) return List.of();
         return models.stream().map(m -> new ActivityImageDto(
-                m.getUrl(), m.getPublicId(), m.getAlt(), m.isCover(), m.getOrder()
+                m.getUrl(),
+                m.getPublicId(),
+                m.getAlt(),
+                m.isCover(),
+                m.getOrder()
         )).toList();
     }
 }
