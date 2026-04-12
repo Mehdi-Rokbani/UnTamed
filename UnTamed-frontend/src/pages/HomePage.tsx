@@ -11,6 +11,7 @@ import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { ExperienceFiltersBar } from "../components/search/ExperienceFiltersBar";
 import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
+import { semanticSearch } from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";
 
@@ -69,6 +70,8 @@ export default function HomePage() {
     );
   }, [addressInput, selectedAddressId, dateFrom, dateTo, categoryIds, minPrice, maxPrice, difficulty]);
 
+  const isSemanticSearch = !selectedAddressId && addressInput.trim().length > 2;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -76,17 +79,43 @@ export default function HomePage() {
       setState("loading");
 
       try {
-        const data = await searchPublicTemplates({
-          addressId: selectedAddressId || undefined,
-          q: selectedAddressId ? undefined : addressInput.trim() || undefined,
-          categoryIds: categoryIds.length ? categoryIds : undefined,
-          minPrice: minPrice ? Number(minPrice) : undefined,
-          maxPrice: maxPrice ? Number(maxPrice) : undefined,
-          difficulty: difficulty === "All" ? undefined : difficulty,
-          dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
-          dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
-          sort,
-        });
+        let data: PublicTemplateCard[];
+
+        if (isSemanticSearch) {
+          const results = await semanticSearch({
+            query: addressInput.trim(),
+            limit: 12,
+            difficulty: difficulty === "All" ? undefined : difficulty,
+            categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+          });
+
+          data = results.map((r) => ({
+            id: r.templateId,
+            title: r.title,
+            description: r.description,
+            coverImageUrl: r.coverImageUrl,
+            categoryIds: r.categoryIds,
+            difficulty: (r.difficulty as Difficulty) ?? "EASY",
+            price: r.price,
+            ratingAverage: r.ratingAverage,
+            ratingCount: r.ratingCount,
+            nextSessionDate: r.nextSessionDate,
+          }));
+        } else {
+          data = await searchPublicTemplates({
+            addressId: selectedAddressId || undefined,
+            q: selectedAddressId ? undefined : addressInput.trim() || undefined,
+            categoryIds: categoryIds.length ? categoryIds : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            difficulty: difficulty === "All" ? undefined : difficulty,
+            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
+            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
+            sort,
+          });
+        }
 
         if (cancelled) return;
 
@@ -94,7 +123,10 @@ export default function HomePage() {
         setState("done");
       } catch (error) {
         console.error("Failed to search templates", error);
-        if (!cancelled) setState("error");
+        if (!cancelled) {
+          setTemplates([]);
+          setState("error");
+        }
       }
     }, 260);
 
@@ -102,7 +134,18 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [addressInput, selectedAddressId, categoryIds, minPrice, maxPrice, difficulty, dateFrom, dateTo, sort]);
+  }, [
+    addressInput,
+    selectedAddressId,
+    categoryIds,
+    minPrice,
+    maxPrice,
+    difficulty,
+    dateFrom,
+    dateTo,
+    sort,
+    isSemanticSearch,
+  ]);
 
   const handleAddressSelect = (address: AddressSuggestion) => {
     setAddressInput(address.displayName);
@@ -260,10 +303,13 @@ export default function HomePage() {
             {templates.length > 0 && (
               <>
                 <div className={styles.sectionHeader}>
-                  <h2 className={styles.sectionTitle}>Available Experiences</h2>
+                  <h2 className={styles.sectionTitle}>
+                    {isSemanticSearch ? "AI-powered results" : "Available Experiences"}
+                  </h2>
                   <p className={styles.sectionSubtitle}>
-                    {templates.length} {templates.length === 1 ? "experience" : "experiences"} waiting
-                    for you
+                    {isSemanticSearch
+                      ? "Results based on meaning, not just keywords"
+                      : `${templates.length} ${templates.length === 1 ? "experience" : "experiences"} waiting for you`}
                   </p>
                 </div>
 

@@ -48,7 +48,10 @@ public class ActivityTemplate {
     private List<@NotBlank String> tags = List.of();
 
     @Builder.Default
-    private List<@Valid ActivityImage> images = List.of(); // Cloudinary stays same
+    private List<@NotBlank String> semanticHints = List.of();
+
+    @Builder.Default
+    private List<@Valid ActivityImage> images = List.of();
 
     @NotEmpty
     @Indexed
@@ -68,7 +71,6 @@ public class ActivityTemplate {
     @GeoSpatialIndexed(type = GeoSpatialIndexType.GEO_2DSPHERE)
     private GeoJsonPoint location;
 
-    // ✅ rating belongs here
     @Builder.Default
     private RatingSummary rating = RatingSummary.builder().average(0.0).count(0).build();
 
@@ -77,7 +79,6 @@ public class ActivityTemplate {
 
     @LastModifiedDate
     private Instant updatedAt;
-
 
     private String embeddingText;
     private List<Double> embeddingVector;

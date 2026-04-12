@@ -18,10 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -170,6 +167,11 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
         if (!categoryNames.isEmpty()) {
             appendLine(sb, "Categories", String.join(", ", categoryNames));
+
+            List<String> semanticHints = expandCategorySemanticHints(categoryNames);
+            if (!semanticHints.isEmpty()) {
+                appendLine(sb, "Category semantic hints", String.join(", ", semanticHints));
+            }
         }
 
         appendLine(sb, "Difficulty", difficulty);
@@ -183,6 +185,116 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         }
 
         return sb.toString().trim();
+    }
+
+    private List<String> expandCategorySemanticHints(List<String> categoryNames) {
+        if (categoryNames == null || categoryNames.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, List<String>> semanticMap = buildCategorySemanticMap();
+
+        LinkedHashSet<String> hints = new LinkedHashSet<>();
+
+        for (String categoryName : categoryNames) {
+            if (categoryName == null || categoryName.isBlank()) {
+                continue;
+            }
+
+            String normalized = categoryName.trim().toLowerCase(Locale.ROOT);
+
+            for (Map.Entry<String, List<String>> entry : semanticMap.entrySet()) {
+                if (normalized.contains(entry.getKey())) {
+                    hints.addAll(entry.getValue());
+                }
+            }
+        }
+
+        return new ArrayList<>(hints);
+    }
+
+    private Map<String, List<String>> buildCategorySemanticMap() {
+        Map<String, List<String>> map = new HashMap<>();
+
+        map.put("diving", List.of(
+                "scuba",
+                "underwater",
+                "water activity",
+                "aquatic adventure",
+                "sea sport",
+                "marine exploration",
+                "ocean experience",
+                "sea adventure"
+        ));
+
+        map.put("hiking", List.of(
+                "trekking",
+                "randonnee",
+                "randonnee",
+                "nature walk",
+                "mountain trail",
+                "outdoor nature activity",
+                "forest walk",
+                "trail adventure"
+        ));
+
+        map.put("camping", List.of(
+                "tent stay",
+                "outdoor stay",
+                "forest escape",
+                "nature overnight",
+                "adventure camp",
+                "wild retreat"
+        ));
+
+        map.put("marathon", List.of(
+                "running event",
+                "endurance sport",
+                "road race",
+                "fitness challenge",
+                "running activity"
+        ));
+
+        map.put("cycling", List.of(
+                "bike ride",
+                "biking adventure",
+                "road cycling",
+                "mountain biking",
+                "outdoor cycling activity"
+        ));
+
+        map.put("kayaking", List.of(
+                "paddle sport",
+                "water adventure",
+                "river activity",
+                "sea kayaking",
+                "aquatic outdoor sport"
+        ));
+
+        map.put("climbing", List.of(
+                "rock climbing",
+                "vertical adventure",
+                "mountain sport",
+                "outdoor challenge"
+        ));
+
+        map.put("desert", List.of(
+                "sahara adventure",
+                "sand dunes",
+                "oasis trip",
+                "desert experience",
+                "camel ride",
+                "quad adventure"
+        ));
+
+        map.put("horse", List.of(
+                "horse riding",
+                "equestrian activity",
+                "riding experience",
+                "nature ride"
+        ));
+
+        return map;
     }
 
     private String buildUserEmbeddingHint(

@@ -1,6 +1,5 @@
 package com.untamed.untamedbackend.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.untamed.untamedbackend.security.JwtAuthFilter;
 import com.untamed.untamedbackend.security.SecurityJsonHandlers;
 import org.springframework.context.annotation.Bean;
@@ -47,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/geo/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/search/semantic").permitAll()
 
                         // Stripe webhook must be public
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
@@ -93,6 +93,4 @@ public class SecurityConfig {
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
-
 }
