@@ -1,15 +1,22 @@
-/* Page Wrapper */
+/* ─── Page ──────────────────────────────────────────────────────────────── */
 .pageWrapper {
   min-height: 100vh;
-  background: #fff;
+  background: #f7f7f7;
   padding-top: 73px;
 }
 
-/* Header Section */
+/* ─── Sticky header ─────────────────────────────────────────────────────── */
 .fixedHeader {
+  position: sticky;
+  top: 73px;
+  z-index: 100;
   background: #fff;
-  border-bottom: 1px solid #ddd;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid #e8e8e8;
+  transition: box-shadow 0.2s ease;
+}
+
+.fixedHeaderScrolled {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
 }
 
 .headerContainer {
@@ -18,285 +25,366 @@
   padding: 0 40px;
 }
 
-/* Profile Card */
+/* ─── Profile card ──────────────────────────────────────────────────────── */
 .profileCard {
   display: flex;
-  gap: 40px;
-  align-items: flex-start;
-  padding: 32px 0 24px;
+  gap: 24px;
+  align-items: center;
+  padding: 24px 0 20px;
+  position: relative;
 }
 
+/* ─── Back button ───────────────────────────────────────────────────────── */
+.backButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid #e0e0e0;
+  background: #fff;
+  color: #444;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.backButton:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+  color: #111;
+  transform: translateX(-2px);
+}
+
+.backButton:active {
+  transform: translateX(-4px) scale(0.96);
+}
+
+/* ─── Avatar ────────────────────────────────────────────────────────────── */
 .avatarSection {
   position: relative;
   flex-shrink: 0;
 }
 
 .avatar {
-  width: 120px;
-  height: 120px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: block;
 }
 
 .avatarPlaceholder {
-  width: 120px;
-  height: 120px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
+  font-size: 36px;
   font-weight: 700;
   color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .verifiedIcon {
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
   background: #00a699;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 2.5px solid #fff;
 }
 
 .verifiedIcon svg {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   color: #fff;
 }
 
+/* ─── Profile info ──────────────────────────────────────────────────────── */
 .profileInfo {
   flex-shrink: 0;
-  min-width: 200px;
+  min-width: 160px;
 }
 
 .userName {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
-  color: #222;
-  margin: 0 0 4px 0;
+  color: #111;
+  margin: 0 0 2px 0;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
 }
 
 .userRole {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #717171;
+  color: #888;
   margin: 0;
   text-transform: capitalize;
+  letter-spacing: 0.2px;
 }
 
-/* Stats Grid */
+/* ─── Stats grid ────────────────────────────────────────────────────────── */
 .statsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  flex: 1;
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .statItem {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
+  background: #f9f9f9;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 72px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .statItem:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .statValue {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
-  color: #222;
+  color: #111;
   line-height: 1.2;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .statLabel {
-  font-size: 14px;
-  color: #717171;
+  font-size: 11px;
+  color: #999;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
-/* Tabs Navigation */
+/* ─── Tabs nav ──────────────────────────────────────────────────────────── */
 .tabsNav {
   display: flex;
-  gap: 32px;
-  border-bottom: 1px solid #ddd;
-  margin-top: 8px;
+  gap: 0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .tab {
   position: relative;
-  padding: 16px 0;
+  padding: 14px 20px;
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #717171;
+  color: #888;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease;
   font-family: inherit;
+  letter-spacing: 0.1px;
   border-bottom: 2px solid transparent;
 }
 
 .tab:hover {
-  color: #222;
+  color: #333;
 }
 
 .tabActive {
-  color: #222;
-  border-bottom-color: #222;
+  color: #111;
+  border-bottom-color: #111;
 }
 
-/* Content Section */
+/* ─── Content wrapper ───────────────────────────────────────────────────── */
 .contentWrapper {
-  background: #f7f7f7;
-  min-height: 100vh;
-}
-
-.contentContainer {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px 40px 80px;
+  padding: 32px 40px 100px;
 }
 
-.tabContent {
-  background: #fff;
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  border: 1px solid #ddd;
+/* scroll-padding to account for sticky header */
+:global(html) {
+  scroll-padding-top: 200px;
 }
 
-/* Section Styles */
-.sectionHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #ebebeb;
-}
-
-.sectionTitle {
-  font-size: 24px;
-  font-weight: 700;
-  color: #222;
-  margin: 0;
-}
-
-.editButton {
-  display: inline-flex;
-  align-items: center;
-  padding: 10px 20px;
-  background: #fff;
-  border: 1px solid #222;
-  border-radius: 8px;
-  text-decoration: none;
-  color: #222;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-.editButton:hover {
-  background: #222;
-  color: #fff;
-  transform: translateY(-1px);
-}
-
+/* ─── Section spacing ───────────────────────────────────────────────────── */
 .section {
-  margin-bottom: 32px;
+  scroll-margin-top: 200px;
+  margin-bottom: 24px;
 }
 
 .section:last-child {
   margin-bottom: 0;
 }
 
-.subsectionTitle {
-  font-size: 18px;
-  font-weight: 700;
-  color: #222;
-  margin: 0 0 16px 0;
+/* ─── Tab content card ──────────────────────────────────────────────────── */
+.tabContent {
+  background: #fff;
+  border-radius: 14px;
+  padding: 32px;
+  border: 1px solid #e8e8e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* Bio */
+/* ─── Section header ────────────────────────────────────────────────────── */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.editButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #fff;
+  border: 1.5px solid #222;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #222;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  letter-spacing: 0.1px;
+}
+
+.editButton:hover {
+  background: #111;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* ─── Subsection ────────────────────────────────────────────────────────── */
+.subsection {
+  margin-bottom: 28px;
+}
+
+.subsection:last-child {
+  margin-bottom: 0;
+}
+
+.subsectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 14px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 11px;
+  color: #999;
+}
+
+/* ─── Bio ───────────────────────────────────────────────────────────────── */
 .bioText {
-  font-size: 16px;
-  line-height: 1.7;
-  color: #484848;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #555;
   margin: 0;
 }
 
-/* Info List */
-.infoList {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.infoRow {
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  background: #f7f7f7;
-  border-radius: 8px;
-}
-
-.infoIcon {
-  width: 24px;
-  height: 24px;
-  color: #222;
-  flex-shrink: 0;
-  stroke-width: 1.5;
-}
-
-.infoLabel {
-  font-size: 12px;
-  font-weight: 600;
-  color: #717171;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-
-.infoValue {
-  font-size: 15px;
-  font-weight: 500;
-  color: #222;
-}
-
-/* Tags */
-.tagContainer {
+/* ─── Compact info badges ───────────────────────────────────────────────── */
+.infoBadgeRow {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.tag {
-  display: inline-block;
-  padding: 10px 18px;
-  background: #f7f7f7;
+.infoBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fafafa;
   border: 1px solid #ebebeb;
-  border-radius: 20px;
-  font-size: 14px;
+  border-radius: 10px;
+  flex: 1 1 auto;
+  min-width: 160px;
+  max-width: 280px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.infoBadge:hover {
+  border-color: #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.infoBadgeIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.infoBadgeText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.infoBadgeLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.infoBadgeValue {
+  font-size: 13px;
   font-weight: 500;
   color: #222;
-  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Tags ──────────────────────────────────────────────────────────────── */
+.tagContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 7px 14px;
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  transition: background 0.15s ease, transform 0.15s ease;
+  cursor: default;
 }
 
 .tag:hover {
@@ -304,11 +392,11 @@
   transform: translateY(-1px);
 }
 
-/* Experience Card */
+/* ─── Experience card ───────────────────────────────────────────────────── */
 .experienceCard {
   display: flex;
   gap: 20px;
-  padding: 24px;
+  padding: 22px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
   color: #fff;
@@ -316,8 +404,8 @@
 }
 
 .experienceIcon {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   display: flex;
@@ -327,29 +415,30 @@
 }
 
 .experienceIcon svg {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   color: #fff;
   stroke-width: 2;
 }
 
 .experienceYears {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1.2;
   margin-bottom: 4px;
 }
 
 .experienceSubtext {
-  font-size: 14px;
-  opacity: 0.9;
+  font-size: 13px;
+  opacity: 0.85;
 }
 
-/* Rating Card */
+/* ─── Rating card ───────────────────────────────────────────────────────── */
 .ratingCard {
-  padding: 24px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  padding: 20px;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
 }
 
 .ratingStars {
@@ -359,45 +448,46 @@
 }
 
 .ratingValue {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  color: #222;
+  color: #111;
 }
 
 .ratingCount {
-  font-size: 16px;
-  color: #717171;
+  font-size: 14px;
+  color: #888;
 }
 
 .ratingEmpty {
-  font-size: 16px;
-  color: #717171;
+  font-size: 14px;
+  color: #aaa;
 }
 
-/* Certificates */
+/* ─── Certificates ──────────────────────────────────────────────────────── */
 .certificateList {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .certificateItem {
   display: flex;
-  gap: 16px;
-  padding: 20px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  gap: 14px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
   align-items: flex-start;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .certificateItem:hover {
-  background: #ebebeb;
-  transform: translateX(4px);
+  background: #f2f2f2;
+  transform: translateX(3px);
 }
 
 .certificateBadge {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   background: linear-gradient(135deg, #00a699 0%, #008489 100%);
   border-radius: 50%;
   display: flex;
@@ -407,8 +497,8 @@
 }
 
 .certificateBadge svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   color: #fff;
   stroke-width: 2;
 }
@@ -418,65 +508,65 @@
 }
 
 .certificateName {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #222;
-  margin-bottom: 4px;
+  color: #111;
+  margin-bottom: 3px;
 }
 
 .certificateIssuer {
-  font-size: 14px;
-  color: #717171;
-  margin-bottom: 4px;
+  font-size: 13px;
+  color: #777;
+  margin-bottom: 3px;
 }
 
 .certificateId {
-  font-size: 12px;
-  color: #b0b0b0;
+  font-size: 11px;
+  color: #bbb;
   font-family: monospace;
 }
 
-/* Coming Soon */
+/* ─── Coming soon ───────────────────────────────────────────────────────── */
 .comingSoon {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 32px;
+  padding: 64px 32px;
   text-align: center;
 }
 
 .comingSoon svg {
-  width: 64px;
-  height: 64px;
-  color: #b0b0b0;
+  width: 52px;
+  height: 52px;
+  color: #ccc;
   stroke-width: 1.5;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .comingSoon h3 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  color: #222;
-  margin: 0 0 8px 0;
+  color: #111;
+  margin: 0 0 6px 0;
 }
 
 .comingSoon p {
-  font-size: 15px;
-  color: #717171;
+  font-size: 14px;
+  color: #888;
   margin: 0;
 }
 
-/* Utility */
+/* ─── Utility ───────────────────────────────────────────────────────────── */
 .loading {
   padding: 200px 24px;
   text-align: center;
-  font-size: 16px;
-  color: #717171;
+  font-size: 15px;
+  color: #aaa;
 }
 
 .loadingText {
-  color: #717171;
+  color: #aaa;
   font-size: 14px;
   text-align: center;
   padding: 40px;
@@ -491,107 +581,125 @@
   border-radius: 8px;
 }
 
-/* Responsive */
+/* ─── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .headerContainer,
-  .contentContainer {
+  .contentWrapper {
     padding-left: 32px;
     padding-right: 32px;
   }
 
-  .profileCard {
-    flex-wrap: wrap;
-  }
-
   .statsGrid {
-    width: 100%;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 
 @media (max-width: 768px) {
   .headerContainer,
-  .contentContainer {
+  .contentWrapper {
     padding-left: 20px;
     padding-right: 20px;
   }
 
   .profileCard {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 24px 0 20px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 0 16px;
   }
 
   .profileInfo {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 
   .statsGrid {
     width: 100%;
-    grid-template-columns: repeat(2, 1fr);
+    justify-content: flex-start;
+    order: 3;
+  }
+
+  .statItem {
+    padding: 10px 14px;
+    min-width: 60px;
+  }
+
+  .statValue {
+    font-size: 16px;
   }
 
   .avatar,
   .avatarPlaceholder {
-    width: 96px;
-    height: 96px;
+    width: 72px;
+    height: 72px;
   }
 
   .avatarPlaceholder {
-    font-size: 36px;
+    font-size: 28px;
   }
 
   .userName {
-    font-size: 26px;
+    font-size: 22px;
   }
 
   .tabsNav {
-    gap: 16px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabsNav::-webkit-scrollbar {
+    display: none;
   }
 
   .tab {
-    padding: 12px 0;
-    font-size: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
     white-space: nowrap;
   }
 
   .tabContent {
-    padding: 24px 20px;
+    padding: 24px 18px;
   }
 
   .sectionHeader {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 12px;
   }
 
   .editButton {
     width: 100%;
     justify-content: center;
   }
+
+  .infoBadgeRow {
+    gap: 8px;
+  }
+
+  .infoBadge {
+    min-width: 140px;
+  }
 }
 
 @media (max-width: 480px) {
   .statsGrid {
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    width: 100%;
   }
 
-  .statItem {
-    padding: 12px;
-    background: #f7f7f7;
-    border-radius: 8px;
+  .infoBadge {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
 }
 
+/* ─── Category cards (kept from original) ───────────────────────────────── */
 .categories {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .categoryCard {
@@ -599,15 +707,21 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 14px;
-  background: #f7f7f5;
+  border-radius: 12px;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  transition: border-color 0.15s ease;
+}
+
+.categoryCard:hover {
+  border-color: #ccc;
 }
 
 .categoryIcon,
 .categoryFallback {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -617,7 +731,7 @@
   align-items: center;
   justify-content: center;
   background: #e9efe8;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .categoryMeta {
@@ -626,13 +740,17 @@
 }
 
 .categoryName {
+  font-size: 13px;
   font-weight: 600;
+  color: #222;
 }
 
 .categoryCount {
-  color: #777;
+  font-size: 11px;
+  color: #999;
 }
 
 .empty {
-  color: #777;
+  font-size: 14px;
+  color: #aaa;
 }

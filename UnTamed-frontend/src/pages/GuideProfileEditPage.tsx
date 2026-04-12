@@ -5,6 +5,7 @@ import * as GuideApi from "../api/guide.api";
 import type { Certificate, GuideProfileResponse } from "../api/guide.api";
 import styles from "../style/Guideprofileeditpage.module.css";
 import { Header } from "../components/Header";
+import { BackButton } from "../components/BackButton";
 
 type CertDraft = Omit<Certificate, "id">;
 
@@ -202,11 +203,7 @@ export function GuideProfileEditPage() {
     <><Header></Header>
     <div className={styles.container}>
       <div className={styles.header}>
-        <button onClick={() => nav("/profile")} className={styles.backButton}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+        <BackButton to="/profile" />
         <h1 className={styles.title}>Edit guide profile</h1>
       </div>
 

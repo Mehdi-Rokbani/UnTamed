@@ -1,179 +1,52 @@
-:root {
-  --forest-deep: #1a4d2e;
-  --forest-mid: #2d5f3e;
-  --sunset-orange: #ff8c42;
-  --sunset-peach: #ffa566;
-  --white: #ffffff;
-  --text-dark: #1a4d2e;
-  --text-muted: #5a6c57;
-  --border-light: #d4d9d0;
-}
-
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: var(--white);
-  border: 2px solid var(--border-light);
-  border-radius: 12px;
-  color: var(--text-dark);
-  font-size: 15px;
-  font-weight: 600;
-  font-family: 'Poppins', sans-serif;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 2px 8px rgba(26, 77, 46, 0.08);
-  position: relative;
-  overflow: hidden;
-}
-
-.back-button::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
+.btn {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(255, 140, 66, 0.1);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s ease, height 0.6s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
 }
 
-.back-button:hover::before {
-  width: 300px;
-  height: 300px;
+/* default — thin border ring */
+.default {
+  background: #fff;
+  border: 1.5px solid #e0e0e0;
+  color: #444;
+}
+.default:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+  color: #111;
+  transform: translateX(-2px);
 }
 
-.back-button:hover {
-  border-color: var(--sunset-orange);
-  color: var(--sunset-orange);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.2);
-}
-
-.back-button:active {
-  transform: translateY(0);
-}
-
-.back-button svg {
-  transition: transform 0.3s ease;
-}
-
-.back-button:hover svg {
-  transform: translateX(-3px);
-}
-
-.back-button span {
-  position: relative;
-  z-index: 1;
-}
-
-/* Alternative style - Primary (Orange) */
-.back-button.primary {
-  background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--sunset-peach) 100%);
-  border: none;
-  color: var(--white);
-  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.3);
-}
-
-.back-button.primary::before {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.back-button.primary:hover {
-  box-shadow: 0 8px 24px rgba(255, 140, 66, 0.4);
-  transform: translateY(-3px);
-}
-
-/* Alternative style - Minimal */
-.back-button.minimal {
+/* ghost — no border */
+.ghost {
   background: transparent;
   border: none;
-  padding: 8px 12px;
-  box-shadow: none;
+  color: #888;
+}
+.ghost:hover {
+  background: #f5f5f5;
+  color: #111;
+  transform: translateX(-2px);
 }
 
-.back-button.minimal:hover {
-  background: rgba(255, 140, 66, 0.1);
-  box-shadow: none;
+/* filled — subtle bg */
+.filled {
+  background: #f5f5f5;
+  border: 1px solid #ebebeb;
+  color: #444;
+}
+.filled:hover {
+  background: #ececec;
+  border-color: #ccc;
+  color: #111;
+  transform: translateX(-2px);
 }
 
-/* Alternative style - Ghost */
-.back-button.ghost {
-  background: transparent;
-  border-color: var(--sunset-orange);
-  color: var(--sunset-orange);
-}
-
-.back-button.ghost:hover {
-  background: var(--sunset-orange);
-  color: var(--white);
-}
-
-/* Dark background variant */
-.back-button.dark {
-  background: rgba(255, 255, 255, 0.15);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: var(--white);
-  backdrop-filter: blur(10px);
-}
-
-.back-button.dark:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: var(--sunset-orange);
-  color: var(--white);
-}
-
-/* Positioning helpers */
-.back-button.fixed-top-left {
-  position: fixed;
-  top: 100px;
-  left: 24px;
-  z-index: 100;
-}
-
-.back-button.absolute-top-left {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 100;
-}
-
-/* Mobile responsive */
-@media (max-width: 640px) {
-  .back-button {
-    padding: 10px 16px;
-    font-size: 14px;
-  }
-
-  .back-button svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .back-button.fixed-top-left {
-    top: 90px;
-    left: 16px;
-  }
-
-  .back-button.absolute-top-left {
-    top: 16px;
-    left: 16px;
-  }
-}
-
-/* Accessibility */
-@media (prefers-reduced-motion: reduce) {
-  .back-button,
-  .back-button svg,
-  .back-button::before {
-    transition-duration: 0.01ms !important;
-  }
-}
-
-.back-button:focus-visible {
-  outline: 2px solid var(--sunset-orange);
-  outline-offset: 4px;
-}
+.btn:active { transform: translateX(-4px) scale(0.95); }
+.btn:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
