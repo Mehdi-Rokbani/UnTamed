@@ -316,10 +316,12 @@ public class UserInsightServiceImpl implements UserInsightService {
     }
 
     private Instant resolveCompletedAtFromSession(Booking booking) {
-        if (booking == null || booking.getSessionId() == null) return null;
+        if (booking == null || booking.getSessionId() == null) {
+            return null;
+        }
 
         Optional<ActivitySession> sessionOpt = activitySessionRepository.findById(booking.getSessionId());
-        return sessionOpt.map(ActivitySession::getDate).orElse(null);
+        return sessionOpt.map(ActivitySession::getStartAt).orElse(null);
     }
 
     private Instant resolveBookingCreatedAt(Booking booking) {

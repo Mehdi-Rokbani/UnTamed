@@ -343,12 +343,12 @@ public class RecommendationServiceImpl implements RecommendationService {
             Instant now,
             Map<String, Integer> reservedSeatsBySessionId
     ) {
-        return activitySessionRepository.findByTemplateIdOrderByDateAsc(templateId).stream()
+        return activitySessionRepository.findByTemplateIdOrderByStartAtAsc(templateId).stream()
                 .filter(Objects::nonNull)
                 .filter(session -> session.getStatus() == ActivityStatus.PUBLISHED)
-                .filter(session -> session.getDate() != null && session.getDate().isAfter(now))
+                .filter(session -> session.getStartAt() != null && session.getStartAt().isAfter(now))
                 .filter(session -> hasUsefulSeatsLeft(session, reservedSeatsBySessionId))
-                .map(ActivitySession::getDate)
+                .map(ActivitySession::getStartAt)
                 .findFirst()
                 .orElse(null);
     }

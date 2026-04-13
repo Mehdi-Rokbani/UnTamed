@@ -49,14 +49,14 @@ export default function GuideActivitiesPage() {
     const now = Date.now();
     for (const s of sessions) {
       const prev = map.get(s.templateId) ?? { total: 0, published: 0, upcoming: 0, nextDate: null };
-      const isUpcoming  = new Date(s.date).getTime() >= now;
+      const isUpcoming  = new Date(s.startAt).getTime() >= now;
       const isPublished = s.status === "PUBLISHED";
       map.set(s.templateId, {
         total:     prev.total + 1,
         published: prev.published + (isPublished ? 1 : 0),
         upcoming:  prev.upcoming  + (isUpcoming  ? 1 : 0),
         nextDate:  isUpcoming && isPublished
-          ? (!prev.nextDate || new Date(s.date) < new Date(prev.nextDate) ? s.date : prev.nextDate)
+          ? (!prev.nextDate || new Date(s.startAt) < new Date(prev.nextDate) ? s.startAt : prev.nextDate)
           : prev.nextDate,
       });
     }
@@ -71,7 +71,7 @@ export default function GuideActivitiesPage() {
   }, [templates, q]);
 
   const totalPublished = sessions.filter((s) => s.status === "PUBLISHED").length;
-  const totalUpcoming  = sessions.filter((s) => new Date(s.date).getTime() >= Date.now()).length;
+  const totalUpcoming  = sessions.filter((s) => new Date(s.startAt).getTime() >= Date.now()).length;
 
   return (
     <div className={styles.shell}>

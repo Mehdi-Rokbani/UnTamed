@@ -17,10 +17,10 @@ import java.time.Instant;
 @Builder
 @Document(collection = "activity_sessions")
 @CompoundIndexes({
-        @CompoundIndex(name = "idx_status_date", def = "{'status': 1, 'date': 1}"),
-        @CompoundIndex(name = "idx_template_status_date", def = "{'template_id': 1, 'status': 1, 'date': 1}"),
-        @CompoundIndex(name = "idx_guide_status_date", def = "{'guide_id': 1, 'status': 1, 'date': 1}"),
-        @CompoundIndex(name="uniq_template_date", def="{'template_id': 1, 'date': 1}", unique = true)
+        @CompoundIndex(name = "idx_status_startAt", def = "{'status': 1, 'start_at': 1}"),
+        @CompoundIndex(name = "idx_template_status_startAt", def = "{'template_id': 1, 'status': 1, 'start_at': 1}"),
+        @CompoundIndex(name = "idx_guide_status_startAt", def = "{'guide_id': 1, 'status': 1, 'start_at': 1}"),
+        @CompoundIndex(name = "uniq_template_startAt", def = "{'template_id': 1, 'start_at': 1}", unique = true)
 })
 public class ActivitySession {
 
@@ -32,7 +32,7 @@ public class ActivitySession {
     @Field("template_id")
     private String templateId;
 
-    // denormalize for fast guide dashboard filters (optional but useful)
+    // denormalized for fast guide dashboard filters
     @NotBlank
     @Indexed
     @Field("guide_id")
@@ -41,7 +41,12 @@ public class ActivitySession {
     @NotNull
     @Indexed
     @Future
-    private Instant date;
+    @Field("start_at")
+    private Instant startAt;
+
+    @NotNull
+    @Field("end_at")
+    private Instant endAt;
 
     @Min(1)
     private int capacity;
@@ -52,6 +57,12 @@ public class ActivitySession {
     @NotNull
     @Indexed
     private ActivityStatus status;
+
+    @Size(max = 300)
+    private String meetingPoint;
+
+    @Size(max = 1000)
+    private String sessionNote;
 
     @CreatedDate
     private Instant createdAt;

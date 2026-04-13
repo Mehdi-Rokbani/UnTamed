@@ -54,7 +54,9 @@ public class ReviewService {
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
         Instant now = Instant.now();
-        if (session.getDate() == null || !session.getDate().isBefore(now)) {
+        Instant startAt = session.getStartAt();
+
+        if (startAt == null || !startAt.isBefore(now)) {
             throw new IllegalArgumentException("You can review only after the session date has passed");
         }
 
@@ -234,7 +236,7 @@ public class ReviewService {
                     ActivitySession s = activitySessionRepository.findById(b.getSessionId()).orElse(null);
                     if (s == null) return null;
                     if (!templateId.equals(s.getTemplateId())) return null;
-                    if (s.getDate() == null || !s.getDate().isBefore(now)) return null;
+                    if (s.getStartAt() == null || !s.getStartAt().isBefore(now)) return null;
                     return b;
                 })
                 .filter(Objects::nonNull)

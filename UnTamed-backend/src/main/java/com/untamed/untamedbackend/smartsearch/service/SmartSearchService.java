@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.smartsearch.service;
 
 import com.untamed.untamedbackend.model.ActivitySession;
+import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.recommendation.dto.RecommendationItemResponse;
 import com.untamed.untamedbackend.recommendation.util.VectorUtils;
@@ -410,11 +411,12 @@ public class SmartSearchService {
         return sessions.stream()
                 .filter(Objects::nonNull)
                 .filter(s -> templateId.equals(s.getTemplateId()))
-                .map(ActivitySession::getDate)
+                .filter(s -> s.getStatus() == ActivityStatus.PUBLISHED)
+                .map(ActivitySession::getStartAt)
                 .filter(Objects::nonNull)
-                .anyMatch(date -> {
-                    boolean afterFrom = finalFrom == null || !date.isBefore(finalFrom);
-                    boolean beforeTo = finalTo == null || !date.isAfter(finalTo);
+                .anyMatch(startAt -> {
+                    boolean afterFrom = finalFrom == null || !startAt.isBefore(finalFrom);
+                    boolean beforeTo = finalTo == null || !startAt.isAfter(finalTo);
                     return afterFrom && beforeTo;
                 });
     }
@@ -468,17 +470,21 @@ public class SmartSearchService {
         Map<String, Instant> nextByTemplateId = new HashMap<>();
 
         for (ActivitySession session : sessions) {
-            if (session == null || session.getTemplateId() == null || session.getDate() == null) {
+            if (session == null || session.getTemplateId() == null || session.getStartAt() == null) {
                 continue;
             }
 
-            if (!session.getDate().isAfter(now)) {
+            if (session.getStatus() != ActivityStatus.PUBLISHED) {
+                continue;
+            }
+
+            if (!session.getStartAt().isAfter(now)) {
                 continue;
             }
 
             Instant existing = nextByTemplateId.get(session.getTemplateId());
-            if (existing == null || session.getDate().isBefore(existing)) {
-                nextByTemplateId.put(session.getTemplateId(), session.getDate());
+            if (existing == null || session.getStartAt().isBefore(existing)) {
+                nextByTemplateId.put(session.getTemplateId(), session.getStartAt());
             }
         }
 

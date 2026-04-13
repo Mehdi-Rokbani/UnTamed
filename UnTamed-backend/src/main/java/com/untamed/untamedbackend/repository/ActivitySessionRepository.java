@@ -10,40 +10,40 @@ import java.util.Optional;
 
 public interface ActivitySessionRepository extends MongoRepository<ActivitySession, String> {
 
-    // sessions for a given template (many dates)
+    // sessions for a given template
     List<ActivitySession> findByTemplateId(String templateId);
 
-    // guide dashboard (all sessions created by this guide)
+    // guide dashboard
     List<ActivitySession> findByGuideId(String guideId);
 
     // ownership check
     Optional<ActivitySession> findByIdAndGuideId(String id, String guideId);
 
-    // filters
+    // public listing
     List<ActivitySession> findByStatus(ActivityStatus status);
-
 
     // for "block delete template if sessions exist"
     boolean existsByTemplateId(String templateId);
 
     long countByTemplateId(String templateId);
 
-    Optional<ActivitySession> findFirstByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
+    Optional<ActivitySession> findFirstByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
             String templateId,
             ActivityStatus status,
             Instant now
     );
 
-    List<ActivitySession> findByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
+    List<ActivitySession> findByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
             String templateId,
             ActivityStatus status,
             Instant now
     );
 
-    List<ActivitySession> findByStatusAndDateBetween(ActivityStatus status, Instant from, Instant to);
+    List<ActivitySession> findByStatusAndStartAtBetween(ActivityStatus status, Instant from, Instant to);
 
-    List<ActivitySession> findByStatusAndDateAfter(ActivityStatus status, Instant from);
-    List<ActivitySession> findByStatusAndDateBefore(ActivityStatus status, Instant to);
-    List<ActivitySession> findByTemplateIdOrderByDateAsc(String templateId);
+    List<ActivitySession> findByStatusAndStartAtAfter(ActivityStatus status, Instant from);
 
+    List<ActivitySession> findByStatusAndStartAtBefore(ActivityStatus status, Instant to);
+
+    List<ActivitySession> findByTemplateIdOrderByStartAtAsc(String templateId);
 }

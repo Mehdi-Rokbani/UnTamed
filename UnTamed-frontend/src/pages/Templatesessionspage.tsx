@@ -193,30 +193,36 @@ export default function TemplateSessionsPage() {
   }
 
   async function handleAddSession() {
-    if (!id || !newDate) return;
-    setAdding(true);
-    setErr(null);
-    try {
-      const created = await createSession(id, {
-        date: new Date(newDate).toISOString(),
-        capacity: newCapacity,
-      });
-      setSessions((prev) => [...prev, created]);
-      setModal(null);
-      setNewDate("");
-      setNewCapacity(10);
-      showToast("Session added ✅");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to add session");
-    } finally {
-      setAdding(false);
-    }
+  if (!id || !newDate) return;
+  setAdding(true);
+  setErr(null);
+
+  try {
+    const startAt = new Date(newDate);
+    const endAt = new Date(startAt.getTime() + 3 * 60 * 60 * 1000);
+
+    const created = await createSession(id, {
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      capacity: newCapacity,
+    });
+
+    setSessions((prev) => [...prev, created]);
+    setModal(null);
+    setNewDate("");
+    setNewCapacity(10);
+    showToast("Session added ✅");
+  } catch (e) {
+    setErr(e instanceof Error ? e.message : "Failed to add session");
+  } finally {
+    setAdding(false);
   }
+}
 
   const now = Date.now();
   const sorted = [...sessions].sort((a, b) => {
-    const aTime = new Date(a.date).getTime();
-    const bTime = new Date(b.date).getTime();
+    const aTime = new Date(a.startAt).getTime();
+    const bTime = new Date(b.startAt).getTime();
     const aFuture = aTime >= now;
     const bFuture = bTime >= now;
     if (aFuture !== bFuture) return aFuture ? -1 : 1;
@@ -224,7 +230,7 @@ export default function TemplateSessionsPage() {
   });
 
   const published = sessions.filter((s) => s.status === "PUBLISHED").length;
-  const upcoming  = sessions.filter((s) => new Date(s.date).getTime() >= now).length;
+  const upcoming  = sessions.filter((s) => new Date(s.startAt).getTime() >= now).length;
 
   // ── Participant groups ──
   const confirmedBookings = participants.filter((p) => p.status === "COMPLETED");
@@ -360,7 +366,7 @@ export default function TemplateSessionsPage() {
       {sorted.length > 0 && (
         <div className={styles.sessionList}>
           {sorted.map((session, idx) => {
-            const isPast = new Date(session.date).getTime() < now;
+            const isPast = new Date(session.startAt).getTime() < now;
             const left = spotsLeft(session);
             const fillPct = Math.round((session.bookedCount / session.capacity) * 100);
             const isChanging = changingId === session.id;
@@ -373,9 +379,9 @@ export default function TemplateSessionsPage() {
               >
                 <div className={styles.sessionLeft}>
                   <div className={styles.sessionDate}>
-                    <div className={styles.dateDay}>{new Date(session.date).toLocaleDateString("en-US", { day: "2-digit" })}</div>
-                    <div className={styles.dateMonth}>{new Date(session.date).toLocaleDateString("en-US", { month: "short" })}</div>
-                    <div className={styles.dateYear}>{new Date(session.date).toLocaleDateString("en-US", { year: "numeric" })}</div>
+                    <div className={styles.dateDay}>{new Date(session.startAt).toLocaleDateString("en-US", { day: "2-digit" })}</div>
+                    <div className={styles.dateMonth}>{new Date(session.startAt).toLocaleDateString("en-US", { month: "short" })}</div>
+                    <div className={styles.dateYear}>{new Date(session.startAt).toLocaleDateString("en-US", { year: "numeric" })}</div>
                   </div>
                   <span className={`${styles.statusBadge} ${styles[statusColor(session.status)]}`}>{session.status}</span>
                   {isPast && <span className={styles.pastBadge}>Past</span>}
@@ -383,7 +389,7 @@ export default function TemplateSessionsPage() {
 
                 <div className={styles.sessionCenter}>
                   <div className={styles.sessionTime}>
-                    🕐 {new Date(session.date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                    🕐 {new Date(session.startAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                   </div>
                   <div className={styles.capacityRow}>
                     <span className={styles.capacityLabel}>{session.bookedCount} / {session.capacity} booked</span>

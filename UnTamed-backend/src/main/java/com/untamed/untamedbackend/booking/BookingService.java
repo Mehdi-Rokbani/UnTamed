@@ -55,7 +55,9 @@ public class BookingService {
     }
 
     public Booking createOrIncreaseBooking(String userId, String sessionId, int people) {
-        if (people < 1) throw bad(BookingErrors.INVALID_PEOPLE);
+        if (people < 1) {
+            throw bad(BookingErrors.INVALID_PEOPLE);
+        }
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
         validateSessionBookable(session, userId);
@@ -76,7 +78,9 @@ public class BookingService {
         }
 
         boolean reserved = sessionSeatOps.tryReserveSeats(sessionId, people);
-        if (!reserved) throw conflict(BookingErrors.SOLD_OUT);
+        if (!reserved) {
+            throw conflict(BookingErrors.SOLD_OUT);
+        }
 
         Instant now = Instant.now();
         Booking booking = Booking.builder()
@@ -86,7 +90,7 @@ public class BookingService {
                 .status(BookingStatus.PENDING)
                 .createdAt(now)
                 .updatedAt(now)
-                .expiresAt(computeExpiresAt(session.getDate(), now))
+                .expiresAt(computeExpiresAt(session.getStartAt(), now))
                 .build();
 
         Booking savedBooking = bookingRepository.save(booking);
@@ -96,7 +100,9 @@ public class BookingService {
     }
 
     public Booking increaseSeats(String bookingId, String userId, int delta) {
-        if (delta < 1) throw bad(BookingErrors.INVALID_DELTA);
+        if (delta < 1) {
+            throw bad(BookingErrors.INVALID_DELTA);
+        }
 
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
@@ -108,17 +114,21 @@ public class BookingService {
         validateSessionBookable(session, userId);
 
         boolean reserved = sessionSeatOps.tryReserveSeats(b.getSessionId(), delta);
-        if (!reserved) throw conflict(BookingErrors.SOLD_OUT);
+        if (!reserved) {
+            throw conflict(BookingErrors.SOLD_OUT);
+        }
 
         b.setNumberOfPeople(b.getNumberOfPeople() + delta);
         b.setUpdatedAt(Instant.now());
-        b.setExpiresAt(computeExpiresAt(session.getDate(), Instant.now()));
+        b.setExpiresAt(computeExpiresAt(session.getStartAt(), Instant.now()));
 
         return bookingRepository.save(b);
     }
 
     public Booking decreaseSeats(String bookingId, String userId, int delta) {
-        if (delta < 1) throw bad(BookingErrors.INVALID_DELTA);
+        if (delta < 1) {
+            throw bad(BookingErrors.INVALID_DELTA);
+        }
 
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
@@ -140,7 +150,7 @@ public class BookingService {
 
         b.setNumberOfPeople(current - delta);
         b.setUpdatedAt(Instant.now());
-        b.setExpiresAt(computeExpiresAt(session.getDate(), Instant.now()));
+        b.setExpiresAt(computeExpiresAt(session.getStartAt(), Instant.now()));
 
         return bookingRepository.save(b);
     }
@@ -210,7 +220,9 @@ public class BookingService {
 
         assertOwned(b, userId);
 
-        if (b.getStatus() == BookingStatus.COMPLETED) throw conflict(BookingErrors.BOOKING_IMMUTABLE_PAID);
+        if (b.getStatus() == BookingStatus.COMPLETED) {
+            throw conflict(BookingErrors.BOOKING_IMMUTABLE_PAID);
+        }
         if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
             throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
@@ -220,8 +232,12 @@ public class BookingService {
             throw conflict("Booking expired");
         }
 
-        if (b.getStatus() == BookingStatus.PAYING) return b;
-        if (b.getStatus() != BookingStatus.PENDING) throw conflict("Booking not payable");
+        if (b.getStatus() == BookingStatus.PAYING) {
+            return b;
+        }
+        if (b.getStatus() != BookingStatus.PENDING) {
+            throw conflict("Booking not payable");
+        }
 
         b.setStatus(BookingStatus.PAYING);
         b.setUpdatedAt(Instant.now());
@@ -291,7 +307,7 @@ public class BookingService {
 
     private void validateSessionChangeAllowed(ActivitySession session) {
         Instant now = Instant.now();
-        Instant start = session.getDate();
+        Instant start = session.getStartAt();
         if (start == null) return;
 
         if (!now.isBefore(start.minus(cutoff()))) {
@@ -326,9 +342,9 @@ public class BookingService {
         }
     }
 
-    private Instant computeExpiresAt(Instant sessionDate, Instant now) {
+    private Instant computeExpiresAt(Instant sessionStartAt, Instant now) {
         Instant proposed = now.plus(pendingHold());
-        Instant latest = sessionDate.minus(cutoff());
+        Instant latest = sessionStartAt.minus(cutoff());
         return proposed.isAfter(latest) ? latest : proposed;
     }
 
@@ -402,8 +418,10 @@ public class BookingService {
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
 
         if (session.getGuideId() == null || !session.getGuideId().equals(guideId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "You can only view participants for your own sessions.");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You can only view participants for your own sessions."
+            );
         }
 
         List<Booking> bookings = bookingRepository
@@ -563,7 +581,7 @@ public class BookingService {
                     .build();
         }
 
-        if (session.getDate() == null || !session.getDate().isBefore(Instant.now())) {
+        if (session.getStartAt() == null || !session.getStartAt().isBefore(Instant.now())) {
             return ReviewEligibilityResponse.builder()
                     .eligible(false)
                     .alreadyReviewed(false)

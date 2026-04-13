@@ -2,7 +2,9 @@ package com.untamed.untamedbackend.controller;
 
 import com.untamed.untamedbackend.booking.BookingService;
 import com.untamed.untamedbackend.booking.ParticipantsPreviewResponse;
-import com.untamed.untamedbackend.dto.*;
+import com.untamed.untamedbackend.dto.ActivitySessionCreateRequest;
+import com.untamed.untamedbackend.dto.ActivitySessionResponse;
+import com.untamed.untamedbackend.dto.ActivitySessionUpdateRequest;
 import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.service.ActivitySessionService;
 import jakarta.validation.Valid;
@@ -32,6 +34,13 @@ public class ActivitySessionController {
     @GetMapping("/{id}")
     public ActivitySessionResponse getById(@PathVariable String id) {
         return sessionService.getSessionById(id, getAuthEmailOrNull());
+    }
+
+    @GetMapping("/{sessionId}/participants-preview")
+    public ResponseEntity<ParticipantsPreviewResponse> getParticipantsPreview(
+            @PathVariable String sessionId
+    ) {
+        return ResponseEntity.ok(bookingService.getParticipantsPreview(sessionId));
     }
 
     // -------- Guide (authenticated) --------
@@ -77,29 +86,30 @@ public class ActivitySessionController {
         return sessionService.setStatus(id, status, requireAuthEmail());
     }
 
-    @GetMapping("/{sessionId}/participants-preview")
-    public ResponseEntity<ParticipantsPreviewResponse> getParticipantsPreview(
-            @PathVariable String sessionId
-    ) {
-        return ResponseEntity.ok(bookingService.getParticipantsPreview(sessionId));
-    }
-
     // -------- Auth helpers --------
 
     private String requireAuthEmail() {
         String email = getAuthEmailOrNull();
-        if (email == null) throw new IllegalArgumentException("Unauthorized");
+        if (email == null) {
+            throw new IllegalArgumentException("Unauthorized");
+        }
         return email;
     }
 
     private String getAuthEmailOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) return null;
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+
         Object principal = auth.getPrincipal();
         if (principal instanceof String s) {
-            if ("anonymousUser".equalsIgnoreCase(s)) return null;
+            if ("anonymousUser".equalsIgnoreCase(s)) {
+                return null;
+            }
             return s;
         }
+
         return auth.getName();
     }
 }

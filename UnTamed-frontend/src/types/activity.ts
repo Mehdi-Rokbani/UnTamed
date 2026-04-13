@@ -69,19 +69,25 @@ export type ActivityTemplateResponse = {
 };
 
 /** ---------------------------
- *  SESSION (date instance)
+ *  SESSION
  *  ---------------------------
  */
 
 export type ActivitySessionCreatePayload = {
-  date: string;      // ISO
+  startAt: string; // ISO
+  endAt: string; // ISO
   capacity: number;
+  meetingPoint?: string;
+  sessionNote?: string;
 };
 
 export type ActivitySessionUpdatePayload = {
-  date?: string;
+  startAt?: string;
+  endAt?: string;
   capacity?: number;
   status?: ActivityStatus;
+  meetingPoint?: string;
+  sessionNote?: string;
 };
 
 export type ActivityTemplateMini = {
@@ -99,36 +105,37 @@ export type ActivitySessionResponse = {
   templateId: string;
   guideId: string;
 
-  date: string;
+  startAt: string;
+  endAt: string;
   capacity: number;
   bookedCount: number;
   status: ActivityStatus;
+  meetingPoint?: string | null;
+  sessionNote?: string | null;
 
   template?: ActivityTemplateMini | null;
-  rating?: RatingSummary | null; // from template
+  rating?: RatingSummary | null;
 };
 
 /** ---------------------------
- *  PUBLIC browse (GetYourGuide-style)
+ *  PUBLIC browse
  *  ---------------------------
  */
 
 export type PublicNextSession = {
   id: string;
-  date: string;
+  startAt: string;
   capacity: number;
   bookedCount: number;
 };
-
 
 export type PublicSession = {
   id: string;
-  date: string;
+  startAt: string;
   capacity: number;
   bookedCount: number;
 };
 
-/** Optional: if you still use AddressResponse somewhere on details pages */
 export type TemplateWithAddress = ActivityTemplateResponse & {
   address?: AddressResponse | null;
 };
@@ -150,7 +157,6 @@ export type PublicGuideDto = {
   experienceYears?: number | null;
 };
 
-// Replace your existing PublicTemplateCard with this:
 export type PublicTemplateCard = {
   id: string;
   title: string;
@@ -162,7 +168,6 @@ export type PublicTemplateCard = {
   rating: RatingSummary;
   nextSession?: PublicNextSession | null;
   upcomingSessionsCount: number;
-  // new
   images: ActivityImageDto[];
   addressDisplayName?: string | null;
   governorate?: string | null;

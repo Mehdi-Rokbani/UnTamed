@@ -50,12 +50,12 @@ public class ActivityTemplatePublicService {
 
         Instant now = Instant.now();
         return sessionRepo
-                .findByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
+                .findByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
                         templateId, ActivityStatus.PUBLISHED, now)
                 .stream()
                 .map(s -> new PublicSessionDto(
                         s.getId(),
-                        s.getDate(),
+                        s.getStartAt(),
                         s.getCapacity(),
                         s.getBookedCount()
                 ))
@@ -148,13 +148,13 @@ public class ActivityTemplatePublicService {
         List<ActivitySession> sessions;
 
         if (hasDateFrom && hasDateTo) {
-            sessions = sessionRepo.findByStatusAndDateBetween(
+            sessions = sessionRepo.findByStatusAndStartAtBetween(
                     ActivityStatus.PUBLISHED, dateFrom, dateTo);
         } else if (hasDateFrom) {
-            sessions = sessionRepo.findByStatusAndDateAfter(
+            sessions = sessionRepo.findByStatusAndStartAtAfter(
                     ActivityStatus.PUBLISHED, dateFrom);
         } else {
-            sessions = sessionRepo.findByStatusAndDateBefore(
+            sessions = sessionRepo.findByStatusAndStartAtBefore(
                     ActivityStatus.PUBLISHED, dateTo);
         }
 
@@ -192,16 +192,15 @@ public class ActivityTemplatePublicService {
                 .toList();
 
         PublicNextSessionDto next = sessionRepo
-                .findFirstByTemplateIdAndStatusAndDateAfterOrderByDateAsc(
+                .findFirstByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
                         t.getId(), ActivityStatus.PUBLISHED, now)
                 .map(s -> new PublicNextSessionDto(
                         s.getId(),
-                        s.getDate(),
+                        s.getStartAt(),
                         s.getCapacity(),
                         s.getBookedCount()
                 ))
                 .orElse(null);
-
         int totalBookedCount = sessionRepo.findByTemplateId(t.getId())
                 .stream()
                 .mapToInt(ActivitySession::getBookedCount)

@@ -143,7 +143,7 @@ export function ActivityCard({ activity, index = 0 }: ActivityCardProps) {
               <span className={styles.badgeSoldOut}>Sold out</span>
             ) : isLowStock ? (
               <span className={styles.badgeLowStock}>⚡ {spotsLeft} left</span>
-            ) : nextSession?.date ? (
+            ) : nextSession?.startAt ? (
               <span className={styles.nextDate}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -151,7 +151,7 @@ export function ActivityCard({ activity, index = 0 }: ActivityCardProps) {
                   <line x1="8"  y1="2" x2="8"  y2="6" />
                   <line x1="3"  y1="10" x2="21" y2="10" />
                 </svg>
-                {formatDate(nextSession.date)}
+                {formatDate(nextSession.startAt)}
               </span>
             ) : upcomingSessionsCount != null && upcomingSessionsCount > 0 ? (
               <span className={styles.nextDate}>

@@ -439,7 +439,7 @@ export default function ActivityDetailsPage() {
 
   const cutoffMs = useMemo(() => {
     if (!selectedSession) return null;
-    const start = new Date(selectedSession.date).getTime();
+    const start = new Date(selectedSession.startAt).getTime();
     if (Number.isNaN(start)) return null;
     return start - now;
   }, [selectedSession, now]);
@@ -700,8 +700,8 @@ export default function ActivityDetailsPage() {
                           )}
                           {active && <span className={styles.sessionCheckmark}><IcoCheck /></span>}
                           {scarce && !soldOut && <span className={styles.scarcePulse} />}
-                          <div className={styles.sessionDateLine}>{formatDateShort(s.date)}</div>
-                          <div className={styles.sessionTimeLine}>{formatTime(s.date)}</div>
+                          <div className={styles.sessionDateLine}>{formatDateShort(s.startAt)}</div>
+                          <div className={styles.sessionTimeLine}>{formatTime(s.startAt)}</div>
                           <div className={styles.sessionSpotsLine}>
                             {soldOut
                               ? <span className={styles.tagSoldOut}>Sold out</span>
@@ -874,7 +874,7 @@ export default function ActivityDetailsPage() {
                     <h3 className={styles.successTitle}>You're booked!</h3>
                     <p className={styles.successSub}>
                       {people} {people === 1 ? "spot" : "spots"} confirmed for{" "}
-                      <strong>{selectedSession ? formatDateShort(selectedSession.date) : "your adventure"}</strong>
+                      <strong>{selectedSession ? formatDateShort(selectedSession.startAt) : "your adventure"}</strong>
                     </p>
                     {price > 0 && (
                       <div className={styles.successPriceLine}>
@@ -924,14 +924,14 @@ export default function ActivityDetailsPage() {
                       <div className={styles.sidebarField}>
                         <span className={styles.sidebarFieldLabel}><IcoCalendar /> Date</span>
                         <span className={styles.sidebarFieldVal}>
-                          {selectedSession ? formatDateShort(selectedSession.date) : "—"}
+                          {selectedSession ? formatDateShort(selectedSession.startAt) : "—"}
                         </span>
                       </div>
 
                       {selectedSession && (
                         <div className={styles.sidebarField}>
                           <span className={styles.sidebarFieldLabel}><IcoClock /> Time</span>
-                          <span className={styles.sidebarFieldVal}>{formatTime(selectedSession.date)}</span>
+                          <span className={styles.sidebarFieldVal}>{formatTime(selectedSession.startAt)}</span>
                         </div>
                       )}
 

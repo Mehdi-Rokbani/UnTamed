@@ -22,8 +22,16 @@ type Step = 1 | 2 | 3 | 4 | 5 | 6;
 /* ── SVG icon helpers ── */
 function IconCalendar() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
@@ -33,8 +41,16 @@ function IconCalendar() {
 }
 function IconUsers() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -44,8 +60,16 @@ function IconUsers() {
 }
 function IconCurrency() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="12" y1="1" x2="12" y2="23" />
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
     </svg>
@@ -53,32 +77,64 @@ function IconCurrency() {
 }
 function IconCheck() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
 function IconArrowRight() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M5 12h14M12 5l7 7-7 7" />
     </svg>
   );
 }
 function IconArrowLeft() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M19 12H5M12 19l-7-7 7-7" />
     </svg>
   );
 }
 function IconFlag() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
       <line x1="4" y1="22" x2="4" y2="15" />
     </svg>
@@ -121,8 +177,11 @@ export default function CreateActivityPage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
   const [price, setPrice] = useState<number>(0);
 
-  const [date, setDate] = useState("");
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
   const [capacity, setCapacity] = useState<number>(3);
+  const [meetingPoint, setMeetingPoint] = useState("");
+  const [sessionNote, setSessionNote] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -154,7 +213,12 @@ export default function CreateActivityPage() {
 
   const step1Valid = title.trim().length > 2 && description.trim().length > 5;
   const step2Valid = !!difficulty && price >= 0;
-  const step3Valid = !!date && capacity >= 3;
+  const step3Valid =
+    !!startAt &&
+    !!endAt &&
+    new Date(startAt).getTime() > Date.now() &&
+    new Date(endAt).getTime() > new Date(startAt).getTime() &&
+    capacity >= 3;
   const step4Valid = categoryIds.length > 0;
   const step5Valid = location !== null;
   const step6Valid = images.length > 0;
@@ -162,18 +226,22 @@ export default function CreateActivityPage() {
 
   const progressSteps = useMemo(
     () => [
-      { n: 1, title: "Basic Info",  desc: "Title & Description" },
-      { n: 2, title: "Details",     desc: "Difficulty & Price" },
-      { n: 3, title: "Schedule",    desc: "First Date & Capacity" },
-      { n: 4, title: "Categories",  desc: "Select at least one" },
-      { n: 5, title: "Location",    desc: "Pick a place" },
-      { n: 6, title: "Images",      desc: "Upload photos" },
+      { n: 1, title: "Basic Info", desc: "Title & Description" },
+      { n: 2, title: "Details", desc: "Difficulty & Price" },
+      { n: 3, title: "Schedule", desc: "Session timing" },
+      { n: 4, title: "Categories", desc: "Select at least one" },
+      { n: 5, title: "Location", desc: "Pick a place" },
+      { n: 6, title: "Images", desc: "Upload photos" },
     ],
     []
   );
 
-  const nextStep = () => { if (step < 6) setStep((step + 1) as Step); };
-  const prevStep = () => { if (step > 1) setStep((step - 1) as Step); };
+  const nextStep = () => {
+    if (step < 6) setStep((step + 1) as Step);
+  };
+  const prevStep = () => {
+    if (step > 1) setStep((step - 1) as Step);
+  };
 
   async function onCreateTemplate(): Promise<boolean> {
     setStatus(null);
@@ -181,6 +249,7 @@ export default function CreateActivityPage() {
       setStatus("Please complete all required steps before continuing.");
       return false;
     }
+
     const payload: ActivityTemplateCreatePayload = {
       title: title.trim(),
       description: description.trim(),
@@ -200,6 +269,7 @@ export default function CreateActivityPage() {
       },
       images: [],
     };
+
     try {
       setSubmitting(true);
       const res = await createTemplate(payload);
@@ -216,16 +286,24 @@ export default function CreateActivityPage() {
   }
 
   async function handleStep5Next() {
-    if (createdTemplate) { setStep(6); return; }
+    if (createdTemplate) {
+      setStep(6);
+      return;
+    }
     const ok = await onCreateTemplate();
     if (ok) setStep(6);
   }
 
   async function onUploadFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    if (!createdTemplate?.id) { setStatus("Create the template first."); return; }
+    if (!createdTemplate?.id) {
+      setStatus("Create the template first.");
+      return;
+    }
+
     setStatus(null);
     setUploading(true);
+
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -246,13 +324,28 @@ export default function CreateActivityPage() {
 
   async function onFinish() {
     setStatus(null);
-    if (!createdTemplate?.id) { setStatus("Template not created."); return; }
-    if (!step3Valid) { setStatus("Please set a valid date and capacity."); return; }
-    if (!step6Valid) { setStatus("Please upload at least one image."); return; }
+
+    if (!createdTemplate?.id) {
+      setStatus("Template not created.");
+      return;
+    }
+    if (!step3Valid) {
+      setStatus("Please set valid start/end time and capacity.");
+      return;
+    }
+    if (!step6Valid) {
+      setStatus("Please upload at least one image.");
+      return;
+    }
+
     const body: ActivitySessionCreatePayload = {
-      date: new Date(date).toISOString(),
+      startAt: new Date(startAt).toISOString(),
+      endAt: new Date(endAt).toISOString(),
       capacity,
+      meetingPoint: meetingPoint.trim() || undefined,
+      sessionNote: sessionNote.trim() || undefined,
     };
+
     try {
       setSubmitting(true);
       await createSession(createdTemplate.id, body);
@@ -265,18 +358,29 @@ export default function CreateActivityPage() {
   }
 
   function resetAll() {
-    setStep(1); setTitle(""); setDescription(""); setDifficulty("EASY");
-    setPrice(0); setDate(""); setCapacity(3); setCategoryIds([]);
-    setLocation(null); setCreatedTemplate(null); setImages([]);
-    setStatus(null); setSubmitting(false); setUploading(false);
+    setStep(1);
+    setTitle("");
+    setDescription("");
+    setDifficulty("EASY");
+    setPrice(0);
+    setStartAt("");
+    setEndAt("");
+    setCapacity(3);
+    setMeetingPoint("");
+    setSessionNote("");
+    setCategoryIds([]);
+    setLocation(null);
+    setCreatedTemplate(null);
+    setImages([]);
+    setStatus(null);
+    setSubmitting(false);
+    setUploading(false);
   }
 
   return (
     <>
       <Header />
       <div className={styles.createActivityPage}>
-
-        {/* ── Left panel ── */}
         <div className={styles.leftPanel}>
           <div className={styles.leftContent}>
             <h1 className={styles.pageTitle}>Create New Adventure</h1>
@@ -288,12 +392,10 @@ export default function CreateActivityPage() {
                   className={[
                     styles.progressStep,
                     step >= s.n ? styles.active : "",
-                    step > s.n  ? styles.completed : "",
+                    step > s.n ? styles.completed : "",
                   ].join(" ")}
                 >
-                  <div className={styles.stepNumber}>
-                    {step > s.n ? <IconCheck /> : s.n}
-                  </div>
+                  <div className={styles.stepNumber}>{step > s.n ? <IconCheck /> : s.n}</div>
                   <div className={styles.stepInfo}>
                     <div className={styles.stepTitle}>{s.title}</div>
                     <div className={styles.stepDesc}>{s.desc}</div>
@@ -311,11 +413,8 @@ export default function CreateActivityPage() {
           </div>
         </div>
 
-        {/* ── Right panel ── */}
         <div className={styles.rightPanel}>
           <form className={styles.activityForm} onSubmit={(e) => e.preventDefault()}>
-
-            {/* Step 1 — Basic Info */}
             {step === 1 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Tell us about your adventure</h2>
@@ -350,7 +449,6 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 2 — Details */}
             {step === 2 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Activity details</h2>
@@ -381,7 +479,9 @@ export default function CreateActivityPage() {
                 <div className={styles.formGroup}>
                   <label htmlFor="price">Price per Person (TND)</label>
                   <div className={styles.inputWithIcon}>
-                    <span className={styles.inputIcon}><IconCurrency /></span>
+                    <span className={styles.inputIcon}>
+                      <IconCurrency />
+                    </span>
                     <input
                       id="price"
                       type="number"
@@ -398,31 +498,51 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 3 — Schedule */}
             {step === 3 && (
               <div className={styles.formStep}>
-                <h2 className={styles.stepHeading}>First date and capacity</h2>
-                <p className={styles.stepSubheading}>You can add more sessions later</p>
+                <h2 className={styles.stepHeading}>Schedule your first session</h2>
+                <p className={styles.stepSubheading}>Set the session time, group size, and optional details</p>
 
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
-                    <label htmlFor="date">Date &amp; Time</label>
+                    <label htmlFor="startAt">Start Date &amp; Time</label>
                     <div className={styles.inputWithIcon}>
-                      <span className={styles.inputIcon}><IconCalendar /></span>
+                      <span className={styles.inputIcon}>
+                        <IconCalendar />
+                      </span>
                       <input
-                        id="date"
+                        id="startAt"
                         type="datetime-local"
                         className={styles.formInput}
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
+                        value={startAt}
+                        onChange={(e) => setStartAt(e.target.value)}
                       />
                     </div>
                   </div>
 
                   <div className={styles.formGroup}>
+                    <label htmlFor="endAt">End Date &amp; Time</label>
+                    <div className={styles.inputWithIcon}>
+                      <span className={styles.inputIcon}>
+                        <IconCalendar />
+                      </span>
+                      <input
+                        id="endAt"
+                        type="datetime-local"
+                        className={styles.formInput}
+                        value={endAt}
+                        onChange={(e) => setEndAt(e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.inputHint}>End time must be after start time</div>
+                  </div>
+
+                  <div className={styles.formGroup}>
                     <label htmlFor="capacity">Group Capacity</label>
                     <div className={styles.inputWithIcon}>
-                      <span className={styles.inputIcon}><IconUsers /></span>
+                      <span className={styles.inputIcon}>
+                        <IconUsers />
+                      </span>
                       <input
                         id="capacity"
                         type="number"
@@ -435,10 +555,33 @@ export default function CreateActivityPage() {
                     <div className={styles.inputHint}>Minimum 3 participants required</div>
                   </div>
                 </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="meetingPoint">Meeting Point (optional)</label>
+                  <input
+                    id="meetingPoint"
+                    type="text"
+                    className={styles.formInput}
+                    value={meetingPoint}
+                    onChange={(e) => setMeetingPoint(e.target.value)}
+                    placeholder="e.g., Main parking, café entrance, trail gate..."
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="sessionNote">Session Notes (optional)</label>
+                  <textarea
+                    id="sessionNote"
+                    className={styles.formTextarea}
+                    value={sessionNote}
+                    onChange={(e) => setSessionNote(e.target.value)}
+                    placeholder="Add useful participant info such as what to bring, exact meetup tips, or special instructions..."
+                    rows={4}
+                  />
+                </div>
               </div>
             )}
 
-            {/* Step 4 — Categories */}
             {step === 4 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Choose categories</h2>
@@ -457,14 +600,14 @@ export default function CreateActivityPage() {
                         aria-pressed={selected}
                       >
                         <div className={styles.categoryIcon}>
-                          {icon && isImageUrl(icon)
-                            ? <img src={icon} alt={c.name ?? "Category"} />
-                            : <span>{icon ?? "📦"}</span>}
+                          {icon && isImageUrl(icon) ? (
+                            <img src={icon} alt={c.name ?? "Category"} />
+                          ) : (
+                            <span>{icon ?? "📦"}</span>
+                          )}
                         </div>
                         <div className={styles.categoryTitle}>{c.name}</div>
-                        {c.description && (
-                          <div className={styles.categoryDesc}>{c.description}</div>
-                        )}
+                        {c.description && <div className={styles.categoryDesc}>{c.description}</div>}
                       </button>
                     );
                   })}
@@ -472,7 +615,6 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 5 — Location */}
             {step === 5 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Where's the adventure?</h2>
@@ -496,16 +638,13 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Step 6 — Images */}
             {step === 6 && (
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Upload pictures</h2>
                 <p className={styles.stepSubheading}>Add a cover photo and gallery images for your activity</p>
 
                 {!createdTemplate?.id ? (
-                  <div className={styles.infoCard}>
-                    Something went wrong. Please go back and try again.
-                  </div>
+                  <div className={styles.infoCard}>Something went wrong. Please go back and try again.</div>
                 ) : (
                   <>
                     <div className={styles.formGroup}>
@@ -527,24 +666,42 @@ export default function CreateActivityPage() {
                         <div className={styles.previewHeader}>
                           <IconCheck /> {images.length} image{images.length > 1 ? "s" : ""} uploaded
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 12 }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, 1fr)",
+                            gap: 10,
+                            marginTop: 12,
+                          }}
+                        >
                           {images
                             .slice()
                             .sort((a, b) => a.order - b.order)
                             .map((img) => (
-                              <div key={img.publicId ?? img.url}
-                                style={{ borderRadius: 10, overflow: "hidden", position: "relative" }}>
+                              <div
+                                key={img.publicId ?? img.url}
+                                style={{ borderRadius: 10, overflow: "hidden", position: "relative" }}
+                              >
                                 <img
                                   src={img.url}
                                   alt={img.alt ?? "Activity image"}
                                   style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }}
                                 />
                                 {img.cover && (
-                                  <div style={{
-                                    position: "absolute", top: 6, left: 6,
-                                    background: "rgba(26,77,46,0.85)", backdropFilter: "blur(4px)",
-                                    color: "white", padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700,
-                                  }}>
+                                  <div
+                                    style={{
+                                      position: "absolute",
+                                      top: 6,
+                                      left: 6,
+                                      background: "rgba(26,77,46,0.85)",
+                                      backdropFilter: "blur(4px)",
+                                      color: "white",
+                                      padding: "3px 9px",
+                                      borderRadius: 999,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                    }}
+                                  >
                                     Cover
                                   </div>
                                 )}
@@ -562,14 +719,12 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Status */}
             {status && (
               <div className={`${styles.statusMessage} ${status.includes("✅") ? styles.success : styles.error}`}>
                 {status}
               </div>
             )}
 
-            {/* Navigation */}
             <div className={styles.formNavigation}>
               {step > 1 && (
                 <button
@@ -608,7 +763,11 @@ export default function CreateActivityPage() {
                   onClick={handleStep5Next}
                   disabled={!step5Valid || submitting}
                 >
-                  {submitting ? "Creating…" : <>Next <IconArrowRight /></>}
+                  {submitting ? "Creating…" : (
+                    <>
+                      Next <IconArrowRight />
+                    </>
+                  )}
                 </button>
               )}
 
@@ -619,7 +778,11 @@ export default function CreateActivityPage() {
                   disabled={uploading || submitting || !createdTemplate?.id || !step6Valid}
                   onClick={onFinish}
                 >
-                  {submitting ? "Publishing…" : <><IconFlag /> Publish Adventure</>}
+                  {submitting ? "Publishing…" : (
+                    <>
+                      <IconFlag /> Publish Adventure
+                    </>
+                  )}
                 </button>
               )}
             </div>

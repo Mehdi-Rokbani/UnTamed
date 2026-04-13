@@ -1,4 +1,5 @@
 import { http } from "./http";
+import type { ParticipantsPreviewResponse } from "../types/participants";
 import type {
   ActivityStatus,
   ActivityTemplateCreatePayload,
@@ -75,6 +76,13 @@ export async function listPublishedSessions() {
 
 export async function getSessionById(id: string) {
   const { data } = await http.get<ActivitySessionResponse>(`/api/sessions/${id}`);
+  return data;
+}
+
+export async function getParticipantsPreview(sessionId: string) {
+  const { data } = await http.get<ParticipantsPreviewResponse>(
+    `/api/sessions/${sessionId}/participants-preview`
+  );
   return data;
 }
 
