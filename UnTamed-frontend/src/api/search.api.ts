@@ -7,6 +7,12 @@ export type SemanticSearchRequest = {
   difficulty?: string;
   minPrice?: number;
   maxPrice?: number;
+
+  // ✅ NEW
+  addressId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: "popular" | "soonest" | "priceAsc" | "priceDesc";
 };
 
 export type SemanticSearchItem = {

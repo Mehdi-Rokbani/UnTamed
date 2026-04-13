@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Difficulty, PublicTemplateCard } from "../types/activity";
 import type { Category } from "../types/category";
 import { ActivityCard } from "../components/ActivityCard";
@@ -6,7 +6,7 @@ import { Header } from "../components/Header";
 import RecommendedActivities from "../components/RecommendedActivities";
 import { useAuth } from "../auth/auth.store";
 import styles from "../style/home.module.css";
-import { searchPublicTemplates, type AddressSuggestion } from "../api/activity.api";
+import { type AddressSuggestion } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { ExperienceFiltersBar } from "../components/search/ExperienceFiltersBar";
@@ -22,17 +22,35 @@ export default function HomePage() {
   const [templates, setTemplates] = useState<PublicTemplateCard[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const [addressInput, setAddressInput] = useState("");
+  const [queryInput, setQueryInput] = useState("");
+  const [locationInput, setLocationInput] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-
   const [difficulty, setDifficulty] = useState<Difficulty | "All">("All");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<"popular" | "soonest" | "priceAsc" | "priceDesc">("popular");
+
+  const [scrolled, setScrolled] = useState(false);
+  const [showCompactSearch, setShowCompactSearch] = useState(false);
+  const resultsRef = useRef<HTMLElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const heroBottom = heroRef.current
+        ? heroRef.current.getBoundingClientRect().bottom
+        : 320;
+
+      setScrolled(window.scrollY > 80);
+      setShowCompactSearch(heroBottom < 80);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,10 +58,11 @@ export default function HomePage() {
     (async () => {
       try {
         const data = await listCategories();
-        if (cancelled) return;
-        setCategories(data ?? []);
-      } catch (error) {
-        console.error("Failed to load categories", error);
+        if (!cancelled) {
+          setCategories(data ?? []);
+        }
+      } catch (err) {
+        console.error("Failed to load categories", err);
       }
     })();
 
@@ -53,24 +72,38 @@ export default function HomePage() {
   }, []);
 
   const categoryOptions = useMemo(
-    () => categories.map((item) => ({ id: item.id, label: item.name })),
+    () => categories.map((c) => ({ id: c.id, label: c.name })),
     [categories]
   );
 
-  const hasActiveFilters = useMemo(() => {
-    return Boolean(
-      addressInput.trim() ||
-        selectedAddressId ||
-        dateFrom ||
-        dateTo ||
-        categoryIds.length > 0 ||
-        minPrice ||
-        maxPrice ||
-        difficulty !== "All"
-    );
-  }, [addressInput, selectedAddressId, dateFrom, dateTo, categoryIds, minPrice, maxPrice, difficulty]);
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(
+        queryInput.trim() ||
+          locationInput.trim() ||
+          selectedAddressId ||
+          dateFrom ||
+          dateTo ||
+          categoryIds.length > 0 ||
+          minPrice ||
+          maxPrice ||
+          difficulty !== "All"
+      ),
+    [
+      queryInput,
+      locationInput,
+      selectedAddressId,
+      dateFrom,
+      dateTo,
+      categoryIds,
+      minPrice,
+      maxPrice,
+      difficulty,
+    ]
+  );
 
-  const isSemanticSearch = !selectedAddressId && addressInput.trim().length > 2;
+  const hasLocationFilter = Boolean(selectedAddressId);
+  const isAiSearch = queryInput.trim().length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -79,50 +112,58 @@ export default function HomePage() {
       setState("loading");
 
       try {
-        let data: PublicTemplateCard[];
+        const results = await semanticSearch({
+          query: queryInput.trim() || "activities",
+          addressId: selectedAddressId || undefined,
+          limit: 12,
+          difficulty: difficulty === "All" ? undefined : difficulty,
+          categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
+          minPrice: minPrice ? Number(minPrice) : undefined,
+          maxPrice: maxPrice ? Number(maxPrice) : undefined,
+          dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
+          dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
+          sort,
+        });
 
-        if (isSemanticSearch) {
-          const results = await semanticSearch({
-            query: addressInput.trim(),
-            limit: 12,
-            difficulty: difficulty === "All" ? undefined : difficulty,
-            categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
-          });
+        const data: PublicTemplateCard[] = results.map((r) => ({
+          id: r.templateId,
+          title: r.title,
+          description: r.description,
+          coverImageUrl: r.coverImageUrl,
+          categoryIds: r.categoryIds,
+          difficulty: (r.difficulty as Difficulty) ?? "EASY",
+          price: r.price ?? 0,
+          ratingAverage: r.ratingAverage ?? 0,
+          ratingCount: r.ratingCount ?? 0,
+          nextSessionDate: r.nextSessionDate,
 
-          data = results.map((r) => ({
-            id: r.templateId,
-            title: r.title,
-            description: r.description,
-            coverImageUrl: r.coverImageUrl,
-            categoryIds: r.categoryIds,
-            difficulty: (r.difficulty as Difficulty) ?? "EASY",
-            price: r.price,
-            ratingAverage: r.ratingAverage,
-            ratingCount: r.ratingCount,
-            nextSessionDate: r.nextSessionDate,
-          }));
-        } else {
-          data = await searchPublicTemplates({
-            addressId: selectedAddressId || undefined,
-            q: selectedAddressId ? undefined : addressInput.trim() || undefined,
-            categoryIds: categoryIds.length ? categoryIds : undefined,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
-            difficulty: difficulty === "All" ? undefined : difficulty,
-            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
-            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
-            sort,
-          });
+          tags: [],
+
+          rating: {
+            average: r.ratingAverage ?? 0,
+            count: r.ratingCount ?? 0,
+          },
+
+          upcomingSessionsCount: r.nextSessionDate ? 1 : 0,
+
+          images: r.coverImageUrl
+            ? [
+                {
+                  url: r.coverImageUrl,
+                  thumbnailUrl: r.coverImageUrl,
+                },
+              ]
+            : [],
+
+          totalBookedCount: 0,
+        }));
+
+        if (!cancelled) {
+          setTemplates(data);
+          setState("done");
         }
-
-        if (cancelled) return;
-
-        setTemplates(data ?? []);
-        setState("done");
-      } catch (error) {
-        console.error("Failed to search templates", error);
+      } catch (err) {
+        console.error("Failed to search templates", err);
         if (!cancelled) {
           setTemplates([]);
           setState("error");
@@ -135,7 +176,7 @@ export default function HomePage() {
       window.clearTimeout(handle);
     };
   }, [
-    addressInput,
+    queryInput,
     selectedAddressId,
     categoryIds,
     minPrice,
@@ -144,25 +185,27 @@ export default function HomePage() {
     dateFrom,
     dateTo,
     sort,
-    isSemanticSearch,
   ]);
 
-  const handleAddressSelect = (address: AddressSuggestion) => {
-    setAddressInput(address.displayName);
+  const handleLocationSelect = (address: AddressSuggestion) => {
+    setLocationInput(address.displayName);
     setSelectedAddressId(address.id);
   };
 
-  const handleAddressInputChange = (value: string) => {
-    setAddressInput(value);
+  const handleLocationInputChange = (value: string) => {
+    setLocationInput(value);
     setSelectedAddressId(null);
   };
 
   const handleToggleCategory = (id: string) => {
-    setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
   const handleClearFilters = () => {
-    setAddressInput("");
+    setQueryInput("");
+    setLocationInput("");
     setSelectedAddressId(null);
     setDateFrom("");
     setDateTo("");
@@ -173,15 +216,47 @@ export default function HomePage() {
     setSort("popular");
   };
 
+  const scrollToResults = () => {
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <>
-      <Header />
+      <div
+        className={`${styles.headerWrap} ${
+          scrolled ? styles.headerWrapScrolled : styles.headerWrapHero
+        }`}
+      >
+        <Header
+          compactSearch={
+            showCompactSearch ? (
+              <HeroSearchBar
+                queryInput={queryInput}
+                locationInput={locationInput}
+                selectedAddressId={selectedAddressId}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onQueryInputChange={setQueryInput}
+                onLocationInputChange={handleLocationInputChange}
+                onLocationSelect={handleLocationSelect}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                compact
+              />
+            ) : null
+          }
+        />
+      </div>
 
       <main className={styles.home}>
-        <section className={styles.homeHero}>
+        <section ref={heroRef} className={styles.homeHero}>
           <div className={styles.heroBackground} />
 
           <div className={styles.heroContent}>
+            <div className={styles.heroBadge}>
+              <span>✦ AI-POWERED ADVENTURE SEARCH</span>
+            </div>
+
             <h1 className={styles.homeTitle}>
               Find your next <span className={styles.accent}>UnTamed</span> adventure
             </h1>
@@ -194,18 +269,20 @@ export default function HomePage() {
 
             <div className={styles.heroSearchStack}>
               <HeroSearchBar
-                addressInput={addressInput}
+                queryInput={queryInput}
+                locationInput={locationInput}
                 selectedAddressId={selectedAddressId}
                 dateFrom={dateFrom}
                 dateTo={dateTo}
-                onAddressInputChange={handleAddressInputChange}
-                onAddressSelect={handleAddressSelect}
+                onQueryInputChange={setQueryInput}
+                onLocationInputChange={handleLocationInputChange}
+                onLocationSelect={handleLocationSelect}
                 onDateFromChange={setDateFrom}
                 onDateToChange={setDateTo}
               />
 
               <ActiveFilterChips
-                addressInput={addressInput}
+                addressInput={locationInput}
                 selectedAddressId={selectedAddressId}
                 dateFrom={dateFrom}
                 dateTo={dateTo}
@@ -215,13 +292,15 @@ export default function HomePage() {
                 maxPrice={maxPrice}
                 categories={categoryOptions}
                 onClearAddress={() => {
-                  setAddressInput("");
+                  setLocationInput("");
                   setSelectedAddressId(null);
                 }}
                 onClearDateFrom={() => setDateFrom("")}
                 onClearDateTo={() => setDateTo("")}
                 onClearDifficulty={() => setDifficulty("All")}
-                onRemoveCategory={(id) => setCategoryIds((prev) => prev.filter((x) => x !== id))}
+                onRemoveCategory={(id) =>
+                  setCategoryIds((prev) => prev.filter((x) => x !== id))
+                }
                 onClearMinPrice={() => setMinPrice("")}
                 onClearMaxPrice={() => setMaxPrice("")}
                 onClearAll={handleClearFilters}
@@ -243,8 +322,44 @@ export default function HomePage() {
                       </div>
                     </>
                   )}
+
+                  {hasLocationFilter && (
+                    <>
+                      <div className={styles.statDivider} />
+                      <div className={styles.stat}>
+                        <span className={styles.statIcon}>📍</span>
+                        <span className={styles.statLabel}>Location applied</span>
+                      </div>
+                    </>
+                  )}
+
+                  {templates.length > 0 && (
+                    <>
+                      <div className={styles.statDivider} />
+                      <button
+                        type="button"
+                        className={styles.seeResultsBtn}
+                        onClick={scrollToResults}
+                      >
+                        See results ↓
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
+            </div>
+
+            <div className={styles.heroStats}>
+              {[
+                ["200+", "Experiences"],
+                ["50+", "Expert guides"],
+                ["4.8★", "Avg rating"],
+              ].map(([num, label]) => (
+                <div key={label} className={styles.heroStat}>
+                  <span className={styles.heroStatNum}>{num}</span>
+                  <span className={styles.heroStatLabel}>{label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -272,12 +387,12 @@ export default function HomePage() {
           </section>
         )}
 
-        <section className={styles.activitiesSection}>
+        <section ref={resultsRef} className={styles.activitiesSection}>
           <div className={styles.container}>
             {state === "loading" && (
               <div className={styles.stateContainer}>
                 <div className={styles.loadingSpinner} />
-                <p className={styles.stateText}>Loading adventures...</p>
+                <p className={styles.stateText}>Loading adventures…</p>
               </div>
             )}
 
@@ -290,9 +405,9 @@ export default function HomePage() {
 
             {state === "done" && templates.length === 0 && (
               <div className={styles.stateContainer}>
-                <p className={styles.stateText}>No experiences match your filters</p>
+                <p className={styles.stateText}>No experiences match your search</p>
                 <p className={styles.stateSubtext}>
-                  Try adjusting your address, date, category, or price
+                  Try changing the activity, location, date, category, or price
                 </p>
                 <button className={styles.btnSecondary} onClick={handleClearFilters} type="button">
                   Clear all filters
@@ -303,14 +418,36 @@ export default function HomePage() {
             {templates.length > 0 && (
               <>
                 <div className={styles.sectionHeader}>
-                  <h2 className={styles.sectionTitle}>
-                    {isSemanticSearch ? "AI-powered results" : "Available Experiences"}
-                  </h2>
-                  <p className={styles.sectionSubtitle}>
-                    {isSemanticSearch
-                      ? "Results based on meaning, not just keywords"
-                      : `${templates.length} ${templates.length === 1 ? "experience" : "experiences"} waiting for you`}
-                  </p>
+                  <div>
+                    <h2 className={styles.sectionTitle}>
+                      {isAiSearch ? "AI-powered results" : "Available Experiences"}
+                    </h2>
+                    <p className={styles.sectionSubtitle}>
+                      {isAiSearch
+                        ? "Results based on meaning, with filters like location and price applied"
+                        : `${templates.length} ${
+                            templates.length === 1 ? "experience" : "experiences"
+                          } waiting for you`}
+                    </p>
+                  </div>
+
+                  <div className={styles.sortInline}>
+                    <label className={styles.sortLabel}>Sort:</label>
+                    <select
+                      className={styles.sortSelect}
+                      value={sort}
+                      onChange={(e) =>
+                        setSort(
+                          e.target.value as "popular" | "soonest" | "priceAsc" | "priceDesc"
+                        )
+                      }
+                    >
+                      <option value="popular">Most popular</option>
+                      <option value="soonest">Soonest</option>
+                      <option value="priceAsc">Price: low → high</option>
+                      <option value="priceDesc">Price: high → low</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className={styles.activityGrid}>

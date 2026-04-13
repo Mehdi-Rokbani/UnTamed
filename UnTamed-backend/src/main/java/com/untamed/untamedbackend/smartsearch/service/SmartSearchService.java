@@ -44,10 +44,11 @@ public class SmartSearchService {
 
         List<ActivityTemplate> templates = activityTemplateRepository.findAll();
 
-        return templates.stream()
+        List<ScoredTemplate> scored = templates.stream()
                 .filter(Objects::nonNull)
                 .filter(this::hasEmbedding)
                 .filter(template -> matchesFilters(template, request))
+                .filter(template -> matchesDateFilter(template.getId(), request, allSessions))
                 .filter(template -> matchesIntentStrict(queryIntent, template))
                 .map(template -> scoreTemplate(
                         template,
@@ -56,9 +57,12 @@ public class SmartSearchService {
                         queryIntent,
                         nextSessionByTemplateId.get(template.getId())
                 ))
-                .filter(item -> item.semanticScore >= minSemanticScore)
-                .sorted(Comparator.comparingDouble(ScoredTemplate::finalScore).reversed())
+                .filter(item -> item.semanticScore() >= minSemanticScore)
+                .sorted(buildComparator(request, nextSessionByTemplateId))
                 .limit(limit)
+                .toList();
+
+        return scored.stream()
                 .map(item -> toResponse(item, nextSessionByTemplateId.get(item.template().getId())))
                 .collect(Collectors.toList());
     }
@@ -299,16 +303,16 @@ public class SmartSearchService {
         int wordCount = normalized.split("\\s+").length;
 
         if (intent != SearchIntent.GENERIC) {
-            if (wordCount == 1) return 0.70;
-            if (wordCount == 2) return 0.72;
-            if (wordCount <= 5) return 0.75;
-            return 0.78;
+            if (wordCount == 1) return 0.58;
+            if (wordCount == 2) return 0.60;
+            if (wordCount <= 5) return 0.62;
+            return 0.65;
         }
 
-        if (wordCount == 1) return 0.66;
-        if (wordCount == 2) return 0.68;
-        if (wordCount <= 5) return 0.71;
-        return 0.74;
+        if (wordCount == 1) return 0.55;
+        if (wordCount == 2) return 0.58;
+        if (wordCount <= 5) return 0.60;
+        return 0.63;
     }
 
     private String normalizeQuery(String query) {
@@ -367,7 +371,52 @@ public class SmartSearchService {
             return false;
         }
 
+        if (request.getAddressId() != null && !request.getAddressId().isBlank()) {
+            if (!request.getAddressId().equals(template.getAddressId())) {
+                return false;
+            }
+        }
+
         return true;
+    }
+
+    private boolean matchesDateFilter(
+            String templateId,
+            SmartSearchRequest request,
+            List<ActivitySession> sessions
+    ) {
+        if ((request.getDateFrom() == null || request.getDateFrom().isBlank()) &&
+                (request.getDateTo() == null || request.getDateTo().isBlank())) {
+            return true;
+        }
+
+        Instant from = null;
+        Instant to = null;
+
+        try {
+            if (request.getDateFrom() != null && !request.getDateFrom().isBlank()) {
+                from = Instant.parse(request.getDateFrom());
+            }
+            if (request.getDateTo() != null && !request.getDateTo().isBlank()) {
+                to = Instant.parse(request.getDateTo());
+            }
+        } catch (Exception e) {
+            return true;
+        }
+
+        Instant finalFrom = from;
+        Instant finalTo = to;
+
+        return sessions.stream()
+                .filter(Objects::nonNull)
+                .filter(s -> templateId.equals(s.getTemplateId()))
+                .map(ActivitySession::getDate)
+                .filter(Objects::nonNull)
+                .anyMatch(date -> {
+                    boolean afterFrom = finalFrom == null || !date.isBefore(finalFrom);
+                    boolean beforeTo = finalTo == null || !date.isAfter(finalTo);
+                    return afterFrom && beforeTo;
+                });
     }
 
     private int comparePrice(BigDecimal price, BigDecimal filterPrice) {
@@ -375,6 +424,43 @@ public class SmartSearchService {
         if (price == null) return -1;
         if (filterPrice == null) return 1;
         return price.compareTo(filterPrice);
+    }
+
+    private Comparator<ScoredTemplate> buildComparator(
+            SmartSearchRequest request,
+            Map<String, Instant> nextSessionByTemplateId
+    ) {
+        String sort = request.getSort() == null ? "" : request.getSort().trim();
+
+        return switch (sort) {
+            case "priceAsc" -> Comparator
+                    .comparing((ScoredTemplate item) -> nullSafePrice(item.template().getPrice()))
+                    .thenComparing(ScoredTemplate::finalScore, Comparator.reverseOrder());
+
+            case "priceDesc" -> Comparator
+                    .comparing((ScoredTemplate item) -> nullSafePrice(item.template().getPrice()), Comparator.reverseOrder())
+                    .thenComparing(ScoredTemplate::finalScore, Comparator.reverseOrder());
+
+            case "soonest" -> Comparator
+                    .comparing((ScoredTemplate item) -> nullSafeInstant(nextSessionByTemplateId.get(item.template().getId())))
+                    .thenComparing(ScoredTemplate::finalScore, Comparator.reverseOrder());
+
+            case "popular" -> Comparator
+                    .comparingDouble(ScoredTemplate::finalScore)
+                    .reversed();
+
+            default -> Comparator
+                    .comparingDouble(ScoredTemplate::finalScore)
+                    .reversed();
+        };
+    }
+
+    private BigDecimal nullSafePrice(BigDecimal price) {
+        return price == null ? new BigDecimal("999999999") : price;
+    }
+
+    private Instant nullSafeInstant(Instant instant) {
+        return instant == null ? Instant.parse("9999-12-31T23:59:59Z") : instant;
     }
 
     private Map<String, Instant> buildNextSessionMap(List<ActivitySession> sessions) {

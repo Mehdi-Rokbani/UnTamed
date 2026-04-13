@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import styles from "../style/header.module.css";
 import { useAuth } from "../auth/auth.store";
 
-export function Header() {
+type HeaderProps = {
+  compactSearch?: React.ReactNode;
+};
+
+export function Header({ compactSearch }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -18,7 +22,6 @@ export function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -50,16 +53,25 @@ export function Header() {
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ""}`}>
       <div className={styles.headerContainer}>
 
-        {/* Logo → /home */}
+        {/* Logo */}
         <Link to="/home" className={styles.headerBrand} onClick={closeMobileMenu}>
           <span className={styles.brandAccent}>Un</span>
           <span className={styles.brandText}>Tamed</span>
         </Link>
 
-        {/* Empty nav — kept for mobile menu structure */}
-        <nav className={`${styles.headerNav} ${mobileMenuOpen ? styles.active : ""}`}>
-
-        </nav>
+        {/* ── CENTER SLOT: compact search bar slides in after scrolling past hero ── */}
+        <div className={styles.centerSlot}>
+          <div
+            className={styles.compactSearchWrap}
+            style={{
+              opacity:       compactSearch ? 1 : 0,
+              transform:     compactSearch ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
+              pointerEvents: compactSearch ? "auto" : "none",
+            }}
+          >
+            {compactSearch}
+          </div>
+        </div>
 
         {/* Actions */}
         <div className={styles.headerActions}>
@@ -77,7 +89,6 @@ export function Header() {
             </div>
           ) : (
             <div className={styles.profileWrapper} ref={dropdownRef}>
-              {/* Profile button — opens dropdown */}
               <button
                 className={`${styles.profileButton} ${dropdownOpen ? styles.profileButtonActive : ""}`}
                 onClick={() => setDropdownOpen((v) => !v)}
@@ -95,7 +106,6 @@ export function Header() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 )}
-                {/* Chevron */}
                 <svg
                   className={`${styles.chevron} ${dropdownOpen ? styles.chevronUp : ""}`}
                   width="14" height="14" viewBox="0 0 24 24"
@@ -105,10 +115,8 @@ export function Header() {
                 </svg>
               </button>
 
-              {/* Dropdown */}
               {dropdownOpen && (
                 <div className={styles.dropdown}>
-                  {/* User info header */}
                   <div className={styles.dropdownHeader}>
                     <div className={styles.dropdownAvatar}>
                       {profileImageUrl ? (
@@ -125,12 +133,7 @@ export function Header() {
 
                   <div className={styles.dropdownDivider} />
 
-                  {/* Menu items */}
-                  <Link
-                    to="/profile"
-                    className={styles.dropdownItem}
-                    onClick={() => setDropdownOpen(false)}
-                  >
+                  <Link to="/profile" className={styles.dropdownItem} onClick={() => setDropdownOpen(false)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
                       <circle cx="12" cy="7" r="4" />
@@ -139,11 +142,7 @@ export function Header() {
                   </Link>
 
                   {user.role === "GUIDE" && (
-                    <Link
-                      to="/guide"
-                      className={styles.dropdownItem}
-                      onClick={() => setDropdownOpen(false)}
-                    >
+                    <Link to="/guide" className={styles.dropdownItem} onClick={() => setDropdownOpen(false)}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <rect x="3" y="3" width="7" height="7" />
                         <rect x="14" y="3" width="7" height="7" />
@@ -153,11 +152,8 @@ export function Header() {
                       Dashboard
                     </Link>
                   )}
-                  <Link
-                    to="/my-bookings"
-                    className={styles.dropdownItem}
-                    onClick={() => setDropdownOpen(false)}
-                  >
+
+                  <Link to="/my-bookings" className={styles.dropdownItem} onClick={() => setDropdownOpen(false)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
                     </svg>
@@ -184,13 +180,13 @@ export function Header() {
           onClick={toggleMobileMenu}
           aria-label="Toggle menu"
         >
-          <Link to="/my-bookings" className={styles.navLink} onClick={closeMobileMenu}>
-            My bookings
-          </Link>
           <span />
           <span />
           <span />
         </button>
+
+        {/* Mobile nav — kept for future nav links */}
+        <nav className={`${styles.headerNav} ${mobileMenuOpen ? styles.active : ""}`} />
       </div>
     </header>
   );

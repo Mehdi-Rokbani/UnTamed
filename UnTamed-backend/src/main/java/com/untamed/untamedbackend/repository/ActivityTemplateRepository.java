@@ -3,7 +3,6 @@ package com.untamed.untamedbackend.repository;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,14 +13,4 @@ public interface ActivityTemplateRepository extends MongoRepository<ActivityTemp
     Optional<ActivityTemplate> findByIdAndGuideId(String id, String guideId);
 
     boolean existsByIdAndGuideId(String id, String guideId);
-
-
-    List<ActivityTemplate> searchByCriteria(
-            String q,
-            String categoryId,
-            String difficulty,
-            BigDecimal minPrice,
-            BigDecimal maxPrice,
-            String addressId
-    );
 }

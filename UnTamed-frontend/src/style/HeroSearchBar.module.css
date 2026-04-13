@@ -1,232 +1,234 @@
-/* ===== HERO SEARCH BAR — GetYourGuide-inspired ===== */
-
+/* ── Outer shell ── */
 .shell {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  justify-content: center;
 }
 
-/* ── Unified pill bar ── */
+.shellCompact {
+  justify-content: flex-start;
+}
+
+/* ── Main pill ── */
 .pill {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) 1px 1fr 1px 1fr auto;
+  display: flex;
   align-items: stretch;
-  min-height: 68px;
-  border-radius: 999px;
   background: #ffffff;
-  border: 1px solid rgba(16, 24, 40, 0.1);
-  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.12);
+  border-radius: 50px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
   overflow: visible;
-  transition: box-shadow 0.2s ease;
+  max-width: 780px;
+  width: 100%;
+  position: relative;
 }
 
 .pill:focus-within {
-  box-shadow: 0 16px 48px rgba(16, 24, 40, 0.18);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.16);
 }
 
-/* Dividers between segments */
-.divider {
-  width: 1px;
-  background: rgba(16, 24, 40, 0.1);
-  align-self: stretch;
-  margin: 12px 0;
-  flex-shrink: 0;
+.pillCompact {
+  max-width: 480px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.10);
 }
 
-/* ── Segments ── */
+/* ── Segment ── */
 .segment {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 10px 22px;
-  cursor: text;
+  flex: 1;
   min-width: 0;
-  border-radius: 999px;
+  padding: 12px 18px;
+  cursor: text;
+  border-radius: 50px;
   transition: background 0.15s ease;
+  position: relative;
 }
 
-.segment:hover {
-  background: rgba(16, 24, 40, 0.03);
+.segment:hover,
+.segmentFocused {
+  background: rgba(0, 0, 0, 0.025);
 }
 
-.segment:focus-within {
-  background: rgba(249, 115, 22, 0.04);
+.segmentWhere {
+  /* contains dropdown — needs overflow visible */
+  overflow: visible;
+}
+
+.segmentDate {
+  flex: 0 0 140px;
 }
 
 .segmentLabel {
-  font-size: 0.72rem;
+  display: block;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  color: #1a2e20;
+  color: #374151;
   text-transform: uppercase;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  pointer-events: none;
+  letter-spacing: 0.07em;
+  margin-bottom: 3px;
+  user-select: none;
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.segmentIcon {
+  color: #9ca3af;
+  flex-shrink: 0;
 }
 
 .segmentInput {
+  flex: 1;
+  font-size: 14px;
+  color: #111827;
+  background: transparent;
   border: none;
   outline: none;
-  background: transparent;
-  font-size: 0.97rem;
-  color: #122118;
-  width: 100%;
-  font-family: 'Poppins', sans-serif;
+  padding: 0;
+  min-width: 0;
 }
 
 .segmentInput::placeholder {
-  color: #9aa89f;
+  color: #9ca3af;
 }
 
-/* Address segment extras */
-.addressWrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.locationIcon {
-  color: #9aa89f;
-  flex-shrink: 0;
-}
-
-.clearBtn {
-  border: none;
-  background: transparent;
-  color: #9aa89f;
-  font-size: 1.1rem;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-  flex-shrink: 0;
-  transition: color 0.15s ease;
-}
-
-.clearBtn:hover {
-  color: #f97316;
-}
-
-.loadingDots {
-  color: #9aa89f;
-  font-size: 0.85rem;
-  flex-shrink: 0;
-}
-
-/* Search CTA button */
-.searchBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 6px 6px 6px 0;
-  padding: 0 28px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  font-size: 0.97rem;
-  font-weight: 700;
-  font-family: 'Outfit', sans-serif;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
-}
-
-.searchBtn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.5);
-}
-
-.searchBtn:active {
-  transform: translateY(0);
-}
-
-/* Date input */
+/* Date input — hide default calendar icon on non-webkit */
 .dateInput {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 0.97rem;
-  color: #122118;
-  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #374151;
   cursor: pointer;
   width: 100%;
 }
 
 .dateInput::-webkit-calendar-picker-indicator {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: pointer;
 }
 
-/* ── Dropdown ── */
-.dropdown {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: -12px;
-  right: -12px;
-  z-index: 40;
-  border-radius: 20px;
-  overflow: hidden;
-  background: #ffffff;
-  border: 1px solid rgba(16, 24, 40, 0.08);
-  box-shadow: 0 20px 60px rgba(16, 24, 40, 0.16);
-}
-
-.option {
-  width: 100%;
-  text-align: left;
+/* ── Clear button ── */
+.clearBtn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e5e7eb;
   border: none;
-  background: #ffffff;
-  padding: 14px 20px;
   cursor: pointer;
-  transition: background 0.14s ease;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
-.option:hover {
-  background: #f8faf8;
+.clearBtn:hover {
+  background: #d1d5db;
+  color: #374151;
 }
 
-.optionIcon {
-  color: #c0cac4;
+/* Loading indicator */
+.loadingDots {
+  font-size: 16px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Divider between segments ── */
+.divider {
+  display: block;
+  width: 1px;
+  background: #e5e7eb;
+  align-self: stretch;
+  margin: 8px 0;
   flex-shrink: 0;
 }
 
-.optionTitle {
-  display: block;
-  color: #122118;
-  font-size: 0.95rem;
-  line-height: 1.4;
+/* ── Search button ── */
+.searchBtnWrap {
+  padding: 7px 8px 7px 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
-/* ── Responsive ── */
-@media (max-width: 860px) {
-  .pill {
-    grid-template-columns: 1fr;
-    border-radius: 24px;
-    min-height: unset;
-  }
+.searchBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e76f1a;
+  color: #ffffff;
+  border: none;
+  border-radius: 40px;
+  padding: 13px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+}
 
-  .divider {
-    width: auto;
-    height: 1px;
-    margin: 0 18px;
-  }
+.searchBtn:hover {
+  background: #c55e12;
+  transform: scale(1.02);
+}
 
-  .segment {
-    padding: 14px 20px;
-    border-radius: 0;
-  }
+.searchBtn:active {
+  transform: scale(0.98);
+}
 
-  .searchBtn {
-    margin: 8px 12px 12px;
-    padding: 16px;
-    border-radius: 14px;
-  }
+.searchBtnCompact {
+  padding: 10px 14px;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  justify-content: center;
+}
+
+/* ── Location dropdown ── */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+  overflow: hidden;
+  min-width: 260px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  color: #374151;
+  transition: background 0.12s ease;
+}
+
+.option:hover {
+  background: #f9fafb;
+}
+
+.optionIcon {
+  color: #9ca3af;
+  flex-shrink: 0;
 }

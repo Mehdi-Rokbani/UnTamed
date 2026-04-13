@@ -19,10 +19,15 @@ public class SmartSearchRequest {
     private Integer limit = 10;
 
     private String categoryId;
-
     private Difficulty difficulty;
-
     private BigDecimal minPrice;
-
     private BigDecimal maxPrice;
+
+    // ✅ NEW (IMPORTANT)
+    private String addressId;
+
+    private String dateFrom; // ISO string from frontend
+    private String dateTo;
+
+    private String sort; // "popular" | "soonest" | "priceAsc" | "priceDesc"
 }

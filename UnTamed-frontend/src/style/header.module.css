@@ -16,7 +16,7 @@
 
 .scrolled {
   padding: 16px 0;
-  background: rgba(26, 77, 46, 0.85);
+  background: rgba(26, 77, 46, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
@@ -30,6 +30,7 @@
   padding: 0 40px;
   display: flex;
   align-items: center;
+  gap: 16px;
 }
 
 /* ── BRAND ── */
@@ -65,7 +66,21 @@
 }
 .brandText { color: var(--white, #ffffff); }
 
-/* ── NAV (mobile only content) ── */
+/* ── CENTER SLOT — holds compact search bar ── */
+.centerSlot {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.compactSearchWrap {
+  width: 100%;
+  max-width: 480px;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* ── NAV ── */
 .headerNav {
   display: flex;
   align-items: center;
@@ -95,7 +110,6 @@
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 /* ── CTA ── */
@@ -119,7 +133,7 @@
 }
 .headerCta:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255, 140, 66, 0.5); }
 
-/* ── PROFILE WRAPPER (relative for dropdown) ── */
+/* ── PROFILE WRAPPER ── */
 .profileWrapper {
   position: relative;
 }
@@ -182,15 +196,12 @@
   flex-shrink: 0;
 }
 
-/* Chevron */
 .chevron {
   color: rgba(255, 255, 255, 0.7);
   flex-shrink: 0;
   transition: transform 0.25s ease;
 }
-.chevronUp {
-  transform: rotate(180deg);
-}
+.chevronUp { transform: rotate(180deg); }
 
 /* ── DROPDOWN ── */
 .dropdown {
@@ -212,7 +223,6 @@
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Dropdown header (user info) */
 .dropdownHeader {
   display: flex;
   align-items: center;
@@ -231,16 +241,8 @@
   align-items: center;
   justify-content: center;
 }
-.dropdownAvatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.dropdownAvatar span {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-}
+.dropdownAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.dropdownAvatar span { font-size: 16px; font-weight: 700; color: #fff; }
 
 .dropdownName {
   font-size: 14px;
@@ -266,7 +268,6 @@
   margin: 0;
 }
 
-/* Dropdown items */
 .dropdownItem {
   display: flex;
   align-items: center;
@@ -289,22 +290,12 @@
   flex-shrink: 0;
   transition: color 0.15s ease;
 }
-.dropdownItem:hover {
-  background: rgba(45, 95, 62, 0.06);
-  color: var(--forest-deep, #1a4d2e);
-}
-.dropdownItem:hover svg {
-  color: var(--sunset-orange, #ff8c42);
-}
+.dropdownItem:hover { background: rgba(45, 95, 62, 0.06); color: var(--forest-deep, #1a4d2e); }
+.dropdownItem:hover svg { color: var(--sunset-orange, #ff8c42); }
 
-.dropdownLogout {
-  color: #c4362c;
-}
+.dropdownLogout { color: #c4362c; }
 .dropdownLogout svg { color: #c4362c; }
-.dropdownLogout:hover {
-  background: rgba(196, 54, 44, 0.06);
-  color: #b02f25;
-}
+.dropdownLogout:hover { background: rgba(196, 54, 44, 0.06); color: #b02f25; }
 .dropdownLogout:hover svg { color: #b02f25; }
 
 /* ── MOBILE TOGGLE ── */
@@ -317,7 +308,6 @@
   padding: 8px;
   cursor: pointer;
   z-index: 1001;
-  margin-left: 12px;
   flex-shrink: 0;
 }
 .mobileToggle span {
@@ -338,12 +328,16 @@
   .headerBrand { font-size: 24px; }
   .headerCta { padding: 10px 24px; font-size: 15px; }
   .profileName { max-width: 80px; }
+  .compactSearchWrap { max-width: 340px; }
 }
 
 @media (max-width: 768px) {
   .headerContainer { padding: 0 20px; }
   .headerBrand { font-size: 22px; }
   .mobileToggle { display: flex; }
+
+  /* Hide compact search on mobile — not enough room */
+  .centerSlot { display: none; }
 
   .headerNav {
     position: fixed;
@@ -369,11 +363,6 @@
     visibility: visible;
   }
 
-  .mobileOnly {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
   .navLink {
     width: 100%;
     text-align: center;
@@ -381,23 +370,6 @@
     font-size: 17px;
     border-radius: 8px;
   }
-  .mobileLogout {
-    color: var(--white, #ffffff);
-    background: transparent;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    padding: 12px 24px;
-    border-radius: 50px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 16px;
-    transition: all 0.3s ease;
-    margin-top: 4px;
-  }
-  .mobileLogout:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  /* On mobile hide dropdown, show toggle instead */
   .dropdown { right: auto; left: 0; min-width: 200px; }
   .profileName { max-width: 100px; }
 }
@@ -409,6 +381,7 @@
   .headerCta { padding: 10px 20px; font-size: 14px; }
   .profileName { display: none; }
 }
+
 .headerLogin {
   display: inline-flex;
   align-items: center;
