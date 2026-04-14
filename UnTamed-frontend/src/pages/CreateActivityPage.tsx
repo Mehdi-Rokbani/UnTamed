@@ -11,6 +11,7 @@ import type { AddressResponse } from "../types/geo";
 import type { Category } from "../types/category";
 
 import { addTemplateImage, createTemplate, createSession } from "../api/activity.api";
+import { generateActivityDraft } from "../api/assistant.api";
 import { listCategories } from "../api/category.api";
 
 import LocationPicker from "../components/LocationPicker";
@@ -140,6 +141,26 @@ function IconFlag() {
     </svg>
   );
 }
+function IconSparkles() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+      <path d="M19 3v4" />
+      <path d="M21 5h-4" />
+      <path d="M5 17v4" />
+      <path d="M7 19H3" />
+    </svg>
+  );
+}
 
 const isImageUrl = (url: string | undefined): boolean => {
   if (!url) return false;
@@ -191,6 +212,9 @@ export default function CreateActivityPage() {
   const [createdTemplate, setCreatedTemplate] = useState<ActivityTemplateResponse | null>(null);
   const [images, setImages] = useState<ActivityImage[]>([]);
 
+  const [aiIdea, setAiIdea] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -239,12 +263,37 @@ export default function CreateActivityPage() {
   const nextStep = () => {
     if (step < 6) setStep((step + 1) as Step);
   };
+
   const prevStep = () => {
     if (step > 1) setStep((step - 1) as Step);
   };
 
+  async function handleGenerateAI() {
+    if (!aiIdea.trim()) return;
+
+    try {
+      setAiLoading(true);
+      setStatus(null);
+
+      const res = await generateActivityDraft({
+        idea: aiIdea.trim(),
+      });
+
+      setTitle(res.title);
+      setDescription(res.description);
+      setDifficulty(res.difficulty);
+
+      setStatus("AI draft generated ✅ You can edit it before continuing.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "AI generation failed");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   async function onCreateTemplate(): Promise<boolean> {
     setStatus(null);
+
     if (!canCreateTemplate || !location) {
       setStatus("Please complete all required steps before continuing.");
       return false;
@@ -372,9 +421,11 @@ export default function CreateActivityPage() {
     setLocation(null);
     setCreatedTemplate(null);
     setImages([]);
+    setAiIdea("");
     setStatus(null);
     setSubmitting(false);
     setUploading(false);
+    setAiLoading(false);
   }
 
   return (
@@ -419,6 +470,37 @@ export default function CreateActivityPage() {
               <div className={styles.formStep}>
                 <h2 className={styles.stepHeading}>Tell us about your adventure</h2>
                 <p className={styles.stepSubheading}>Give your activity a compelling title and description</p>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="aiIdea">Describe your idea (AI assistant)</label>
+                  <textarea
+                    id="aiIdea"
+                    className={styles.formTextarea}
+                    value={aiIdea}
+                    onChange={(e) => setAiIdea(e.target.value)}
+                    placeholder="e.g., forest walk in ain draham with waterfall and medium effort"
+                    rows={3}
+                  />
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className={styles.navBtnSecondary}
+                      onClick={handleGenerateAI}
+                      disabled={aiLoading || !aiIdea.trim()}
+                    >
+                      {aiLoading ? (
+                        "Generating..."
+                      ) : (
+                        <>
+                          <IconSparkles /> Generate with AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className={styles.inputHint}>
+                    Let AI generate a title, description, and difficulty for you
+                  </div>
+                </div>
 
                 <div className={styles.formGroup}>
                   <label htmlFor="title">Activity Title</label>
@@ -731,7 +813,7 @@ export default function CreateActivityPage() {
                   type="button"
                   className={styles.navBtnSecondary}
                   onClick={prevStep}
-                  disabled={submitting || uploading}
+                  disabled={submitting || uploading || aiLoading}
                 >
                   <IconArrowLeft /> Previous
                 </button>
@@ -746,6 +828,8 @@ export default function CreateActivityPage() {
                   onClick={nextStep}
                   disabled={
                     submitting ||
+                    uploading ||
+                    aiLoading ||
                     (step === 1 && !step1Valid) ||
                     (step === 2 && !step2Valid) ||
                     (step === 3 && !step3Valid) ||
@@ -761,9 +845,11 @@ export default function CreateActivityPage() {
                   type="button"
                   className={styles.navBtnPrimary}
                   onClick={handleStep5Next}
-                  disabled={!step5Valid || submitting}
+                  disabled={!step5Valid || submitting || aiLoading}
                 >
-                  {submitting ? "Creating…" : (
+                  {submitting ? (
+                    "Creating…"
+                  ) : (
                     <>
                       Next <IconArrowRight />
                     </>
@@ -775,10 +861,12 @@ export default function CreateActivityPage() {
                 <button
                   type="button"
                   className={styles.navBtnPrimarySubmit}
-                  disabled={uploading || submitting || !createdTemplate?.id || !step6Valid}
+                  disabled={uploading || submitting || aiLoading || !createdTemplate?.id || !step6Valid}
                   onClick={onFinish}
                 >
-                  {submitting ? "Publishing…" : (
+                  {submitting ? (
+                    "Publishing…"
+                  ) : (
                     <>
                       <IconFlag /> Publish Adventure
                     </>
@@ -793,7 +881,7 @@ export default function CreateActivityPage() {
                   type="button"
                   className={styles.navBtnSecondary}
                   onClick={resetAll}
-                  disabled={submitting || uploading}
+                  disabled={submitting || uploading || aiLoading}
                 >
                   Start Over
                 </button>
