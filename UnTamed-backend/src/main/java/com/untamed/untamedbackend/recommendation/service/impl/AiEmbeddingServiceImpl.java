@@ -44,6 +44,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 template.getTitle(),
                 template.getDescription(),
                 categoryNames,
+                safeList(template.getSemanticHints()),
                 difficulty,
                 template.getPrice(),
                 safeList(template.getTags())
@@ -156,6 +157,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
             String title,
             String description,
             List<String> categoryNames,
+            List<String> semanticHints,
             String difficulty,
             BigDecimal price,
             List<String> tags
@@ -167,11 +169,24 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
         if (!categoryNames.isEmpty()) {
             appendLine(sb, "Categories", String.join(", ", categoryNames));
+        }
 
-            List<String> semanticHints = expandCategorySemanticHints(categoryNames);
-            if (!semanticHints.isEmpty()) {
-                appendLine(sb, "Category semantic hints", String.join(", ", semanticHints));
-            }
+        List<String> finalSemanticHints = new ArrayList<>();
+
+        if (semanticHints != null && !semanticHints.isEmpty()) {
+            finalSemanticHints.addAll(
+                    semanticHints.stream()
+                            .filter(Objects::nonNull)
+                            .map(String::trim)
+                            .filter(s -> !s.isBlank())
+                            .toList()
+            );
+        } else if (!categoryNames.isEmpty()) {
+            finalSemanticHints.addAll(expandCategorySemanticHints(categoryNames));
+        }
+
+        if (!finalSemanticHints.isEmpty()) {
+            appendLine(sb, "Category semantic hints", String.join(", ", finalSemanticHints));
         }
 
         appendLine(sb, "Difficulty", difficulty);
@@ -180,9 +195,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
             appendLine(sb, "Price", price.stripTrailingZeros().toPlainString() + " TND");
         }
 
-        if (!tags.isEmpty()) {
-            appendLine(sb, "Tags", String.join(", ", tags));
-        }
+        appendLine(sb, "Tags", (tags == null || tags.isEmpty()) ? "none" : String.join(", ", tags));
 
         return sb.toString().trim();
     }
@@ -229,7 +242,6 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
         map.put("hiking", List.of(
                 "trekking",
-                "randonnee",
                 "randonnee",
                 "nature walk",
                 "mountain trail",

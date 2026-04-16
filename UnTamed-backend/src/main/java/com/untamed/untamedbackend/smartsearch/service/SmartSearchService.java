@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static reactor.netty.http.HttpConnectionLiveness.log;
+
 @Service
 @RequiredArgsConstructor
 public class SmartSearchService {
@@ -38,19 +40,47 @@ public class SmartSearchService {
         SearchIntent queryIntent = detectIntent(query);
         double minSemanticScore = resolveMinSemanticScore(query, queryIntent);
 
+        log.info("🔍 Smart search query='{}', limit={}, intent={}, minSemanticScore={}",
+                query, limit, queryIntent, minSemanticScore);
+
         List<Double> queryEmbedding = queryEmbeddingService.embedQuery(query);
+        log.info("🧠 Query embedding size={}", queryEmbedding != null ? queryEmbedding.size() : 0);
 
         List<ActivitySession> allSessions = activitySessionRepository.findAll();
         Map<String, Instant> nextSessionByTemplateId = buildNextSessionMap(allSessions);
 
-        List<ActivityTemplate> templates = activityTemplateRepository.findAll();
+        log.info("📅 Sessions fetched={}, templates with next session={}",
+                allSessions.size(), nextSessionByTemplateId.size());
 
-        List<ScoredTemplate> scored = templates.stream()
+        List<ActivityTemplate> templates = activityTemplateRepository.findAll();
+        log.info("📦 Templates fetched={}", templates.size());
+
+        List<ActivityTemplate> nonNullTemplates = templates.stream()
                 .filter(Objects::nonNull)
+                .toList();
+        log.info("✅ Non-null templates={}", nonNullTemplates.size());
+
+        List<ActivityTemplate> embeddedTemplates = nonNullTemplates.stream()
                 .filter(this::hasEmbedding)
+                .toList();
+        log.info("🧠 Templates with embeddings={}", embeddedTemplates.size());
+
+        List<ActivityTemplate> filterMatchedTemplates = embeddedTemplates.stream()
                 .filter(template -> matchesFilters(template, request))
+                .toList();
+        log.info("🎛️ After request filters={}", filterMatchedTemplates.size());
+
+        List<ActivityTemplate> dateMatchedTemplates = filterMatchedTemplates.stream()
                 .filter(template -> matchesDateFilter(template.getId(), request, allSessions))
+                .toList();
+        log.info("📆 After date filters={}", dateMatchedTemplates.size());
+
+        List<ActivityTemplate> intentMatchedTemplates = dateMatchedTemplates.stream()
                 .filter(template -> matchesIntentStrict(queryIntent, template))
+                .toList();
+        log.info("🎯 After intent strict match={}", intentMatchedTemplates.size());
+
+        List<ScoredTemplate> scoredBeforeThreshold = intentMatchedTemplates.stream()
                 .map(template -> scoreTemplate(
                         template,
                         queryEmbedding,
@@ -58,10 +88,27 @@ public class SmartSearchService {
                         queryIntent,
                         nextSessionByTemplateId.get(template.getId())
                 ))
+                .sorted((a, b) -> Double.compare(b.semanticScore(), a.semanticScore()))
+                .toList();
+
+        log.info("📊 Scored templates before threshold={}", scoredBeforeThreshold.size());
+
+        scoredBeforeThreshold.stream()
+                .limit(10)
+                .forEach(item -> log.info(
+                        "📈 Candidate title='{}', semanticScore={}, finalScore={}",
+                        item.template().getTitle(),
+                        item.semanticScore(),
+                        item.finalScore()
+                ));
+
+        List<ScoredTemplate> scored = scoredBeforeThreshold.stream()
                 .filter(item -> item.semanticScore() >= minSemanticScore)
                 .sorted(buildComparator(request, nextSessionByTemplateId))
                 .limit(limit)
                 .toList();
+
+        log.info("✅ Final results after threshold/sort/limit={}", scored.size());
 
         return scored.stream()
                 .map(item -> toResponse(item, nextSessionByTemplateId.get(item.template().getId())))

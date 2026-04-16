@@ -26,12 +26,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecommendationServiceImpl implements RecommendationService {
 
-    private static final double SEMANTIC_WEIGHT = 0.52;
-    private static final double CATEGORY_WEIGHT = 0.16;
-    private static final double DIFFICULTY_WEIGHT = 0.10;
-    private static final double BUDGET_WEIGHT = 0.10;
-    private static final double RATING_WEIGHT = 0.07;
-    private static final double FRESHNESS_WEIGHT = 0.05;
+    private static final double SEMANTIC_WEIGHT = 0.40;
+    private static final double CATEGORY_WEIGHT = 0.20;
+    private static final double DIFFICULTY_WEIGHT = 0.12;
+    private static final double BUDGET_WEIGHT = 0.12;
+    private static final double RATING_WEIGHT = 0.10;
+    private static final double FRESHNESS_WEIGHT = 0.06;
 
     private static final double FALLBACK_CATEGORY_WEIGHT = 0.34;
     private static final double FALLBACK_DIFFICULTY_WEIGHT = 0.22;
@@ -110,7 +110,9 @@ public class RecommendationServiceImpl implements RecommendationService {
 
         double finalScore;
         if (semanticUsed) {
-            semanticScore = clamp01(VectorUtils.cosineSimilarity(userVector, templateVector));
+            double cosine = VectorUtils.cosineSimilarity(userVector, templateVector);
+            semanticScore = clamp01((cosine + 1.0) / 2.0);
+
             finalScore =
                     (semanticScore * SEMANTIC_WEIGHT) +
                             (categoryBonus * CATEGORY_WEIGHT) +

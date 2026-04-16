@@ -6,7 +6,11 @@ import { Header } from "../components/Header";
 import RecommendedActivities from "../components/RecommendedActivities";
 import { useAuth } from "../auth/auth.store";
 import styles from "../style/home.module.css";
-import { type AddressSuggestion } from "../api/activity.api";
+import {
+  type AddressSuggestion,
+  listPublicTemplates,
+  searchPublicTemplates,
+} from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { ExperienceFiltersBar } from "../components/search/ExperienceFiltersBar";
@@ -112,51 +116,83 @@ export default function HomePage() {
       setState("loading");
 
       try {
-        const results = await semanticSearch({
-          query: queryInput.trim() || "activities",
-          addressId: selectedAddressId || undefined,
-          limit: 12,
-          difficulty: difficulty === "All" ? undefined : difficulty,
-          categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
-          minPrice: minPrice ? Number(minPrice) : undefined,
-          maxPrice: maxPrice ? Number(maxPrice) : undefined,
-          dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
-          dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
-          sort,
-        });
+        const trimmedQuery = queryInput.trim();
 
-        const data: PublicTemplateCard[] = results.map((r) => ({
-          id: r.templateId,
-          title: r.title,
-          description: r.description,
-          coverImageUrl: r.coverImageUrl,
-          categoryIds: r.categoryIds,
-          difficulty: (r.difficulty as Difficulty) ?? "EASY",
-          price: r.price ?? 0,
-          ratingAverage: r.ratingAverage ?? 0,
-          ratingCount: r.ratingCount ?? 0,
-          nextSessionDate: r.nextSessionDate,
+        let data: PublicTemplateCard[] = [];
 
-          tags: [],
+        if (trimmedQuery) {
+          const results = await semanticSearch({
+            query: trimmedQuery,
+            addressId: selectedAddressId || undefined,
+            limit: 12,
+            difficulty: difficulty === "All" ? undefined : difficulty,
+            categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
+            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
+            sort,
+          });
 
-          rating: {
-            average: r.ratingAverage ?? 0,
-            count: r.ratingCount ?? 0,
-          },
+          const filteredResults =
+            categoryIds.length > 1
+              ? results.filter((r) =>
+                  categoryIds.every((id) => (r.categoryIds ?? []).includes(id))
+                )
+              : results;
 
-          upcomingSessionsCount: r.nextSessionDate ? 1 : 0,
-
-          images: r.coverImageUrl
-            ? [
-                {
-                  url: r.coverImageUrl,
-                  thumbnailUrl: r.coverImageUrl,
-                },
-              ]
-            : [],
-
-          totalBookedCount: 0,
-        }));
+          data = filteredResults.map((r) => ({
+            id: r.templateId,
+            title: r.title,
+            description: r.description,
+            difficulty: ((r.difficulty ?? "EASY").toUpperCase() as Difficulty),
+            price: r.price ?? 0,
+            tags: [],
+            coverImageUrl: r.coverImageUrl ?? null,
+            rating: {
+              average: r.ratingAverage ?? 0,
+              count: r.ratingCount ?? 0,
+            },
+            nextSession: r.nextSessionDate
+              ? {
+                  id: `next-${r.templateId}`,
+                  startAt: r.nextSessionDate,
+                  capacity: 0,
+                  bookedCount: 0,
+                }
+              : null,
+            upcomingSessionsCount: r.nextSessionDate ? 1 : 0,
+            images: r.coverImageUrl
+              ? [
+                  {
+                    url: r.coverImageUrl,
+                    thumbnailUrl: r.coverImageUrl,
+                    cover: true,
+                    order: 0,
+                  },
+                ]
+              : [],
+            addressDisplayName: null,
+            governorate: null,
+            latitude: null,
+            longitude: null,
+            totalBookedCount: 0,
+            guide: null,
+          }));
+        } else if (hasActiveFilters) {
+          data = await searchPublicTemplates({
+            addressId: selectedAddressId || undefined,
+            categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            difficulty: difficulty === "All" ? undefined : difficulty,
+            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
+            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
+            sort,
+          });
+        } else {
+          data = await listPublicTemplates();
+        }
 
         if (!cancelled) {
           setTemplates(data);
@@ -185,6 +221,7 @@ export default function HomePage() {
     dateFrom,
     dateTo,
     sort,
+    hasActiveFilters,
   ]);
 
   const handleLocationSelect = (address: AddressSuggestion) => {
