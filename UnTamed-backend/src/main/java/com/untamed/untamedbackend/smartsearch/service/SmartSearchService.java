@@ -7,6 +7,7 @@ import com.untamed.untamedbackend.recommendation.dto.RecommendationItemResponse;
 import com.untamed.untamedbackend.recommendation.util.VectorUtils;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
+import com.untamed.untamedbackend.smartsearch.dto.AiSearchPlan;
 import com.untamed.untamedbackend.smartsearch.dto.SmartSearchRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class SmartSearchService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final QueryEmbeddingService queryEmbeddingService;
+    private final AiQueryUnderstandingService aiQueryUnderstandingService;
 
     private static final double UPCOMING_SESSION_BOOST = 0.03;
     private static final double RATING_MULTIPLIER = 0.006;
@@ -32,21 +34,29 @@ public class SmartSearchService {
     private static final double TITLE_EXACT_BOOST = 0.18;
     private static final double DESCRIPTION_MATCH_BOOST = 0.08;
     private static final double TAG_MATCH_BOOST = 0.14;
+    private static final double AI_ANCHOR_MATCH_BOOST = 0.08;
 
-    private static final double FALLBACK_MIN_FINAL_SCORE = 0.28;
+    private static final double FALLBACK_MIN_FINAL_SCORE = 0.25;
     private static final double FALLBACK_RELATIVE_TOP_RATIO = 0.55;
 
     public List<RecommendationItemResponse> search(SmartSearchRequest request) {
         String query = normalizeQuery(request.getQuery());
         int limit = resolveLimit(request.getLimit());
 
-        SearchIntent queryIntent = detectIntent(query);
-        double minSemanticScore = resolveMinSemanticScore(query, queryIntent);
+        AiSearchPlan plan = aiQueryUnderstandingService.buildPlan(query);
+        SearchIntent queryIntent = resolveIntent(plan, query);
+        double minSemanticScore = resolveMinSemanticScore(plan, query, queryIntent);
+        String semanticQuery = buildSemanticQuery(plan, query);
 
-        log.info("🔍 Smart search query='{}', limit={}, intent={}, minSemanticScore={}",
-                query, limit, queryIntent, minSemanticScore);
+        log.info("🔍 Smart search query='{}', semanticQuery='{}', limit={}, intent={}, strictness={}, minSemanticScore={}",
+                query,
+                semanticQuery,
+                limit,
+                queryIntent,
+                plan != null ? plan.getStrictness() : null,
+                minSemanticScore);
 
-        List<Double> queryEmbedding = queryEmbeddingService.embedQuery(query);
+        List<Double> queryEmbedding = queryEmbeddingService.embedQuery(semanticQuery);
         log.info("🧠 Query embedding size={}", queryEmbedding != null ? queryEmbedding.size() : 0);
 
         if (queryEmbedding == null || queryEmbedding.isEmpty()) {
@@ -96,7 +106,7 @@ public class SmartSearchService {
 
         if (queryIntent != SearchIntent.GENERIC) {
             List<ActivityTemplate> tokenMatchedCandidates = candidates.stream()
-                    .filter(template -> hasImportantTokenOverlap(query, template))
+                    .filter(template -> hasImportantTokenOverlap(plan, query, template))
                     .toList();
 
             log.info("🔤 After important token overlap={}", tokenMatchedCandidates.size());
@@ -112,6 +122,7 @@ public class SmartSearchService {
                 .map(template -> scoreTemplate(
                         template,
                         queryEmbedding,
+                        plan,
                         query,
                         queryIntent,
                         nextSessionByTemplateId.get(template.getId())
@@ -124,20 +135,25 @@ public class SmartSearchService {
         scoredBeforeThreshold.stream()
                 .limit(10)
                 .forEach(item -> log.info(
-                        "📈 Candidate title='{}', semanticScore={}, keywordBoost={}, intentBoost={}, genericBoost={}, finalScore={}",
+                        "📈 Candidate title='{}', semanticScore={}, keywordBoost={}, intentBoost={}, genericBoost={}, aiAnchorBoost={}, finalScore={}",
                         item.template().getTitle(),
                         item.semanticScore(),
                         item.keywordBoost(),
                         item.intentBoost(),
                         item.genericBoost(),
+                        item.aiAnchorBoost(),
                         item.finalScore()
                 ));
 
         List<ScoredTemplate> thresholded = scoredBeforeThreshold.stream()
-                .filter(item -> item.semanticScore() >= minSemanticScore)
+                .filter(item ->
+                        item.semanticScore() >= minSemanticScore
+                                || item.keywordBoost() >= 0.18
+                                || item.finalScore() >= 0.30
+                )
                 .toList();
 
-        log.info("✅ Results after semantic threshold={}", thresholded.size());
+        log.info("✅ Results after semantic/lexical threshold={}", thresholded.size());
 
         List<ScoredTemplate> scored;
         if (!thresholded.isEmpty()) {
@@ -152,8 +168,8 @@ public class SmartSearchService {
                     minSemanticScore, topScore);
 
             scored = scoredBeforeThreshold.stream()
-                    .filter(item -> item.finalScore() >= FALLBACK_MIN_FINAL_SCORE)
-                    .filter(item -> topScore == 0.0 || item.finalScore() >= topScore * FALLBACK_RELATIVE_TOP_RATIO)
+                    .filter(item -> item.finalScore() + 1e-9 >= FALLBACK_MIN_FINAL_SCORE)
+                    .filter(item -> topScore == 0.0 || item.finalScore() + 1e-9 >= topScore * FALLBACK_RELATIVE_TOP_RATIO)
                     .sorted(buildComparator(request, nextSessionByTemplateId))
                     .limit(limit)
                     .toList();
@@ -169,7 +185,8 @@ public class SmartSearchService {
     private ScoredTemplate scoreTemplate(
             ActivityTemplate template,
             List<Double> queryEmbedding,
-            String query,
+            AiSearchPlan plan,
+            String rawQuery,
             SearchIntent queryIntent,
             Instant nextSessionDate
     ) {
@@ -181,15 +198,17 @@ public class SmartSearchService {
 
         semanticScore = Math.max(0.0, semanticScore);
 
-        double keywordBoost = computeKeywordBoost(query, template);
+        double keywordBoost = computeKeywordBoost(plan, rawQuery, template);
         double intentBoost = computeIntentBoost(queryIntent, template);
         double genericBoost = computeGenericBoost(template, nextSessionDate);
+        double aiAnchorBoost = computeAiAnchorBoost(template, plan);
 
         double finalScore =
                 (semanticScore * 0.55) +
                         keywordBoost +
                         intentBoost +
-                        genericBoost;
+                        genericBoost +
+                        aiAnchorBoost;
 
         return new ScoredTemplate(
                 template,
@@ -197,12 +216,13 @@ public class SmartSearchService {
                 keywordBoost,
                 intentBoost,
                 genericBoost,
+                aiAnchorBoost,
                 finalScore
         );
     }
 
-    private double computeKeywordBoost(String query, ActivityTemplate template) {
-        String normalizedQuery = normalizeLower(query);
+    private double computeKeywordBoost(AiSearchPlan plan, String rawQuery, ActivityTemplate template) {
+        String normalizedQuery = normalizeLower(rawQuery);
         String title = normalizeLower(template.getTitle());
         String description = normalizeLower(template.getDescription());
         String embeddingText = normalizeLower(template.getEmbeddingText());
@@ -212,6 +232,24 @@ public class SmartSearchService {
                 .filter(Objects::nonNull)
                 .map(this::normalizeLower)
                 .collect(Collectors.joining(" "));
+
+        Set<String> queryTerms = new LinkedHashSet<>();
+
+        if (!normalizedQuery.isBlank()) {
+            queryTerms.add(normalizedQuery);
+        }
+
+        splitTokens(normalizedQuery).stream()
+                .filter(token -> token.length() >= 3)
+                .forEach(queryTerms::add);
+
+        if (plan != null && plan.getConcepts() != null) {
+            plan.getConcepts().stream()
+                    .filter(Objects::nonNull)
+                    .map(this::normalizeLower)
+                    .filter(term -> !term.isBlank())
+                    .forEach(queryTerms::add);
+        }
 
         double boost = 0.0;
 
@@ -227,23 +265,23 @@ public class SmartSearchService {
             boost += TAG_MATCH_BOOST;
         }
 
-        for (String token : splitTokens(normalizedQuery)) {
-            if (token.length() < 3) {
+        for (String term : queryTerms) {
+            if (term.length() < 3) {
                 continue;
             }
 
-            if (title.contains(token)) {
+            if (title.contains(term)) {
                 boost += 0.06;
             }
-            if (tagsBlob.contains(token)) {
+            if (tagsBlob.contains(term)) {
                 boost += 0.05;
             }
-            if (description.contains(token) || embeddingText.contains(token)) {
+            if (description.contains(term) || embeddingText.contains(term)) {
                 boost += 0.03;
             }
         }
 
-        return Math.min(boost, 0.35);
+        return Math.min(boost, 0.45);
     }
 
     private double computeIntentBoost(SearchIntent queryIntent, ActivityTemplate template) {
@@ -252,6 +290,10 @@ public class SmartSearchService {
         }
 
         SearchIntent templateIntent = detectTemplateIntent(template);
+
+        log.info("🎯 Template intent check: title='{}', queryIntent={}, templateIntent={}",
+                template.getTitle(), queryIntent, templateIntent);
+
         if (templateIntent == queryIntent) {
             return INTENT_MATCH_BOOST;
         }
@@ -273,6 +315,22 @@ public class SmartSearchService {
         return boost;
     }
 
+    private double computeAiAnchorBoost(ActivityTemplate template, AiSearchPlan plan) {
+        if (plan == null || plan.getMustIncludeAny() == null || plan.getMustIncludeAny().isEmpty()) {
+            return 0.0;
+        }
+
+        String blob = buildTemplateSearchBlob(template);
+
+        boolean matched = plan.getMustIncludeAny().stream()
+                .filter(Objects::nonNull)
+                .map(this::normalizeLower)
+                .filter(term -> !term.isBlank())
+                .anyMatch(blob::contains);
+
+        return matched ? AI_ANCHOR_MATCH_BOOST : 0.0;
+    }
+
     private boolean matchesIntentStrict(SearchIntent queryIntent, ActivityTemplate template) {
         if (queryIntent == SearchIntent.GENERIC) {
             return true;
@@ -285,36 +343,78 @@ public class SmartSearchService {
                     "water", "sea", "diving", "scuba", "snorkeling", "snorkelling",
                     "kayak", "kayaking", "paddle", "underwater", "marine", "boat", "ocean"
             );
-
             case NATURE -> containsAny(blob,
                     "hike", "hiking", "trail", "trek", "trekking", "mountain",
                     "forest", "camping", "walk", "randonnee", "randonnée"
             );
-
             case RUNNING -> containsAny(blob,
                     "run", "running", "marathon", "race", "road race", "endurance"
             );
-
             case DESERT -> containsAny(blob,
                     "desert", "sahara", "dune", "dunes", "camel", "quad", "oasis"
             );
-
             case GENERIC -> true;
         };
     }
 
-    private boolean hasImportantTokenOverlap(String query, ActivityTemplate template) {
+    private boolean hasImportantTokenOverlap(AiSearchPlan plan, String rawQuery, ActivityTemplate template) {
         String blob = buildTemplateSearchBlob(template);
+        Set<String> importantTokens = new LinkedHashSet<>();
 
-        List<String> importantTokens = splitTokens(normalizeLower(query)).stream()
+        splitTokens(normalizeLower(rawQuery)).stream()
                 .filter(token -> token.length() >= 4)
-                .toList();
+                .forEach(importantTokens::add);
+
+        if (plan != null && plan.getConcepts() != null) {
+            plan.getConcepts().stream()
+                    .filter(Objects::nonNull)
+                    .map(this::normalizeLower)
+                    .filter(token -> token.length() >= 4)
+                    .forEach(importantTokens::add);
+        }
 
         if (importantTokens.isEmpty()) {
             return true;
         }
 
         return importantTokens.stream().anyMatch(blob::contains);
+    }
+
+    private SearchIntent resolveIntent(AiSearchPlan plan, String query) {
+        if (plan != null && plan.getIntent() != null && !plan.getIntent().isBlank()) {
+            try {
+                return SearchIntent.valueOf(plan.getIntent().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                log.warn("Unknown AI intent '{}', falling back to local detection", plan.getIntent());
+            }
+        }
+        return detectIntent(query);
+    }
+
+    private String buildSemanticQuery(AiSearchPlan plan, String rawQuery) {
+        if (plan == null || plan.getConcepts() == null || plan.getConcepts().isEmpty()) {
+            return rawQuery;
+        }
+
+        return plan.getConcepts().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .collect(Collectors.joining(" "));
+    }
+
+    private double resolveMinSemanticScore(AiSearchPlan plan, String query, SearchIntent fallbackIntent) {
+        if (plan != null && plan.getStrictness() != null) {
+            String strictness = plan.getStrictness().trim().toUpperCase(Locale.ROOT);
+            return switch (strictness) {
+                case "HIGH" -> 0.40;
+                case "MEDIUM" -> 0.33;
+                case "LOW" -> 0.26;
+                default -> resolveMinSemanticScore(query, fallbackIntent);
+            };
+        }
+        return resolveMinSemanticScore(query, fallbackIntent);
     }
 
     private SearchIntent detectIntent(String query) {
@@ -360,10 +460,9 @@ public class SmartSearchService {
         }
 
         if (containsAny(blob,
-                "hike", "hiking", "trail", "trek", "trekking", "mountain",
-                "forest", "camping", "walk", "randonnee", "randonnée"
+                "desert", "sahara", "dune", "dunes", "camel", "quad", "oasis", "ksar", "ghilane"
         )) {
-            return SearchIntent.NATURE;
+            return SearchIntent.DESERT;
         }
 
         if (containsAny(blob,
@@ -373,13 +472,15 @@ public class SmartSearchService {
         }
 
         if (containsAny(blob,
-                "desert", "sahara", "dune", "dunes", "camel", "quad", "oasis"
+                "hike", "hiking", "trail", "trek", "trekking", "mountain",
+                "forest", "camping", "walk", "randonnee", "randonnée"
         )) {
-            return SearchIntent.DESERT;
+            return SearchIntent.NATURE;
         }
 
         return SearchIntent.GENERIC;
     }
+
 
     private String buildTemplateSearchBlob(ActivityTemplate template) {
         StringBuilder sb = new StringBuilder();
@@ -631,10 +732,16 @@ public class SmartSearchService {
     }
 
     private String buildReason(ScoredTemplate item, Instant nextSessionDate) {
-        if (item.semanticScore() >= 0.50 && item.intentBoost() > 0.0 && nextSessionDate != null) {
+        if (item.semanticScore() >= 0.50 && item.keywordBoost() >= 0.15 && nextSessionDate != null) {
+            return "Strong semantic and text match with upcoming availability";
+        }
+        if (item.semanticScore() >= 0.50 && item.keywordBoost() >= 0.15) {
+            return "Strong semantic and text match for your search";
+        }
+        if (item.intentBoost() > 0.0 && item.keywordBoost() >= 0.10 && nextSessionDate != null) {
             return "Strong intent match with upcoming availability";
         }
-        if (item.semanticScore() >= 0.50 && item.intentBoost() > 0.0) {
+        if (item.intentBoost() > 0.0 && item.keywordBoost() >= 0.10) {
             return "Strong intent match for your search";
         }
         if (item.keywordBoost() >= 0.15 && nextSessionDate != null) {
@@ -673,6 +780,7 @@ public class SmartSearchService {
             double keywordBoost,
             double intentBoost,
             double genericBoost,
+            double aiAnchorBoost,
             double finalScore
     ) {}
 }
