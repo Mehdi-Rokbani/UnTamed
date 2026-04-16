@@ -9,6 +9,7 @@ import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.smartsearch.dto.SmartSearchRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -16,9 +17,8 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static reactor.netty.http.HttpConnectionLiveness.log;
-
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SmartSearchService {
 
@@ -33,6 +33,9 @@ public class SmartSearchService {
     private static final double DESCRIPTION_MATCH_BOOST = 0.08;
     private static final double TAG_MATCH_BOOST = 0.14;
 
+    private static final double FALLBACK_MIN_FINAL_SCORE = 0.28;
+    private static final double FALLBACK_RELATIVE_TOP_RATIO = 0.55;
+
     public List<RecommendationItemResponse> search(SmartSearchRequest request) {
         String query = normalizeQuery(request.getQuery());
         int limit = resolveLimit(request.getLimit());
@@ -45,6 +48,11 @@ public class SmartSearchService {
 
         List<Double> queryEmbedding = queryEmbeddingService.embedQuery(query);
         log.info("🧠 Query embedding size={}", queryEmbedding != null ? queryEmbedding.size() : 0);
+
+        if (queryEmbedding == null || queryEmbedding.isEmpty()) {
+            log.warn("⚠️ Query embedding is empty, returning no results");
+            return List.of();
+        }
 
         List<ActivitySession> allSessions = activitySessionRepository.findAll();
         Map<String, Instant> nextSessionByTemplateId = buildNextSessionMap(allSessions);
@@ -80,7 +88,27 @@ public class SmartSearchService {
                 .toList();
         log.info("🎯 After intent strict match={}", intentMatchedTemplates.size());
 
-        List<ScoredTemplate> scoredBeforeThreshold = intentMatchedTemplates.stream()
+        List<ActivityTemplate> candidates = intentMatchedTemplates;
+        if (candidates.isEmpty() && queryIntent != SearchIntent.GENERIC) {
+            log.warn("↩️ Strict intent match returned 0 results, falling back to date-matched templates");
+            candidates = dateMatchedTemplates;
+        }
+
+        if (queryIntent != SearchIntent.GENERIC) {
+            List<ActivityTemplate> tokenMatchedCandidates = candidates.stream()
+                    .filter(template -> hasImportantTokenOverlap(query, template))
+                    .toList();
+
+            log.info("🔤 After important token overlap={}", tokenMatchedCandidates.size());
+
+            if (!tokenMatchedCandidates.isEmpty()) {
+                candidates = tokenMatchedCandidates;
+            } else {
+                log.warn("↩️ Important token overlap returned 0 results, keeping previous candidate set");
+            }
+        }
+
+        List<ScoredTemplate> scoredBeforeThreshold = candidates.stream()
                 .map(template -> scoreTemplate(
                         template,
                         queryEmbedding,
@@ -96,19 +124,42 @@ public class SmartSearchService {
         scoredBeforeThreshold.stream()
                 .limit(10)
                 .forEach(item -> log.info(
-                        "📈 Candidate title='{}', semanticScore={}, finalScore={}",
+                        "📈 Candidate title='{}', semanticScore={}, keywordBoost={}, intentBoost={}, genericBoost={}, finalScore={}",
                         item.template().getTitle(),
                         item.semanticScore(),
+                        item.keywordBoost(),
+                        item.intentBoost(),
+                        item.genericBoost(),
                         item.finalScore()
                 ));
 
-        List<ScoredTemplate> scored = scoredBeforeThreshold.stream()
+        List<ScoredTemplate> thresholded = scoredBeforeThreshold.stream()
                 .filter(item -> item.semanticScore() >= minSemanticScore)
-                .sorted(buildComparator(request, nextSessionByTemplateId))
-                .limit(limit)
                 .toList();
 
-        log.info("✅ Final results after threshold/sort/limit={}", scored.size());
+        log.info("✅ Results after semantic threshold={}", thresholded.size());
+
+        List<ScoredTemplate> scored;
+        if (!thresholded.isEmpty()) {
+            scored = thresholded.stream()
+                    .sorted(buildComparator(request, nextSessionByTemplateId))
+                    .limit(limit)
+                    .toList();
+        } else {
+            double topScore = scoredBeforeThreshold.isEmpty() ? 0.0 : scoredBeforeThreshold.get(0).finalScore();
+
+            log.warn("↩️ No results after threshold={}, using fallback top scored results. topScore={}",
+                    minSemanticScore, topScore);
+
+            scored = scoredBeforeThreshold.stream()
+                    .filter(item -> item.finalScore() >= FALLBACK_MIN_FINAL_SCORE)
+                    .filter(item -> topScore == 0.0 || item.finalScore() >= topScore * FALLBACK_RELATIVE_TOP_RATIO)
+                    .sorted(buildComparator(request, nextSessionByTemplateId))
+                    .limit(limit)
+                    .toList();
+        }
+
+        log.info("✅ Final results after sort/limit={}", scored.size());
 
         return scored.stream()
                 .map(item -> toResponse(item, nextSessionByTemplateId.get(item.template().getId())))
@@ -124,9 +175,11 @@ public class SmartSearchService {
     ) {
         double semanticScore = VectorUtils.cosineSimilarity(queryEmbedding, template.getEmbeddingVector());
 
-        if (semanticScore < 0.65) {
+        if (Double.isNaN(semanticScore) || Double.isInfinite(semanticScore)) {
             semanticScore = 0.0;
         }
+
+        semanticScore = Math.max(0.0, semanticScore);
 
         double keywordBoost = computeKeywordBoost(query, template);
         double intentBoost = computeIntentBoost(queryIntent, template);
@@ -250,6 +303,20 @@ public class SmartSearchService {
         };
     }
 
+    private boolean hasImportantTokenOverlap(String query, ActivityTemplate template) {
+        String blob = buildTemplateSearchBlob(template);
+
+        List<String> importantTokens = splitTokens(normalizeLower(query)).stream()
+                .filter(token -> token.length() >= 4)
+                .toList();
+
+        if (importantTokens.isEmpty()) {
+            return true;
+        }
+
+        return importantTokens.stream().anyMatch(blob::contains);
+    }
+
     private SearchIntent detectIntent(String query) {
         String q = normalizeLower(query);
 
@@ -351,16 +418,16 @@ public class SmartSearchService {
         int wordCount = normalized.split("\\s+").length;
 
         if (intent != SearchIntent.GENERIC) {
-            if (wordCount == 1) return 0.58;
-            if (wordCount == 2) return 0.60;
-            if (wordCount <= 5) return 0.62;
-            return 0.65;
+            if (wordCount == 1) return 0.30;
+            if (wordCount == 2) return 0.33;
+            if (wordCount <= 5) return 0.36;
+            return 0.40;
         }
 
-        if (wordCount == 1) return 0.55;
-        if (wordCount == 2) return 0.58;
-        if (wordCount <= 5) return 0.60;
-        return 0.63;
+        if (wordCount == 1) return 0.28;
+        if (wordCount == 2) return 0.30;
+        if (wordCount <= 5) return 0.33;
+        return 0.36;
     }
 
     private String normalizeQuery(String query) {
@@ -378,6 +445,7 @@ public class SmartSearchService {
         if (query == null || query.isBlank()) {
             return List.of();
         }
+
         return Arrays.stream(query.split("\\s+"))
                 .map(String::trim)
                 .filter(token -> !token.isBlank())
@@ -449,6 +517,8 @@ public class SmartSearchService {
                 to = Instant.parse(request.getDateTo());
             }
         } catch (Exception e) {
+            log.warn("Invalid date filter format in smart search: from='{}', to='{}'",
+                    request.getDateFrom(), request.getDateTo());
             return true;
         }
 
@@ -487,7 +557,10 @@ public class SmartSearchService {
                     .thenComparing(ScoredTemplate::finalScore, Comparator.reverseOrder());
 
             case "priceDesc" -> Comparator
-                    .comparing((ScoredTemplate item) -> nullSafePrice(item.template().getPrice()), Comparator.reverseOrder())
+                    .comparing(
+                            (ScoredTemplate item) -> nullSafePrice(item.template().getPrice()),
+                            Comparator.reverseOrder()
+                    )
                     .thenComparing(ScoredTemplate::finalScore, Comparator.reverseOrder());
 
             case "soonest" -> Comparator
@@ -547,7 +620,7 @@ public class SmartSearchService {
                 .description(template.getDescription())
                 .coverImageUrl(getCoverImage(template))
                 .categoryIds(template.getCategoryIds())
-                .difficulty(template.getDifficulty().name())
+                .difficulty(template.getDifficulty() != null ? template.getDifficulty().name() : null)
                 .price(template.getPrice())
                 .ratingAverage(template.getRating() != null ? template.getRating().getAverage() : 0.0)
                 .ratingCount(template.getRating() != null ? template.getRating().getCount() : 0)
@@ -558,26 +631,29 @@ public class SmartSearchService {
     }
 
     private String buildReason(ScoredTemplate item, Instant nextSessionDate) {
-        if (item.intentBoost() > 0.0 && nextSessionDate != null) {
+        if (item.semanticScore() >= 0.50 && item.intentBoost() > 0.0 && nextSessionDate != null) {
             return "Strong intent match with upcoming availability";
         }
-        if (item.intentBoost() > 0.0) {
+        if (item.semanticScore() >= 0.50 && item.intentBoost() > 0.0) {
             return "Strong intent match for your search";
         }
         if (item.keywordBoost() >= 0.15 && nextSessionDate != null) {
-            return "Strong text match with upcoming availability";
+            return "Good text match with upcoming availability";
         }
         if (item.keywordBoost() >= 0.15) {
-            return "Strong text match for your search";
+            return "Good text match for your search";
         }
-        if (nextSessionDate != null && item.genericBoost() > 0.0) {
-            return "Relevant semantic match with upcoming availability";
+        if (nextSessionDate != null) {
+            return "Related activity with upcoming availability";
         }
-        return "Relevant semantic match for your search";
+        return "Related activity for your search";
     }
 
     private String getCoverImage(ActivityTemplate template) {
         if (template.getImages() == null || template.getImages().isEmpty()) {
+            return null;
+        }
+        if (template.getImages().get(0) == null) {
             return null;
         }
         return template.getImages().get(0).getUrl();
