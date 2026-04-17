@@ -18,7 +18,7 @@ import LocationPicker from "../components/LocationPicker";
 import { Header } from "../components/Header";
 import styles from "../style/createActivity.module.css";
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step    = 1 | 2 | 3 | 4 | 5 | 6;
 type UIPhase = "ai-entry" | "form";
 
 /* ── SVG Icons ── */
@@ -76,11 +76,18 @@ const IconX = () => (
 const isImageUrl = (url: string | undefined): boolean =>
   !!url && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/"));
 
+const cleanList = (values: string[] | null | undefined, max = 8): string[] => {
+  if (!values?.length) return [];
+  return Array.from(
+    new Set(values.map((v) => v?.trim()).filter((v): v is string => !!v))
+  ).slice(0, max);
+};
+
 /* ── Difficulty config ── */
 const DIFFICULTY_OPTIONS = [
-  { value: "EASY" as Difficulty, label: "Easy", emoji: "🌿", sub: "Beginners welcome", cardClass: styles.difficultyEasy },
+  { value: "EASY"   as Difficulty, label: "Easy",   emoji: "🌿", sub: "Beginners welcome",    cardClass: styles.difficultyEasy },
   { value: "MEDIUM" as Difficulty, label: "Medium", emoji: "⚡", sub: "Some experience needed", cardClass: styles.difficultyMedium },
-  { value: "HARD" as Difficulty, label: "Hard", emoji: "🔥", sub: "Advanced only", cardClass: styles.difficultyHard },
+  { value: "HARD"   as Difficulty, label: "Hard",   emoji: "🔥", sub: "Advanced only",          cardClass: styles.difficultyHard },
 ] as const;
 
 /* ── AI Example prompts ── */
@@ -153,45 +160,53 @@ function AISkeleton() {
   );
 }
 
-/* ── Main Page ── */
 export default function CreateActivityPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<UIPhase>("ai-entry");
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep]   = useState<Step>(1);
 
   /* form fields */
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
-  const [price, setPrice] = useState<number>(0);
-  const [tags, setTags] = useState<string[]>([]);
+  const [title, setTitle]               = useState("");
+  const [description, setDescription]   = useState("");
+  const [difficulty, setDifficulty]     = useState<Difficulty>("EASY");
+  const [price, setPrice]               = useState<number>(0);
+  const [tags, setTags]                 = useState<string[]>([]);
+  const [safetyNotes, setSafetyNotes]   = useState<string[]>([]);
 
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
-  const [capacity, setCapacity] = useState<number>(3);
+  const [startAt, setStartAt]           = useState("");
+  const [endAt, setEndAt]               = useState("");
+  const [capacity, setCapacity]         = useState<number>(3);
   const [meetingPoint, setMeetingPoint] = useState("");
-  const [sessionNote, setSessionNote] = useState("");
+  const [sessionNote, setSessionNote]   = useState("");
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryIds, setCategoryIds] = useState<string[]>([]);
-  const [location, setLocation] = useState<AddressResponse | null>(null);
+  const [categories, setCategories]         = useState<Category[]>([]);
+  const [categoryIds, setCategoryIds]       = useState<string[]>([]);
+  const [location, setLocation]             = useState<AddressResponse | null>(null);
   const [createdTemplate, setCreatedTemplate] = useState<ActivityTemplateResponse | null>(null);
-  const [images, setImages] = useState<ActivityImage[]>([]);
+  const [images, setImages]                 = useState<ActivityImage[]>([]);
 
   /* AI state */
-  const [aiIdea, setAiIdea] = useState("");
-  const [aiPlace, setAiPlace] = useState("");
-  const [aiAudience, setAiAudience] = useState("");
-  const [aiVibe, setAiVibe] = useState("");
-  const [aiNotes, setAiNotes] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
+  const [aiIdea, setAiIdea]                         = useState("");
+  const [aiPlace, setAiPlace]                       = useState("");
+  const [aiAudience, setAiAudience]                 = useState("");
+  const [aiVibe, setAiVibe]                         = useState("");
+  const [aiNotes, setAiNotes]                       = useState("");
+  const [aiDurationPreference, setAiDurationPreference] = useState("");
+  const [aiBudgetStyle, setAiBudgetStyle]           = useState("");
+  const [aiWarnings, setAiWarnings]                 = useState<string[]>([]);
+  const [aiMissingDetails, setAiMissingDetails]     = useState<string[]>([]);
+  const [aiHighlights, setAiHighlights]             = useState<string[]>([]);
+  const [aiIncludedItems, setAiIncludedItems]       = useState<string[]>([]);
+  const [aiWhatToBring, setAiWhatToBring]           = useState<string[]>([]);
+  const [aiRationale, setAiRationale]               = useState<string | null>(null);
+  const [aiLoading, setAiLoading]                   = useState(false);
+  const [aiFilledFields, setAiFilledFields]         = useState<Set<string>>(new Set());
 
   /* misc */
   const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [uploading, setUploading]   = useState(false);
+  const [status, setStatus]         = useState<string | null>(null);
+  const formRef                     = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     listCategories({ activeOnly: true })
@@ -222,13 +237,16 @@ export default function CreateActivityPage() {
   const step6Valid = images.length > 0;
   const canCreateTemplate = step1Valid && step2Valid && step4Valid && step5Valid;
 
+  /* ── Step progress (0–100) for the header progress bar ── */
+  const stepProgress = Math.round(((step - 1) / 5) * 100);
+
   const progressSteps = useMemo(() => [
-    { n: 1 as Step, title: "Basic Info", desc: "Title & description", emoji: "✍️" },
-    { n: 2 as Step, title: "Details", desc: "Difficulty & price", emoji: "⚙️" },
-    { n: 3 as Step, title: "Schedule", desc: "Session timing", emoji: "📅" },
-    { n: 4 as Step, title: "Categories", desc: "Choose tags", emoji: "🏷️" },
-    { n: 5 as Step, title: "Location", desc: "Meeting point", emoji: "📍" },
-    { n: 6 as Step, title: "Photos", desc: "Upload images", emoji: "📸" },
+    { n: 1 as Step, title: "Basic Info",  desc: "Title & description", emoji: "✍️" },
+    { n: 2 as Step, title: "Details",     desc: "Difficulty & price",  emoji: "⚙️" },
+    { n: 3 as Step, title: "Schedule",    desc: "Session timing",      emoji: "📅" },
+    { n: 4 as Step, title: "Categories",  desc: "Choose tags",         emoji: "🏷️" },
+    { n: 5 as Step, title: "Location",    desc: "Meeting point",       emoji: "📍" },
+    { n: 6 as Step, title: "Photos",      desc: "Upload images",       emoji: "📸" },
   ], []);
 
   const nextStep = () => { if (step < 6) setStep((step + 1) as Step); };
@@ -239,45 +257,78 @@ export default function CreateActivityPage() {
 
   /* ── AI generation ── */
   async function handleGenerateAI() {
-    const ideaText = [
-      aiIdea.trim(),
-      aiPlace.trim() && `in ${aiPlace.trim()}`,
-      aiAudience.trim() && `for ${aiAudience.trim()}`,
-      aiVibe.trim() && `vibe: ${aiVibe.trim()}`,
-      aiNotes.trim(),
-    ].filter(Boolean).join(", ");
-
-    if (!ideaText) return;
+    if (!aiIdea.trim()) return;
 
     try {
       setAiLoading(true);
       setStatus(null);
-      const res = await generateActivityDraft({ idea: ideaText });
 
-      // Animate fields filling in
-      setTimeout(() => {
-        setTitle(res.title);
-        setAiFilledFields((p) => new Set([...p, "title"]));
-      }, 300);
-      setTimeout(() => {
-        setDescription(res.description);
-        setAiFilledFields((p) => new Set([...p, "description"]));
-      }, 600);
-      setTimeout(() => {
-        setDifficulty(res.difficulty);
-        setAiFilledFields((p) => new Set([...p, "difficulty"]));
-      }, 900);
-      if (res.tags?.length) {
-        setTimeout(() => {
-          setTags(res.tags.slice(0, 6));
-          setAiFilledFields((p) => new Set([...p, "tags"]));
-        }, 1100);
+      const res = await generateActivityDraft({
+        idea:               aiIdea.trim(),
+        targetAudience:     aiAudience.trim() || undefined,
+        vibe:               aiVibe.trim() || undefined,
+        notes:              aiNotes.trim() || undefined,
+        durationPreference: aiDurationPreference.trim() || undefined,
+        budgetStyle:        aiBudgetStyle.trim() || undefined,
+        placeLabel:         aiPlace.trim() || undefined,
+        addressId:          location?.id,
+      });
+
+      const warningList   = cleanList(res.warnings, 6);
+      const missingList   = cleanList(res.missingDetails, 6);
+      const highlightList = cleanList(res.highlights, 6);
+      const includedList  = cleanList(res.includedItems, 6);
+      const bringList     = cleanList(res.whatToBring, 6);
+
+      setAiWarnings(warningList);
+      setAiMissingDetails(missingList);
+      setAiHighlights(highlightList);
+      setAiIncludedItems(includedList);
+      setAiWhatToBring(bringList);
+      setAiRationale(res.rationale ?? null);
+
+      if (warningList.length || missingList.length) {
+        const preview = [...warningList.slice(0, 2), ...missingList.slice(0, 2)].join(" • ");
+        setStatus(preview ? `AI draft ready. Review: ${preview}` : "AI draft generated successfully.");
       }
 
-      setTimeout(() => {
-        setPhase("form");
-        setStep(1);
-      }, 1400);
+      setTimeout(() => { setTitle(res.title); setAiFilledFields((p) => new Set([...p, "title"])); }, 250);
+      setTimeout(() => { setDescription(res.description); setAiFilledFields((p) => new Set([...p, "description"])); }, 500);
+      setTimeout(() => { setDifficulty(res.difficulty); setAiFilledFields((p) => new Set([...p, "difficulty"])); }, 750);
+
+      if (res.tags?.length) {
+        setTimeout(() => { setTags(cleanList(res.tags, 8)); setAiFilledFields((p) => new Set([...p, "tags"])); }, 1000);
+      }
+      if (res.suggestedPriceMin != null) {
+        setTimeout(() => { setPrice(Number(res.suggestedPriceMin) || 0); setAiFilledFields((p) => new Set([...p, "price"])); }, 1150);
+      }
+      if (res.suggestedCapacity != null && res.suggestedCapacity >= 3) {
+        setTimeout(() => { setCapacity(res.suggestedCapacity); setAiFilledFields((p) => new Set([...p, "capacity"])); }, 1250);
+      }
+      if (res.meetingPointSuggestion) {
+        setTimeout(() => { setMeetingPoint(res.meetingPointSuggestion ?? ""); setAiFilledFields((p) => new Set([...p, "meetingPoint"])); }, 1350);
+      }
+      if (res.sessionNoteSuggestion) {
+        setTimeout(() => { setSessionNote(res.sessionNoteSuggestion ?? ""); setAiFilledFields((p) => new Set([...p, "sessionNote"])); }, 1450);
+      }
+      if (res.suggestedCategoryIds?.length) {
+        setTimeout(() => {
+          setCategoryIds((prev) => {
+            const valid  = new Set(categories.map((c) => c.id));
+            const merged = Array.from(new Set([...prev, ...res.suggestedCategoryIds.filter((id) => valid.has(id))]));
+            return merged;
+          });
+          setAiFilledFields((p) => new Set([...p, "categories"]));
+        }, 1550);
+      }
+      if (!location && aiPlace.trim()) {
+        setTimeout(() => { setStatus("AI draft ready. Pick the exact location on the map before continuing."); }, 1650);
+      }
+      if (!safetyNotes.length && (warningList.length || bringList.length)) {
+        setSafetyNotes(cleanList([...warningList, ...bringList], 8));
+      }
+
+      setTimeout(() => { setPhase("form"); setStep(1); }, 1750);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "AI generation failed. Please try again.");
     } finally {
@@ -287,6 +338,12 @@ export default function CreateActivityPage() {
 
   function handleSkipAI() {
     setAiFilledFields(new Set());
+    setAiWarnings([]);
+    setAiMissingDetails([]);
+    setAiHighlights([]);
+    setAiIncludedItems([]);
+    setAiWhatToBring([]);
+    setAiRationale(null);
     setPhase("form");
     setStep(1);
   }
@@ -306,25 +363,28 @@ export default function CreateActivityPage() {
       setStatus("Please complete all required steps before continuing.");
       return false;
     }
+
     const payload: ActivityTemplateCreatePayload = {
-      title: title.trim(),
+      title:       title.trim(),
       description: description.trim(),
       difficulty,
       price,
       categoryIds,
       tags,
+      safetyNotes,
       address: {
-        provider: location.provider,
+        provider:        location.provider,
         providerPlaceId: location.providerPlaceId,
-        displayName: location.displayName,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        governorate: location.governorate ?? null,
-        delegation: location.delegation ?? null,
-        locality: location.locality ?? null,
+        displayName:     location.displayName,
+        latitude:        location.latitude,
+        longitude:       location.longitude,
+        governorate:     location.governorate ?? null,
+        delegation:      location.delegation ?? null,
+        locality:        location.locality ?? null,
       },
       images: [],
     };
+
     try {
       setSubmitting(true);
       const res = await createTemplate(payload);
@@ -353,7 +413,7 @@ export default function CreateActivityPage() {
       for (let i = 0; i < files.length; i++) {
         const updated = await addTemplateImage(createdTemplate.id, files[i], {
           cover: i === 0 && images.length === 0,
-          alt: title.trim() || "Activity image",
+          alt:   title.trim() || "Activity image",
         });
         setCreatedTemplate(updated);
         setImages(updated.images ?? []);
@@ -373,11 +433,11 @@ export default function CreateActivityPage() {
       return;
     }
     const body: ActivitySessionCreatePayload = {
-      startAt: new Date(startAt).toISOString(),
-      endAt: new Date(endAt).toISOString(),
+      startAt:      new Date(startAt).toISOString(),
+      endAt:        new Date(endAt).toISOString(),
       capacity,
       meetingPoint: meetingPoint.trim() || undefined,
-      sessionNote: sessionNote.trim() || undefined,
+      sessionNote:  sessionNote.trim() || undefined,
     };
     try {
       setSubmitting(true);
@@ -393,38 +453,36 @@ export default function CreateActivityPage() {
   function resetAll() {
     setPhase("ai-entry");
     setStep(1);
-    setTitle(""); setDescription(""); setDifficulty("EASY"); setPrice(0); setTags([]);
+    setTitle(""); setDescription(""); setDifficulty("EASY"); setPrice(0); setTags([]); setSafetyNotes([]);
     setStartAt(""); setEndAt(""); setCapacity(3); setMeetingPoint(""); setSessionNote("");
     setCategoryIds([]); setLocation(null); setCreatedTemplate(null); setImages([]);
     setAiIdea(""); setAiPlace(""); setAiAudience(""); setAiVibe(""); setAiNotes("");
-    setAiFilledFields(new Set()); setStatus(null);
-    setSubmitting(false); setUploading(false); setAiLoading(false);
+    setAiDurationPreference(""); setAiBudgetStyle("");
+    setAiWarnings([]); setAiMissingDetails([]); setAiHighlights([]);
+    setAiIncludedItems([]); setAiWhatToBring([]); setAiRationale(null);
+    setAiFilledFields(new Set());
+    setStatus(null); setSubmitting(false); setUploading(false); setAiLoading(false);
   }
 
-  /* ─────────────────────────────────────────────
-     RENDER: AI ENTRY PHASE
-  ───────────────────────────────────────────── */
+  /* ════════════════════════════════════════
+     AI ENTRY PHASE
+  ════════════════════════════════════════ */
   if (phase === "ai-entry") {
     return (
       <>
-        <Header />
+        <Header opaque />
         <div className={styles.aiEntryPage}>
-          {/* Background orbs */}
           <div className={styles.orb1} /><div className={styles.orb2} />
 
           <div className={styles.aiEntryCard}>
-            {/* Header */}
             <div className={styles.aiCardHeader}>
-              <div className={styles.aiIconBadge}>
-                <IconSparkles />
-              </div>
+              <div className={styles.aiIconBadge}><IconSparkles /></div>
               <div>
                 <h1 className={styles.aiCardTitle}>Create your adventure</h1>
                 <p className={styles.aiCardSubtitle}>Describe your idea and let AI do the heavy lifting</p>
               </div>
             </div>
 
-            {/* Main idea textarea */}
             <div className={styles.aiMainInputGroup}>
               <label className={styles.aiLabel}>What's your adventure idea?</label>
               <textarea
@@ -435,7 +493,6 @@ export default function CreateActivityPage() {
                 rows={3}
                 disabled={aiLoading}
               />
-              {/* Example chips */}
               <div className={styles.exampleChips}>
                 {AI_EXAMPLES.map((ex) => (
                   <button key={ex} type="button" className={styles.exampleChip}
@@ -446,10 +503,9 @@ export default function CreateActivityPage() {
               </div>
             </div>
 
-            {/* Optional extras row */}
             <div className={styles.aiExtrasGrid}>
               <div className={styles.aiExtraField}>
-                <label className={styles.aiLabelSm}>📍 Place</label>
+                <label className={styles.aiLabelSm}>📍 Place label</label>
                 <input className={styles.aiExtraInput} value={aiPlace}
                   onChange={(e) => setAiPlace(e.target.value)}
                   placeholder="Ain Draham, Bizerte…" disabled={aiLoading} />
@@ -472,21 +528,31 @@ export default function CreateActivityPage() {
                   onChange={(e) => setAiNotes(e.target.value)}
                   placeholder="Guided, equipment needed…" disabled={aiLoading} />
               </div>
+              <div className={styles.aiExtraField}>
+                <label className={styles.aiLabelSm}>⏱ Duration</label>
+                <input className={styles.aiExtraInput} value={aiDurationPreference}
+                  onChange={(e) => setAiDurationPreference(e.target.value)}
+                  placeholder="short, half-day, full-day…" disabled={aiLoading} />
+              </div>
+              <div className={styles.aiExtraField}>
+                <label className={styles.aiLabelSm}>💰 Budget style</label>
+                <input className={styles.aiExtraInput} value={aiBudgetStyle}
+                  onChange={(e) => setAiBudgetStyle(e.target.value)}
+                  placeholder="budget, standard, premium…" disabled={aiLoading} />
+              </div>
             </div>
 
-            {/* Loading skeleton */}
             {aiLoading && <AISkeleton />}
 
-            {/* Status */}
             {status && !aiLoading && (
-              <div className={`${styles.statusPill} ${styles.error}`}>{status}</div>
+              <div className={`${styles.statusPill} ${status.includes("✅") ? styles.success : styles.error}`}>
+                {status}
+              </div>
             )}
 
-            {/* Actions */}
             <div className={styles.aiActions}>
               <button type="button" className={styles.aiGenerateBtn}
-                onClick={handleGenerateAI}
-                disabled={aiLoading || !aiIdea.trim()}>
+                onClick={handleGenerateAI} disabled={aiLoading || !aiIdea.trim()}>
                 {aiLoading ? (
                   <><span className={styles.loadingDots} />&nbsp;Crafting your adventure…</>
                 ) : (
@@ -499,11 +565,10 @@ export default function CreateActivityPage() {
             </div>
           </div>
 
-          {/* Step preview */}
           <div className={styles.aiStepHints}>
             <span className={styles.aiStepHint}>① Describe idea</span>
             <span className={styles.aiStepArrow}>→</span>
-            <span className={styles.aiStepHint}>② Review & edit</span>
+            <span className={styles.aiStepHint}>② Review &amp; edit</span>
             <span className={styles.aiStepArrow}>→</span>
             <span className={styles.aiStepHint}>③ Publish</span>
           </div>
@@ -512,24 +577,26 @@ export default function CreateActivityPage() {
     );
   }
 
-  /* ─────────────────────────────────────────────
-     RENDER: FORM PHASE
-  ───────────────────────────────────────────── */
+  /* ════════════════════════════════════════
+     FORM PHASE
+  ════════════════════════════════════════ */
   const isAiFilled = aiFilledFields.size > 0;
 
   return (
     <>
-      <Header />
+      {/* opaque: solid header (no hero below), stepProgress: orange progress bar */}
+      <Header opaque stepProgress={stepProgress} />
+
       <div className={styles.createActivityPage}>
-        {/* ── Left Panel ── */}
-        <div className={styles.leftPanel}>
+
+        {/* ── Left sidebar ── */}
+        <aside className={styles.leftPanel}>
           <div className={styles.leftContent}>
             <div className={styles.leftBrand}>
               <div className={styles.brandIcon}><IconFlag /></div>
               <span className={styles.brandLabel}>New Adventure</span>
             </div>
 
-            {/* AI badge if AI-filled */}
             {isAiFilled && (
               <div className={styles.aiBadgePanel}>
                 <IconSparkles />
@@ -540,16 +607,15 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Progress */}
             <nav className={styles.progressSteps} aria-label="Form progress">
               {progressSteps.map((s) => {
                 const isActive = step === s.n;
-                const isDone = step > s.n;
+                const isDone   = step > s.n;
                 return (
                   <div key={s.n} className={[
                     styles.progressStep,
-                    isActive ? styles.active : "",
-                    isDone ? styles.completed : "",
+                    isActive ? styles.active    : "",
+                    isDone   ? styles.completed : "",
                   ].join(" ")}>
                     <div className={styles.stepNumber}>
                       {isDone ? <IconCheck /> : <span>{s.emoji}</span>}
@@ -563,13 +629,48 @@ export default function CreateActivityPage() {
               })}
             </nav>
 
+            {(aiWarnings.length > 0 || aiMissingDetails.length > 0 || aiHighlights.length > 0) && (
+              <div className={styles.infoCard} style={{ marginTop: 18 }}>
+                <strong>AI notes</strong>
+                {aiHighlights.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Highlights</div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {aiHighlights.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {aiWarnings.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Warnings</div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {aiWarnings.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {aiMissingDetails.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Missing details</div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {aiMissingDetails.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {aiRationale && (
+                  <div style={{ marginTop: 10, opacity: 0.9 }}>
+                    <strong>Why this draft:</strong> {aiRationale}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className={styles.decorativeQuote}>
               <p>"Every great adventure starts with a single step"</p>
             </div>
           </div>
-        </div>
+        </aside>
 
-        {/* ── Right Panel ── */}
+        {/* ── Right scrollable content ── */}
         <div className={styles.rightPanel}>
           <form ref={formRef} className={styles.activityForm} onSubmit={(e) => e.preventDefault()}>
 
@@ -581,7 +682,6 @@ export default function CreateActivityPage() {
                   <p className={styles.stepSubheading}>Give it a great title and a vivid description</p>
                 </div>
 
-                {/* Title */}
                 <div className={styles.formGroup}>
                   <div className={styles.labelRow}>
                     <label htmlFor="title">Activity Title</label>
@@ -604,7 +704,6 @@ export default function CreateActivityPage() {
                   <div className={styles.inputHint}>{title.length} / 80 characters</div>
                 </div>
 
-                {/* Description */}
                 <div className={styles.formGroup}>
                   <div className={styles.labelRow}>
                     <label htmlFor="description">Description</label>
@@ -627,7 +726,6 @@ export default function CreateActivityPage() {
                   <div className={styles.inputHint}>Help adventurers know exactly what to expect</div>
                 </div>
 
-                {/* Tags */}
                 <div className={styles.formGroup}>
                   <div className={styles.labelRow}>
                     <label>Tags</label>
@@ -639,6 +737,15 @@ export default function CreateActivityPage() {
                     isAiFilled={aiFilledFields.has("tags")} />
                   <div className={styles.inputHint}>Up to 8 tags — press Enter or comma to add</div>
                 </div>
+
+                {safetyNotes.length > 0 && (
+                  <div className={styles.infoCard}>
+                    <strong>Suggested safety notes</strong>
+                    <ul style={{ marginTop: 8, paddingLeft: 18 }}>
+                      {safetyNotes.map((note) => <li key={note}>{note}</li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
@@ -671,16 +778,42 @@ export default function CreateActivityPage() {
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label htmlFor="price">Price per Person (TND)</label>
+                  <div className={styles.labelRow}>
+                    <label htmlFor="price">Price per Person (TND)</label>
+                    {aiFilledFields.has("price") && (
+                      <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
+                    )}
+                  </div>
                   <div className={styles.inputWithIcon}>
                     <span className={styles.inputIcon}><IconCurrency /></span>
                     <input id="price" type="number" className={styles.formInput}
                       min={0} step={0.5} value={price}
-                      onChange={(e) => setPrice(Number(e.target.value))}
+                      onChange={(e) => { setPrice(Number(e.target.value)); handleFieldEdit("price"); }}
                       placeholder="0" />
                   </div>
                   <div className={styles.inputHint}>Set to 0 for free activities</div>
                 </div>
+
+                {(aiIncludedItems.length > 0 || aiWhatToBring.length > 0) && (
+                  <div className={styles.infoCard}>
+                    {aiIncludedItems.length > 0 && (
+                      <>
+                        <strong>Suggested inclusions</strong>
+                        <ul style={{ marginTop: 8, paddingLeft: 18 }}>
+                          {aiIncludedItems.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </>
+                    )}
+                    {aiWhatToBring.length > 0 && (
+                      <>
+                        <div style={{ marginTop: aiIncludedItems.length ? 12 : 8, fontWeight: 700 }}>Suggested what to bring</div>
+                        <ul style={{ marginTop: 8, paddingLeft: 18 }}>
+                          {aiWhatToBring.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -711,26 +844,45 @@ export default function CreateActivityPage() {
                     <div className={styles.inputHint}>Must be after start time</div>
                   </div>
                   <div className={styles.formGroup}>
-                    <label htmlFor="capacity">Group Capacity</label>
+                    <div className={styles.labelRow}>
+                      <label htmlFor="capacity">Group Capacity</label>
+                      {aiFilledFields.has("capacity") && (
+                        <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
+                      )}
+                    </div>
                     <div className={styles.inputWithIcon}>
                       <span className={styles.inputIcon}><IconUsers /></span>
                       <input id="capacity" type="number" className={styles.formInput}
-                        min={3} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
+                        min={3} value={capacity}
+                        onChange={(e) => { setCapacity(Number(e.target.value)); handleFieldEdit("capacity"); }} />
                     </div>
                     <div className={styles.inputHint}>Minimum 3 participants</div>
                   </div>
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label htmlFor="meetingPoint">Meeting Point <span className={styles.optional}>(optional)</span></label>
+                  <div className={styles.labelRow}>
+                    <label htmlFor="meetingPoint">Meeting Point <span className={styles.optional}>(optional)</span></label>
+                    {aiFilledFields.has("meetingPoint") && (
+                      <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
+                    )}
+                  </div>
                   <input id="meetingPoint" type="text" className={styles.formInput}
-                    value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)}
+                    value={meetingPoint}
+                    onChange={(e) => { setMeetingPoint(e.target.value); handleFieldEdit("meetingPoint"); }}
                     placeholder="e.g., Main parking, café entrance…" />
                 </div>
+
                 <div className={styles.formGroup}>
-                  <label htmlFor="sessionNote">Session Notes <span className={styles.optional}>(optional)</span></label>
+                  <div className={styles.labelRow}>
+                    <label htmlFor="sessionNote">Session Notes <span className={styles.optional}>(optional)</span></label>
+                    {aiFilledFields.has("sessionNote") && (
+                      <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
+                    )}
+                  </div>
                   <textarea id="sessionNote" className={styles.formTextarea}
-                    value={sessionNote} onChange={(e) => setSessionNote(e.target.value)}
+                    value={sessionNote}
+                    onChange={(e) => { setSessionNote(e.target.value); handleFieldEdit("sessionNote"); }}
                     placeholder="What to bring, special instructions, tips…" rows={4} />
                 </div>
               </div>
@@ -743,16 +895,26 @@ export default function CreateActivityPage() {
                   <h2 className={styles.stepHeading}>Choose categories</h2>
                   <p className={styles.stepSubheading}>Select at least one category for your activity</p>
                 </div>
+
+                {aiFilledFields.has("categories") && (
+                  <div className={styles.infoCard} style={{ marginBottom: 14 }}>
+                    <strong>AI suggested categories</strong>
+                  </div>
+                )}
+
                 <div className={styles.categoryGrid}>
                   {categories.map((c) => {
                     const selected = categoryIds.includes(c.id);
-                    const icon = c.iconUrl ?? null;
+                    const icon     = c.iconUrl ?? null;
                     return (
                       <button key={c.id} type="button"
                         className={`${styles.categoryCard} ${selected ? styles.selected : ""}`}
-                        onClick={() => toggleCategory(c.id)} aria-pressed={selected}>
+                        onClick={() => toggleCategory(c.id)}
+                        aria-pressed={selected}>
                         <div className={styles.categoryIcon}>
-                          {icon && isImageUrl(icon) ? <img src={icon} alt={c.name ?? "Category"} /> : <span>{icon ?? "📦"}</span>}
+                          {icon && isImageUrl(icon)
+                            ? <img src={icon} alt={c.name ?? "Category"} />
+                            : <span>{icon ?? "📦"}</span>}
                         </div>
                         <div className={styles.categoryTitle}>{c.name}</div>
                         {c.description && <div className={styles.categoryDesc}>{c.description}</div>}
@@ -783,7 +945,7 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* ── Step 6: Images ── */}
+            {/* ── Step 6: Photos ── */}
             {step === 6 && (
               <div className={styles.formStep}>
                 <div className={styles.stepHeader}>
@@ -825,14 +987,13 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* Status message */}
             {status && (
               <div className={`${styles.statusPill} ${status.includes("✅") ? styles.success : styles.error}`}>
                 {status}
               </div>
             )}
 
-            {/* Navigation */}
+            {/* ── Navigation ── */}
             <div className={styles.formNavigation}>
               <button type="button" className={styles.navBtnSecondary} onClick={prevStep}
                 disabled={submitting || uploading || aiLoading}>
@@ -843,9 +1004,11 @@ export default function CreateActivityPage() {
 
               {step >= 1 && step <= 4 && (
                 <button type="button" className={styles.navBtnPrimary} onClick={nextStep}
-                  disabled={submitting || uploading || aiLoading ||
+                  disabled={
+                    submitting || uploading || aiLoading ||
                     (step === 1 && !step1Valid) || (step === 2 && !step2Valid) ||
-                    (step === 3 && !step3Valid) || (step === 4 && !step4Valid)}>
+                    (step === 3 && !step3Valid) || (step === 4 && !step4Valid)
+                  }>
                   Continue <IconArrowRight />
                 </button>
               )}

@@ -8,6 +8,7 @@ import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -15,11 +16,17 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GeminiActivityAssistantService implements AiActivityAssistantService {
 
     private final AssistantProperties properties;
@@ -50,15 +57,23 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", properties.getModel());
+        body.put("temperature", 0.4);
 
         body.set("messages",
                 objectMapper.createArrayNode()
                         .add(objectMapper.createObjectNode()
+                                .put("role", "system")
+                                .put("content", """
+                                        You are an expert AI assistant for outdoor activity guides in Tunisia.
+                                        Your job is to generate realistic, useful, marketable activity draft suggestions.
+                                        Always return strict JSON only.
+                                        Never return markdown.
+                                        Never return code fences.
+                                        """))
+                        .add(objectMapper.createObjectNode()
                                 .put("role", "user")
                                 .put("content", prompt))
         );
-
-        body.put("temperature", 0.5);
 
         HttpEntity<String> entity;
         try {
@@ -82,7 +97,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
             throw new IllegalStateException("Assistant request failed", e);
         }
 
-        return parseResponse(response.getBody());
+        return parseResponse(response.getBody(), request);
     }
 
     private void ensureGuide(String authEmail) {
@@ -100,48 +115,75 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
     private String buildPrompt(GenerateActivityDraftRequest request) {
         return """
-            You are an expert assistant for an outdoor activities platform in Tunisia.
+                Return ONLY raw valid JSON.
+                Do not add explanations.
+                Do not add markdown.
+                Do not use ``` fences.
+                Do not write any text before or after the JSON.
 
-            Return ONLY raw valid JSON.
-            Do not add explanations.
-            Do not add markdown.
-            Do not use ``` fences.
-            Do not write any text before or after the JSON.
+                You are helping a guide create a strong outdoor activity draft for Tunisia.
 
-            Required JSON format:
-            {
-              "title": "string",
-              "description": "string",
-              "difficulty": "EASY | MEDIUM | HARD",
-              "tags": ["string"],
-              "semanticHints": ["string"]
-            }
+                The location field is only contextual. Do not invent exact address facts.
+                If location is missing, still generate a useful draft.
+                Be practical, realistic, and commercially useful.
 
-            Rules:
-            - Title must be catchy, concise, and natural.
-            - Description must be 3 to 5 sentences.
-            - tags must contain 4 to 8 short lowercase tags.
-            - semanticHints must contain 4 to 8 short search-oriented phrases.
+                Required JSON format:
+                {
+                  "title": "string",
+                  "description": "string",
+                  "difficulty": "EASY | MEDIUM | HARD",
+                  "tags": ["string"],
+                  "semanticHints": ["string"],
+                  "suggestedCategoryIds": ["string"],
+                  "suggestedCategoryNames": ["string"],
+                  "suggestedPriceMin": 0,
+                  "suggestedPriceMax": 0,
+                  "suggestedDurationMinutes": 0,
+                  "suggestedCapacity": 0,
+                  "highlights": ["string"],
+                  "includedItems": ["string"],
+                  "whatToBring": ["string"],
+                  "warnings": ["string"],
+                  "missingDetails": ["string"],
+                  "meetingPointSuggestion": "string",
+                  "sessionNoteSuggestion": "string",
+                  "rationale": "string"
+                }
 
-            Idea: %s
-            Place: %s
-            Audience: %s
-            Vibe: %s
-            Notes: %s
-            """.formatted(
+                Rules:
+                - title must be catchy, concise, and natural
+                - description must be 3 to 5 sentences and suitable for a booking page
+                - difficulty must be EASY, MEDIUM, or HARD
+                - tags must contain 4 to 8 short lowercase tags
+                - semanticHints must contain 4 to 8 short search-oriented phrases
+                - suggestedPriceMin and suggestedPriceMax must be realistic non-negative numbers
+                - suggestedDurationMinutes and suggestedCapacity must be realistic positive integers
+                - warnings should mention uncertainty or operational risks
+                - missingDetails should mention what the guide still needs to confirm
+                - if uncertain, make conservative suggestions
+
+                Input:
+                Idea: %s
+                Target audience: %s
+                Vibe: %s
+                Notes: %s
+                Duration preference: %s
+                Budget style: %s
+                Selected address id: %s
+                Place label: %s
+                """.formatted(
                 safe(request.idea()),
-                safe(request.place()),
                 safe(request.targetAudience()),
                 safe(request.vibe()),
-                safe(request.notes())
+                safe(request.notes()),
+                safe(request.durationPreference()),
+                safe(request.budgetStyle()),
+                safe(request.addressId()),
+                safe(request.placeLabel())
         );
     }
 
-    private String safe(String value) {
-        return StringUtils.hasText(value) ? value : "not specified";
-    }
-
-    private GenerateActivityDraftResponse parseResponse(String rawBody) {
+    private GenerateActivityDraftResponse parseResponse(String rawBody, GenerateActivityDraftRequest request) {
         try {
             JsonNode root = objectMapper.readTree(rawBody);
 
@@ -159,14 +201,12 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
                 throw new IllegalStateException("Assistant returned empty content");
             }
 
-            System.out.println("ASSISTANT RAW CONTENT = " + content);
+            log.info("ASSISTANT RAW CONTENT = {}", content);
+
             JsonNode json = extractJsonFromContent(content);
 
-            String title = json.path("title").asText(null);
-            String description = json.path("description").asText(null);
-            Difficulty difficulty = parseDifficulty(json.path("difficulty").asText(null));
-            List<String> tags = toList(json.path("tags"));
-            List<String> semanticHints = toList(json.path("semanticHints"));
+            String title = trimToNull(json.path("title").asText(null));
+            String description = trimToNull(json.path("description").asText(null));
 
             if (!StringUtils.hasText(title)) {
                 throw new IllegalStateException("Assistant did not return title");
@@ -175,16 +215,87 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
                 throw new IllegalStateException("Assistant did not return description");
             }
 
+            Difficulty difficulty = parseDifficulty(json.path("difficulty").asText(null));
+
+            List<String> tags = cleanList(toList(json.path("tags")), 8);
+            List<String> semanticHints = cleanList(toList(json.path("semanticHints")), 8);
+
+            List<String> suggestedCategoryIds = cleanList(toList(json.path("suggestedCategoryIds")), 5);
+            List<String> suggestedCategoryNames = cleanList(toList(json.path("suggestedCategoryNames")), 5);
+
+            BigDecimal suggestedPriceMin = parseBigDecimal(json.path("suggestedPriceMin"));
+            BigDecimal suggestedPriceMax = parseBigDecimal(json.path("suggestedPriceMax"));
+            if (suggestedPriceMin != null && suggestedPriceMin.compareTo(BigDecimal.ZERO) < 0) {
+                suggestedPriceMin = BigDecimal.ZERO;
+            }
+            if (suggestedPriceMax != null && suggestedPriceMax.compareTo(BigDecimal.ZERO) < 0) {
+                suggestedPriceMax = BigDecimal.ZERO;
+            }
+            if (suggestedPriceMin != null && suggestedPriceMax != null
+                    && suggestedPriceMax.compareTo(suggestedPriceMin) < 0) {
+                suggestedPriceMax = suggestedPriceMin;
+            }
+
+            Integer suggestedDurationMinutes = parsePositiveInt(json.path("suggestedDurationMinutes"));
+            Integer suggestedCapacity = parsePositiveInt(json.path("suggestedCapacity"));
+
+            List<String> highlights = cleanList(toList(json.path("highlights")), 8);
+            List<String> includedItems = cleanList(toList(json.path("includedItems")), 8);
+            List<String> whatToBring = cleanList(toList(json.path("whatToBring")), 8);
+            List<String> warnings = cleanList(toList(json.path("warnings")), 8);
+            List<String> missingDetails = cleanList(toList(json.path("missingDetails")), 8);
+
+            String meetingPointSuggestion = trimToNull(json.path("meetingPointSuggestion").asText(null));
+            String sessionNoteSuggestion = trimToNull(json.path("sessionNoteSuggestion").asText(null));
+            String rationale = trimToNull(json.path("rationale").asText(null));
+
+            if (tags.isEmpty()) {
+                tags = fallbackTags(request);
+            }
+            if (semanticHints.isEmpty()) {
+                semanticHints = fallbackSemanticHints(request);
+            }
+            if (warnings.isEmpty()) {
+                warnings = List.of("Review logistics, pricing, and exact meeting instructions before publishing.");
+            }
+            if (missingDetails.isEmpty()) {
+                missingDetails = fallbackMissingDetails(request);
+            }
+            if (suggestedDurationMinutes == null) {
+                suggestedDurationMinutes = 180;
+            }
+            if (suggestedCapacity == null) {
+                suggestedCapacity = 10;
+            }
+            if (difficulty == null) {
+                difficulty = Difficulty.MEDIUM;
+            }
+
             return new GenerateActivityDraftResponse(
-                    title.trim(),
-                    description.trim(),
-                    difficulty != null ? difficulty : Difficulty.MEDIUM,
+                    title,
+                    description,
+                    difficulty,
                     tags,
-                    semanticHints
+                    semanticHints,
+                    suggestedCategoryIds,
+                    suggestedCategoryNames,
+                    suggestedPriceMin,
+                    suggestedPriceMax,
+                    suggestedDurationMinutes,
+                    suggestedCapacity,
+                    highlights,
+                    includedItems,
+                    whatToBring,
+                    warnings,
+                    missingDetails,
+                    meetingPointSuggestion,
+                    sessionNoteSuggestion,
+                    rationale
             );
 
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse assistant response", e);
+            log.warn("Failed to parse assistant response: {}", e.getMessage(), e);
+            return fallbackResponse(request);
         }
     }
 
@@ -211,21 +322,200 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         return objectMapper.readTree(text);
     }
 
+    private GenerateActivityDraftResponse fallbackResponse(GenerateActivityDraftRequest request) {
+        String baseTitle = trimToNull(request.idea());
+        if (!StringUtils.hasText(baseTitle)) {
+            baseTitle = "Guided outdoor experience";
+        }
+
+        String title = capitalize(shorten(baseTitle, 60));
+
+        StringBuilder description = new StringBuilder("A guided outdoor experience");
+        if (StringUtils.hasText(request.targetAudience())) {
+            description.append(" designed for ").append(request.targetAudience().trim());
+        }
+        if (StringUtils.hasText(request.placeLabel())) {
+            description.append(" around ").append(request.placeLabel().trim());
+        }
+        description.append(". It offers a practical and enjoyable way to discover the destination with the support of a guide. ");
+        description.append("Review the operational details, inclusions, and exact logistics before publishing.");
+
+        return new GenerateActivityDraftResponse(
+                title,
+                description.toString(),
+                Difficulty.MEDIUM,
+                fallbackTags(request),
+                fallbackSemanticHints(request),
+                List.of(),
+                List.of(),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                180,
+                10,
+                List.of("Guided experience", "Outdoor discovery"),
+                List.of(),
+                List.of("Comfortable shoes", "Water"),
+                List.of("AI fallback draft used. Review all fields before saving."),
+                fallbackMissingDetails(request),
+                "Set a clear and easy-to-find meeting point for participants.",
+                "Mention what participants should bring, the pace of the experience, and who it is suitable for.",
+                "Fallback response generated because the assistant output could not be parsed reliably."
+        );
+    }
+
+    private List<String> fallbackTags(GenerateActivityDraftRequest request) {
+        Set<String> tags = new LinkedHashSet<>();
+        tags.add("outdoor");
+        tags.add("guided");
+
+        String idea = safeLower(request.idea());
+        if (idea.contains("hike") || idea.contains("trail") || idea.contains("trek")) tags.add("hiking");
+        if (idea.contains("camp")) tags.add("camping");
+        if (idea.contains("water") || idea.contains("kayak") || idea.contains("boat")) tags.add("water-activity");
+        if (idea.contains("forest")) tags.add("nature");
+        if (idea.contains("sunset")) tags.add("sunset");
+        if (idea.contains("family")) tags.add("family-friendly");
+        if (idea.contains("beginner")) tags.add("beginner-friendly");
+
+        return tags.stream().limit(8).toList();
+    }
+
+    private List<String> fallbackSemanticHints(GenerateActivityDraftRequest request) {
+        Set<String> hints = new LinkedHashSet<>();
+        hints.add("guided outdoor activity");
+        hints.add("nature experience");
+        hints.add("local adventure");
+
+        if (StringUtils.hasText(request.targetAudience())) {
+            hints.add(request.targetAudience().trim().toLowerCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(request.vibe())) {
+            hints.add(request.vibe().trim().toLowerCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(request.placeLabel())) {
+            hints.add(request.placeLabel().trim().toLowerCase(Locale.ROOT));
+        }
+
+        return hints.stream().limit(8).toList();
+    }
+
+    private List<String> fallbackMissingDetails(GenerateActivityDraftRequest request) {
+        List<String> missing = new ArrayList<>();
+        if (!StringUtils.hasText(request.placeLabel()) && !StringUtils.hasText(request.addressId())) {
+            missing.add("Select a precise address.");
+        }
+        if (!StringUtils.hasText(request.durationPreference())) {
+            missing.add("Confirm the target duration.");
+        }
+        if (!StringUtils.hasText(request.budgetStyle())) {
+            missing.add("Confirm the intended price positioning.");
+        }
+        missing.add("Review capacity, inclusions, and meeting point.");
+        return missing;
+    }
+
     private Difficulty parseDifficulty(String value) {
+        if (!StringUtils.hasText(value)) {
+            return Difficulty.MEDIUM;
+        }
+
         try {
-            return Difficulty.valueOf(value.toUpperCase());
+            return Difficulty.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             return Difficulty.MEDIUM;
         }
     }
 
+    private BigDecimal parseBigDecimal(JsonNode node) {
+        try {
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                return null;
+            }
+            if (node.isNumber()) {
+                return node.decimalValue();
+            }
+            String text = trimToNull(node.asText(null));
+            if (!StringUtils.hasText(text)) {
+                return null;
+            }
+            return new BigDecimal(text);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Integer parsePositiveInt(JsonNode node) {
+        try {
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                return null;
+            }
+            int value = node.isNumber() ? node.asInt() : Integer.parseInt(node.asText());
+            return value > 0 ? value : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private List<String> toList(JsonNode node) {
-        if (!node.isArray()) return List.of();
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
 
         List<String> list = new ArrayList<>();
         for (JsonNode n : node) {
-            list.add(n.asText());
+            String value = trimToNull(n.asText(null));
+            if (value != null) {
+                list.add(value);
+            }
         }
         return list;
+    }
+
+    private List<String> cleanList(List<String> input, int maxSize) {
+        if (input == null || input.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> cleaned = new LinkedHashSet<>();
+        for (String item : input) {
+            String value = trimToNull(item);
+            if (value != null) {
+                cleaned.add(value);
+            }
+            if (cleaned.size() >= maxSize) {
+                break;
+            }
+        }
+
+        return List.copyOf(cleaned);
+    }
+
+    private String safe(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "not specified";
+    }
+
+    private String safeLower(String value) {
+        return StringUtils.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : "";
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String shorten(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max).trim();
+    }
+
+    private String capitalize(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        return value.substring(0, 1).toUpperCase(Locale.ROOT) + value.substring(1);
     }
 }

@@ -1,31 +1,95 @@
 /* header.module.css */
 
+/* ══════════════════════════════════════════
+   HEADER HEIGHT TOKENS
+   Referenced by createActivity.module.css and any other
+   page that needs to offset content below the fixed header.
+══════════════════════════════════════════ */
+:root {
+  --header-h:    68px;
+  --header-h-sm: 60px;
+}
+
+/* ══════════════════════════════════════════
+   BASE HEADER
+══════════════════════════════════════════ */
 .header {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  padding: 20px 0;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
   background: rgba(26, 77, 46, 0.3);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    height     0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ── Scrolled state ── */
 .scrolled {
-  padding: 16px 0;
-  background: rgba(26, 77, 46, 0.92);
+  height: var(--header-h-sm);
+  background: rgba(26, 77, 46, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 24px rgba(26, 77, 46, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06),
+              0 4px 24px rgba(26, 77, 46, 0.22);
 }
 
-/* ── CONTAINER ── */
+/* ── Opaque variant ──
+   Use on form / dashboard pages that sit above white/cream
+   content (no hero image underneath the header).
+   Pass opaque prop to <Header> to apply this class.          */
+.opaque {
+  background: rgba(26, 77, 46, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06),
+              0 4px 20px rgba(26, 77, 46, 0.18);
+}
+
+/* ══════════════════════════════════════════
+   STEP PROGRESS BAR
+   Rendered as a sibling element immediately after <header>.
+   Stays pinned directly below the header at all breakpoints.
+══════════════════════════════════════════ */
+.progressBar {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  z-index: 999;
+  transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progressBarScrolled {
+  top: var(--header-h-sm);
+}
+
+.progressBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #f97316 0%, #fb923c 100%);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: width;
+}
+
+/* ══════════════════════════════════════════
+   CONTAINER
+══════════════════════════════════════════ */
 .headerContainer {
   max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
   padding: 0 40px;
   display: flex;
@@ -33,7 +97,9 @@
   gap: 16px;
 }
 
-/* ── BRAND ── */
+/* ══════════════════════════════════════════
+   BRAND
+══════════════════════════════════════════ */
 .headerBrand {
   display: flex;
   align-items: center;
@@ -66,7 +132,9 @@
 }
 .brandText { color: var(--white, #ffffff); }
 
-/* ── CENTER SLOT — holds compact search bar ── */
+/* ══════════════════════════════════════════
+   CENTER SLOT — compact search bar
+══════════════════════════════════════════ */
 .centerSlot {
   flex: 1;
   display: flex;
@@ -80,7 +148,9 @@
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-/* ── NAV ── */
+/* ══════════════════════════════════════════
+   NAV
+══════════════════════════════════════════ */
 .headerNav {
   display: flex;
   align-items: center;
@@ -104,7 +174,9 @@
 .navLink:hover { color: var(--sunset-orange, #ff8c42); }
 .mobileOnly { display: none; }
 
-/* ── ACTIONS ── */
+/* ══════════════════════════════════════════
+   ACTIONS
+══════════════════════════════════════════ */
 .headerActions {
   display: flex;
   align-items: center;
@@ -112,7 +184,9 @@
   flex-shrink: 0;
 }
 
-/* ── CTA ── */
+/* ══════════════════════════════════════════
+   CTA
+══════════════════════════════════════════ */
 .headerCta {
   display: inline-flex;
   align-items: center;
@@ -131,14 +205,40 @@
   font-family: inherit;
   white-space: nowrap;
 }
-.headerCta:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255, 140, 66, 0.5); }
+.headerCta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 140, 66, 0.5);
+}
 
-/* ── PROFILE WRAPPER ── */
+/* ══════════════════════════════════════════
+   LOGIN LINK
+══════════════════════════════════════════ */
+.headerLogin {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 22px;
+  background: transparent;
+  color: var(--white, #ffffff);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+.headerLogin:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* ══════════════════════════════════════════
+   PROFILE
+══════════════════════════════════════════ */
 .profileWrapper {
   position: relative;
 }
 
-/* ── PROFILE BUTTON ── */
 .profileButton {
   display: flex;
   align-items: center;
@@ -203,7 +303,9 @@
 }
 .chevronUp { transform: rotate(180deg); }
 
-/* ── DROPDOWN ── */
+/* ══════════════════════════════════════════
+   DROPDOWN
+══════════════════════════════════════════ */
 .dropdown {
   position: absolute;
   top: calc(100% + 10px);
@@ -211,11 +313,12 @@
   min-width: 220px;
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(26, 77, 46, 0.18), 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 8px 32px rgba(26, 77, 46, 0.18),
+              0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(212, 217, 208, 0.6);
   overflow: hidden;
   animation: dropIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 100;
+  z-index: 1001;
 }
 
 @keyframes dropIn {
@@ -298,7 +401,9 @@
 .dropdownLogout:hover { background: rgba(196, 54, 44, 0.06); color: #b02f25; }
 .dropdownLogout:hover svg { color: #b02f25; }
 
-/* ── MOBILE TOGGLE ── */
+/* ══════════════════════════════════════════
+   MOBILE TOGGLE
+══════════════════════════════════════════ */
 .mobileToggle {
   display: none;
   flex-direction: column;
@@ -322,7 +427,9 @@
 .mobileToggleActive span:nth-child(2) { opacity: 0; }
 .mobileToggleActive span:nth-child(3) { transform: rotate(-45deg) translateY(-8px); }
 
-/* ── RESPONSIVE ── */
+/* ══════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .headerContainer { padding: 0 28px; }
   .headerBrand { font-size: 24px; }
@@ -332,16 +439,19 @@
 }
 
 @media (max-width: 768px) {
+  :root {
+    --header-h:    60px;
+    --header-h-sm: 56px;
+  }
+
   .headerContainer { padding: 0 20px; }
   .headerBrand { font-size: 22px; }
   .mobileToggle { display: flex; }
-
-  /* Hide compact search on mobile — not enough room */
   .centerSlot { display: none; }
 
   .headerNav {
     position: fixed;
-    top: 73px;
+    top: var(--header-h);
     left: 0;
     right: 0;
     flex-direction: column;
@@ -356,6 +466,7 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(26, 77, 46, 0.3);
     align-items: stretch;
+    z-index: 998;
   }
   .headerNav.active {
     transform: translateY(0);
@@ -370,33 +481,22 @@
     font-size: 17px;
     border-radius: 8px;
   }
+
   .dropdown { right: auto; left: 0; min-width: 200px; }
   .profileName { max-width: 100px; }
+  .progressBar { top: var(--header-h); }
 }
 
 @media (max-width: 480px) {
+  :root {
+    --header-h:    56px;
+    --header-h-sm: 52px;
+  }
+
   .headerContainer { padding: 0 16px; }
   .headerBrand { font-size: 20px; }
   .brandText { display: none; }
   .headerCta { padding: 10px 20px; font-size: 14px; }
   .profileName { display: none; }
-}
-
-.headerLogin {
-  display: inline-flex;
-  align-items: center;
-  padding: 12px 22px;
-  background: transparent;
-  color: var(--white, #ffffff);
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 50px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  transition: all 0.25s ease;
-  white-space: nowrap;
-}
-.headerLogin:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.6);
+  .progressBar { top: var(--header-h); }
 }

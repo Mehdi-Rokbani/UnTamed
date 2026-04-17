@@ -17,6 +17,7 @@ public record ActivityTemplateCreateRequest(
 
         List<@Valid ActivityImageDto> images,
         List<@NotBlank String> tags,
+        List<@NotBlank String> safetyNotes,
 
         @NotNull @Valid AddressPickDto address
 ) {}

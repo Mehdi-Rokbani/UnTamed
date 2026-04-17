@@ -393,6 +393,7 @@ public class ActivityTemplateService {
                 t.getGuideId(),
                 t.getAddressId(),
                 t.getTags() == null ? List.of() : t.getTags(),
+                t.getSafetyNotes(),
                 ratingDto,
                 toImageDtos(t.getImages()),
                 t.getCategoryIds() == null ? List.of() : t.getCategoryIds(),

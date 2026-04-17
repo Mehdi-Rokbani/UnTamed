@@ -18,10 +18,6 @@ public class AiActivityAssistantController {
             @Valid @RequestBody GenerateActivityDraftRequest request,
             Authentication authentication
     ) {
-        if (request == null) {
-            throw new IllegalArgumentException("Request body is required");
-        }
-
         String authEmail = authentication != null ? authentication.getName() : null;
 
         GenerateActivityDraftResponse response =

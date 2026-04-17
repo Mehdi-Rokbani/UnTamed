@@ -18,6 +18,7 @@ public record ActivityTemplateUpdateRequest(
         List<@NotBlank String> categoryIds,
         List<@Valid ActivityImageDto> images,
         List<@NotBlank String> tags,
+        List<@NotBlank String> safetyNotes,
 
         @Valid AddressPickDto address
 ) {}

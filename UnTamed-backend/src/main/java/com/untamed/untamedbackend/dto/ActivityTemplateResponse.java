@@ -17,6 +17,7 @@ public record ActivityTemplateResponse(
         String addressId,
 
         List<String> tags,
+        List<String> safetyNotes,
         RatingSummaryDto rating,
         List<ActivityImageDto> images,
         List<String> categoryIds,

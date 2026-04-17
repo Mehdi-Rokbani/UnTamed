@@ -9,14 +9,22 @@ public record GenerateActivityDraftRequest(
         String idea,
 
         @Size(max = 200)
-        String place,
-
-        @Size(max = 200)
         String targetAudience,
 
         @Size(max = 200)
         String vibe,
 
         @Size(max = 1000)
-        String notes
+        String notes,
+
+        @Size(max = 100)
+        String durationPreference,
+
+        @Size(max = 100)
+        String budgetStyle,
+
+        String addressId,
+
+        @Size(max = 200)
+        String placeLabel
 ) {}

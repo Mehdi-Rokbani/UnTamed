@@ -44,6 +44,9 @@ public class ActivityTemplate {
     private BigDecimal price;
 
     @Builder.Default
+    private List<String> safetyNotes = List.of();
+
+    @Builder.Default
     @Indexed
     private List<@NotBlank String> tags = List.of();
 

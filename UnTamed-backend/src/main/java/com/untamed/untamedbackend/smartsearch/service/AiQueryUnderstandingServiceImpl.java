@@ -37,7 +37,7 @@ public class AiQueryUnderstandingServiceImpl implements AiQueryUnderstandingServ
     @Value("${app.ai.openrouter.base-url:https://openrouter.ai/api/v1}")
     private String baseUrl;
 
-    @Value("${app.ai.openrouter.timeout-ms:20000}")
+    @Value("${app.ai.openrouter.timeout-ms:60000}")
     private int timeoutMs;
 
     public AiQueryUnderstandingServiceImpl(ObjectMapper objectMapper) {
