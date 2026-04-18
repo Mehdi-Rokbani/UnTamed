@@ -17,8 +17,10 @@ import { listCategories } from "../api/category.api";
 import LocationPicker from "../components/LocationPicker";
 import { Header } from "../components/Header";
 import styles from "../style/createActivity.module.css";
+import WeatherSection from "../components/Weathersection";
+import Weatherrangeselector from "../components/Weatherrangeselector";
 
-type Step    = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 type UIPhase = "ai-entry" | "form";
 
 /* ── SVG Icons ── */
@@ -85,9 +87,9 @@ const cleanList = (values: string[] | null | undefined, max = 8): string[] => {
 
 /* ── Difficulty config ── */
 const DIFFICULTY_OPTIONS = [
-  { value: "EASY"   as Difficulty, label: "Easy",   emoji: "🌿", sub: "Beginners welcome",    cardClass: styles.difficultyEasy },
+  { value: "EASY" as Difficulty, label: "Easy", emoji: "🌿", sub: "Beginners welcome", cardClass: styles.difficultyEasy },
   { value: "MEDIUM" as Difficulty, label: "Medium", emoji: "⚡", sub: "Some experience needed", cardClass: styles.difficultyMedium },
-  { value: "HARD"   as Difficulty, label: "Hard",   emoji: "🔥", sub: "Advanced only",          cardClass: styles.difficultyHard },
+  { value: "HARD" as Difficulty, label: "Hard", emoji: "🔥", sub: "Advanced only", cardClass: styles.difficultyHard },
 ] as const;
 
 /* ── AI Example prompts ── */
@@ -163,50 +165,50 @@ function AISkeleton() {
 export default function CreateActivityPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<UIPhase>("ai-entry");
-  const [step, setStep]   = useState<Step>(1);
+  const [step, setStep] = useState<Step>(1);
 
   /* form fields */
-  const [title, setTitle]               = useState("");
-  const [description, setDescription]   = useState("");
-  const [difficulty, setDifficulty]     = useState<Difficulty>("EASY");
-  const [price, setPrice]               = useState<number>(0);
-  const [tags, setTags]                 = useState<string[]>([]);
-  const [safetyNotes, setSafetyNotes]   = useState<string[]>([]);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
+  const [price, setPrice] = useState<number>(0);
+  const [tags, setTags] = useState<string[]>([]);
+  const [safetyNotes, setSafetyNotes] = useState<string[]>([]);
 
-  const [startAt, setStartAt]           = useState("");
-  const [endAt, setEndAt]               = useState("");
-  const [capacity, setCapacity]         = useState<number>(3);
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [capacity, setCapacity] = useState<number>(3);
   const [meetingPoint, setMeetingPoint] = useState("");
-  const [sessionNote, setSessionNote]   = useState("");
+  const [sessionNote, setSessionNote] = useState("");
 
-  const [categories, setCategories]         = useState<Category[]>([]);
-  const [categoryIds, setCategoryIds]       = useState<string[]>([]);
-  const [location, setLocation]             = useState<AddressResponse | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [location, setLocation] = useState<AddressResponse | null>(null);
   const [createdTemplate, setCreatedTemplate] = useState<ActivityTemplateResponse | null>(null);
-  const [images, setImages]                 = useState<ActivityImage[]>([]);
+  const [images, setImages] = useState<ActivityImage[]>([]);
 
   /* AI state */
-  const [aiIdea, setAiIdea]                         = useState("");
-  const [aiPlace, setAiPlace]                       = useState("");
-  const [aiAudience, setAiAudience]                 = useState("");
-  const [aiVibe, setAiVibe]                         = useState("");
-  const [aiNotes, setAiNotes]                       = useState("");
+  const [aiIdea, setAiIdea] = useState("");
+  const [aiPlace, setAiPlace] = useState("");
+  const [aiAudience, setAiAudience] = useState("");
+  const [aiVibe, setAiVibe] = useState("");
+  const [aiNotes, setAiNotes] = useState("");
   const [aiDurationPreference, setAiDurationPreference] = useState("");
-  const [aiBudgetStyle, setAiBudgetStyle]           = useState("");
-  const [aiWarnings, setAiWarnings]                 = useState<string[]>([]);
-  const [aiMissingDetails, setAiMissingDetails]     = useState<string[]>([]);
-  const [aiHighlights, setAiHighlights]             = useState<string[]>([]);
-  const [aiIncludedItems, setAiIncludedItems]       = useState<string[]>([]);
-  const [aiWhatToBring, setAiWhatToBring]           = useState<string[]>([]);
-  const [aiRationale, setAiRationale]               = useState<string | null>(null);
-  const [aiLoading, setAiLoading]                   = useState(false);
-  const [aiFilledFields, setAiFilledFields]         = useState<Set<string>>(new Set());
+  const [aiBudgetStyle, setAiBudgetStyle] = useState("");
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+  const [aiMissingDetails, setAiMissingDetails] = useState<string[]>([]);
+  const [aiHighlights, setAiHighlights] = useState<string[]>([]);
+  const [aiIncludedItems, setAiIncludedItems] = useState<string[]>([]);
+  const [aiWhatToBring, setAiWhatToBring] = useState<string[]>([]);
+  const [aiRationale, setAiRationale] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
 
   /* misc */
   const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading]   = useState(false);
-  const [status, setStatus]         = useState<string | null>(null);
-  const formRef                     = useRef<HTMLFormElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     listCategories({ activeOnly: true })
@@ -221,32 +223,34 @@ export default function CreateActivityPage() {
       .catch(() => setCategories([]));
   }, []);
 
+
   const toggleCategory = (id: string) =>
     setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   /* ── Validation ── */
   const step1Valid = title.trim().length > 2 && description.trim().length > 5;
   const step2Valid = !!difficulty && price >= 0;
-  const step3Valid =
+  const step3Valid = location !== null;
+  const step4Valid =
     !!startAt && !!endAt &&
     new Date(startAt).getTime() > Date.now() &&
     new Date(endAt).getTime() > new Date(startAt).getTime() &&
     capacity >= 3;
-  const step4Valid = categoryIds.length > 0;
-  const step5Valid = location !== null;
+  const step5Valid = categoryIds.length > 0;
   const step6Valid = images.length > 0;
-  const canCreateTemplate = step1Valid && step2Valid && step4Valid && step5Valid;
+  const canCreateTemplate = step1Valid && step2Valid && step3Valid && step5Valid;
+
 
   /* ── Step progress (0–100) for the header progress bar ── */
   const stepProgress = Math.round(((step - 1) / 5) * 100);
 
   const progressSteps = useMemo(() => [
-    { n: 1 as Step, title: "Basic Info",  desc: "Title & description", emoji: "✍️" },
-    { n: 2 as Step, title: "Details",     desc: "Difficulty & price",  emoji: "⚙️" },
-    { n: 3 as Step, title: "Schedule",    desc: "Session timing",      emoji: "📅" },
-    { n: 4 as Step, title: "Categories",  desc: "Choose tags",         emoji: "🏷️" },
-    { n: 5 as Step, title: "Location",    desc: "Meeting point",       emoji: "📍" },
-    { n: 6 as Step, title: "Photos",      desc: "Upload images",       emoji: "📸" },
+    { n: 1 as Step, title: "Basic Info", desc: "Title & description", emoji: "✍️" },
+    { n: 2 as Step, title: "Details", desc: "Difficulty & price", emoji: "⚙️" },
+    { n: 3 as Step, title: "Location", desc: "Meeting point", emoji: "📍" },
+    { n: 4 as Step, title: "Schedule", desc: "Session timing", emoji: "📅" },
+    { n: 5 as Step, title: "Categories", desc: "Choose tags", emoji: "🏷️" },
+    { n: 6 as Step, title: "Photos", desc: "Upload images", emoji: "📸" },
   ], []);
 
   const nextStep = () => { if (step < 6) setStep((step + 1) as Step); };
@@ -264,21 +268,21 @@ export default function CreateActivityPage() {
       setStatus(null);
 
       const res = await generateActivityDraft({
-        idea:               aiIdea.trim(),
-        targetAudience:     aiAudience.trim() || undefined,
-        vibe:               aiVibe.trim() || undefined,
-        notes:              aiNotes.trim() || undefined,
+        idea: aiIdea.trim(),
+        targetAudience: aiAudience.trim() || undefined,
+        vibe: aiVibe.trim() || undefined,
+        notes: aiNotes.trim() || undefined,
         durationPreference: aiDurationPreference.trim() || undefined,
-        budgetStyle:        aiBudgetStyle.trim() || undefined,
-        placeLabel:         aiPlace.trim() || undefined,
-        addressId:          location?.id,
+        budgetStyle: aiBudgetStyle.trim() || undefined,
+        placeLabel: aiPlace.trim() || undefined,
+        addressId: location?.id,
       });
 
-      const warningList   = cleanList(res.warnings, 6);
-      const missingList   = cleanList(res.missingDetails, 6);
+      const warningList = cleanList(res.warnings, 6);
+      const missingList = cleanList(res.missingDetails, 6);
       const highlightList = cleanList(res.highlights, 6);
-      const includedList  = cleanList(res.includedItems, 6);
-      const bringList     = cleanList(res.whatToBring, 6);
+      const includedList = cleanList(res.includedItems, 6);
+      const bringList = cleanList(res.whatToBring, 6);
 
       setAiWarnings(warningList);
       setAiMissingDetails(missingList);
@@ -303,7 +307,7 @@ export default function CreateActivityPage() {
         setTimeout(() => { setPrice(Number(res.suggestedPriceMin) || 0); setAiFilledFields((p) => new Set([...p, "price"])); }, 1150);
       }
       if (res.suggestedCapacity != null && res.suggestedCapacity >= 3) {
-        setTimeout(() => { setCapacity(res.suggestedCapacity); setAiFilledFields((p) => new Set([...p, "capacity"])); }, 1250);
+        setTimeout(() => { setCapacity(res.suggestedCapacity!); setAiFilledFields((p) => new Set([...p, "capacity"])); }, 1250);
       }
       if (res.meetingPointSuggestion) {
         setTimeout(() => { setMeetingPoint(res.meetingPointSuggestion ?? ""); setAiFilledFields((p) => new Set([...p, "meetingPoint"])); }, 1350);
@@ -314,7 +318,7 @@ export default function CreateActivityPage() {
       if (res.suggestedCategoryIds?.length) {
         setTimeout(() => {
           setCategoryIds((prev) => {
-            const valid  = new Set(categories.map((c) => c.id));
+            const valid = new Set(categories.map((c) => c.id));
             const merged = Array.from(new Set([...prev, ...res.suggestedCategoryIds.filter((id) => valid.has(id))]));
             return merged;
           });
@@ -365,7 +369,7 @@ export default function CreateActivityPage() {
     }
 
     const payload: ActivityTemplateCreatePayload = {
-      title:       title.trim(),
+      title: title.trim(),
       description: description.trim(),
       difficulty,
       price,
@@ -373,14 +377,14 @@ export default function CreateActivityPage() {
       tags,
       safetyNotes,
       address: {
-        provider:        location.provider,
+        provider: location.provider,
         providerPlaceId: location.providerPlaceId,
-        displayName:     location.displayName,
-        latitude:        location.latitude,
-        longitude:       location.longitude,
-        governorate:     location.governorate ?? null,
-        delegation:      location.delegation ?? null,
-        locality:        location.locality ?? null,
+        displayName: location.displayName,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        governorate: location.governorate ?? null,
+        delegation: location.delegation ?? null,
+        locality: location.locality ?? null,
       },
       images: [],
     };
@@ -413,7 +417,7 @@ export default function CreateActivityPage() {
       for (let i = 0; i < files.length; i++) {
         const updated = await addTemplateImage(createdTemplate.id, files[i], {
           cover: i === 0 && images.length === 0,
-          alt:   title.trim() || "Activity image",
+          alt: title.trim() || "Activity image",
         });
         setCreatedTemplate(updated);
         setImages(updated.images ?? []);
@@ -428,16 +432,16 @@ export default function CreateActivityPage() {
 
   async function onFinish() {
     setStatus(null);
-    if (!createdTemplate?.id || !step3Valid || !step6Valid) {
+    if (!createdTemplate?.id || !step4Valid || !step6Valid) {
       setStatus("Please complete all required fields.");
       return;
     }
     const body: ActivitySessionCreatePayload = {
-      startAt:      new Date(startAt).toISOString(),
-      endAt:        new Date(endAt).toISOString(),
+      startAt: new Date(startAt).toISOString(),
+      endAt: new Date(endAt).toISOString(),
       capacity,
       meetingPoint: meetingPoint.trim() || undefined,
-      sessionNote:  sessionNote.trim() || undefined,
+      sessionNote: sessionNote.trim() || undefined,
     };
     try {
       setSubmitting(true);
@@ -610,12 +614,12 @@ export default function CreateActivityPage() {
             <nav className={styles.progressSteps} aria-label="Form progress">
               {progressSteps.map((s) => {
                 const isActive = step === s.n;
-                const isDone   = step > s.n;
+                const isDone = step > s.n;
                 return (
                   <div key={s.n} className={[
                     styles.progressStep,
-                    isActive ? styles.active    : "",
-                    isDone   ? styles.completed : "",
+                    isActive ? styles.active : "",
+                    isDone ? styles.completed : "",
                   ].join(" ")}>
                     <div className={styles.stepNumber}>
                       {isDone ? <IconCheck /> : <span>{s.emoji}</span>}
@@ -817,79 +821,46 @@ export default function CreateActivityPage() {
               </div>
             )}
 
-            {/* ── Step 3: Schedule ── */}
+            {/* ── Step 3: Location ── */}
             {step === 3 && (
               <div className={styles.formStep}>
                 <div className={styles.stepHeader}>
-                  <h2 className={styles.stepHeading}>Schedule your session</h2>
-                  <p className={styles.stepSubheading}>Set timing, group size, and optional notes</p>
+                  <h2 className={styles.stepHeading}>Where's the adventure?</h2>
+                  <p className={styles.stepSubheading}>Search or click the map to set the meeting point</p>
                 </div>
-
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="startAt">Start Date &amp; Time</label>
-                    <div className={styles.inputWithIcon}>
-                      <span className={styles.inputIcon}><IconCalendar /></span>
-                      <input id="startAt" type="datetime-local" className={styles.formInput}
-                        value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-                    </div>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="endAt">End Date &amp; Time</label>
-                    <div className={styles.inputWithIcon}>
-                      <span className={styles.inputIcon}><IconCalendar /></span>
-                      <input id="endAt" type="datetime-local" className={styles.formInput}
-                        value={endAt} onChange={(e) => setEndAt(e.target.value)} />
-                    </div>
-                    <div className={styles.inputHint}>Must be after start time</div>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <div className={styles.labelRow}>
-                      <label htmlFor="capacity">Group Capacity</label>
-                      {aiFilledFields.has("capacity") && (
-                        <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
-                      )}
-                    </div>
-                    <div className={styles.inputWithIcon}>
-                      <span className={styles.inputIcon}><IconUsers /></span>
-                      <input id="capacity" type="number" className={styles.formInput}
-                        min={3} value={capacity}
-                        onChange={(e) => { setCapacity(Number(e.target.value)); handleFieldEdit("capacity"); }} />
-                    </div>
-                    <div className={styles.inputHint}>Minimum 3 participants</div>
-                  </div>
+                <div className={styles.locationWrapper}>
+                  <LocationPicker value={location} onChange={setLocation} label="Meeting Point" />
                 </div>
-
-                <div className={styles.formGroup}>
-                  <div className={styles.labelRow}>
-                    <label htmlFor="meetingPoint">Meeting Point <span className={styles.optional}>(optional)</span></label>
-                    {aiFilledFields.has("meetingPoint") && (
-                      <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
-                    )}
+                {location && (
+                  <div className={styles.locationPreview}>
+                    <div className={styles.previewHeader}><IconCheck /> Location confirmed</div>
+                    <div className={styles.previewName}>{location.displayName}</div>
+                    <div className={styles.previewCoords}>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</div>
                   </div>
-                  <input id="meetingPoint" type="text" className={styles.formInput}
-                    value={meetingPoint}
-                    onChange={(e) => { setMeetingPoint(e.target.value); handleFieldEdit("meetingPoint"); }}
-                    placeholder="e.g., Main parking, café entrance…" />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <div className={styles.labelRow}>
-                    <label htmlFor="sessionNote">Session Notes <span className={styles.optional}>(optional)</span></label>
-                    {aiFilledFields.has("sessionNote") && (
-                      <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
-                    )}
-                  </div>
-                  <textarea id="sessionNote" className={styles.formTextarea}
-                    value={sessionNote}
-                    onChange={(e) => { setSessionNote(e.target.value); handleFieldEdit("sessionNote"); }}
-                    placeholder="What to bring, special instructions, tips…" rows={4} />
-                </div>
+                )}
               </div>
             )}
-
-            {/* ── Step 4: Categories ── */}
+            {/* ── Step 4: Schedule ── */}
             {step === 4 && (
+              <Weatherrangeselector
+                locationName={location?.displayName ?? "Your activity location"}
+                latitude={location?.latitude ?? null}
+                longitude={location?.longitude ?? null}
+                startAt={startAt}
+                endAt={endAt}
+                onStartAtChange={(value) => { setStartAt(value); handleFieldEdit("startAt"); }}
+                onEndAtChange={(value) => { setEndAt(value); handleFieldEdit("endAt"); }}
+                capacity={capacity}
+                onCapacityChange={(value) => { setCapacity(value); handleFieldEdit("capacity"); }}
+                meetingPoint={meetingPoint}
+                onMeetingPointChange={(value) => { setMeetingPoint(value); handleFieldEdit("meetingPoint"); }}
+                sessionNote={sessionNote}
+                onSessionNoteChange={(value) => { setSessionNote(value); handleFieldEdit("sessionNote"); }}
+              />
+            )}
+
+            {/* ── Step 5: Categories ── */}
+            {step === 5 && (
               <div className={styles.formStep}>
                 <div className={styles.stepHeader}>
                   <h2 className={styles.stepHeading}>Choose categories</h2>
@@ -905,7 +876,7 @@ export default function CreateActivityPage() {
                 <div className={styles.categoryGrid}>
                   {categories.map((c) => {
                     const selected = categoryIds.includes(c.id);
-                    const icon     = c.iconUrl ?? null;
+                    const icon = c.iconUrl ?? null;
                     return (
                       <button key={c.id} type="button"
                         className={`${styles.categoryCard} ${selected ? styles.selected : ""}`}
@@ -922,26 +893,6 @@ export default function CreateActivityPage() {
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* ── Step 5: Location ── */}
-            {step === 5 && (
-              <div className={styles.formStep}>
-                <div className={styles.stepHeader}>
-                  <h2 className={styles.stepHeading}>Where's the adventure?</h2>
-                  <p className={styles.stepSubheading}>Search or click the map to set the meeting point</p>
-                </div>
-                <div className={styles.locationWrapper}>
-                  <LocationPicker value={location} onChange={setLocation} label="Meeting Point" />
-                </div>
-                {location && (
-                  <div className={styles.locationPreview}>
-                    <div className={styles.previewHeader}><IconCheck /> Location confirmed</div>
-                    <div className={styles.previewName}>{location.displayName}</div>
-                    <div className={styles.previewCoords}>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</div>
-                  </div>
-                )}
               </div>
             )}
 

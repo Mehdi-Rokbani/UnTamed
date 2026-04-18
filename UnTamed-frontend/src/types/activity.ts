@@ -41,6 +41,7 @@ export type ActivityTemplateCreatePayload = {
   categoryIds: string[];
 
   tags?: string[];
+  safetyNotes?: string[];
   address: AddressPickDto;
 
   images?: ActivityImage[];
