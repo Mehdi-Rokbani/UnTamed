@@ -8,26 +8,9 @@ import styles from "../style/RecommendedActivities.module.css";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function formatDate(value?: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-}
-
 function formatPrice(price?: number): string | null {
   if (typeof price !== "number") return null;
   return `${price} TND`;
-}
-
-function formatRating(avg?: number, count?: number): string {
-  const safeAvg = typeof avg === "number" ? avg.toFixed(1) : "0.0";
-  const safeCount = typeof count === "number" ? count : 0;
-  return `${safeAvg} (${safeCount})`;
 }
 
 // ─── sub-components ──────────────────────────────────────────────────────────
@@ -72,7 +55,6 @@ function SkeletonCard() {
     <div className={styles.skeletonCard} aria-hidden="true">
       <div className={styles.skeletonImage} />
       <div className={styles.skeletonBody}>
-        <div className={styles.skeletonPill} />
         <div className={styles.skeletonLineLg} />
         <div className={styles.skeletonLineMd} />
         <div className={styles.skeletonLineSm} />
@@ -81,20 +63,30 @@ function SkeletonCard() {
   );
 }
 
-function ActivityCard({
+function RecoCard({
   item,
-  categoryMap,
 }: {
   item: RecommendationItem;
-  categoryMap: Map<string, string>;
 }) {
-  const categoryNames = (item.categoryIds ?? [])
-    .map((id) => categoryMap.get(id))
-    .filter((n): n is string => Boolean(n))
-    .slice(0, 2);
+  const avg = Number(item.ratingAverage ?? 0);
+  const cnt = Number(item.ratingCount ?? 0);
+  const isFree = Number(item.price ?? 0) === 0;
+  const sessionCount = item.nextSessionDate ? 1 : 0;
 
-  const formattedDate = formatDate(item.nextSessionDate);
-  const formattedPrice = formatPrice(item.price);
+  // difficulty colors matching ActivityCard
+  const difficultyStyle = useMemo(() => {
+    const d = (item.difficulty ?? "").toUpperCase();
+    if (d === "HARD")   return { bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" };
+    if (d === "MEDIUM") return { bg: "#fef9c3", color: "#854d0e", dot: "#ca8a04" };
+    return                     { bg: "#dcfce7", color: "#166534", dot: "#16a34a" };
+  }, [item.difficulty]);
+
+  const difficultyLabel = useMemo(() => {
+    const d = (item.difficulty ?? "").toUpperCase();
+    if (d === "HARD") return "Hard";
+    if (d === "MEDIUM") return "Medium";
+    return "Easy";
+  }, [item.difficulty]);
 
   return (
     <Link
@@ -113,7 +105,7 @@ function ActivityCard({
           />
         ) : (
           <div className={styles.imageFallback}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 d="M21 15l-5-5L5 21M3 3l18 18M10.5 6.5a2 2 0 11-4 0 2 2 0 014 0z"
                 stroke="currentColor"
@@ -122,18 +114,22 @@ function ActivityCard({
                 strokeLinejoin="round"
               />
             </svg>
-            <span>No image</span>
           </div>
         )}
 
-        {/* floating price chip */}
-        {formattedPrice && (
-          <span className={styles.priceChip}>{formattedPrice}</span>
-        )}
-
-        {/* difficulty pill */}
+        {/* difficulty badge */}
         {item.difficulty && (
-          <span className={styles.difficultyChip}>{item.difficulty}</span>
+          <span
+            className={styles.difficultyChip}
+            style={{ background: difficultyStyle.bg, color: difficultyStyle.color }}
+          >
+            <span style={{
+              width: 5, height: 5, borderRadius: "50%",
+              background: difficultyStyle.dot, flexShrink: 0,
+              display: "inline-block",
+            }} />
+            {difficultyLabel}
+          </span>
         )}
       </div>
 
@@ -145,45 +141,33 @@ function ActivityCard({
           <p className={styles.description}>{item.description}</p>
         )}
 
-        {categoryNames.length > 0 && (
-          <div className={styles.tags}>
-            {categoryNames.map((name) => (
-              <span key={name} className={styles.tag}>
-                {name}
-              </span>
-            ))}
-          </div>
+        {sessionCount > 0 && (
+          <p className={styles.sessionInfo}>
+            {sessionCount} session{sessionCount > 1 ? "s" : ""}
+          </p>
         )}
 
+        {/* rating + price row */}
         <div className={styles.meta}>
-          <span className={styles.rating}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <div className={styles.rating}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill={avg > 0 ? "#f59e0b" : "#d1d5db"}>
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
-            {formatRating(item.ratingAverage, item.ratingCount)}
-          </span>
+            <span>{avg > 0 ? avg.toFixed(1) : "New"}</span>
+            {cnt > 0 && <span className={styles.ratingCount}>({cnt})</span>}
+          </div>
 
-          {formattedDate && (
-            <span className={styles.nextDate}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              {formattedDate}
-            </span>
-          )}
+          <div className={styles.priceBlock}>
+            {isFree ? (
+              <span className={styles.priceFree}>Free</span>
+            ) : (
+              <>
+                <span className={styles.priceFrom}>From</span>
+                <span className={styles.priceValue}>{item.price} TND</span>
+              </>
+            )}
+          </div>
         </div>
-
-        {(item.reasons?.length ?? 0) > 0 && (
-          <ul className={styles.reasons}>
-            {item.reasons.slice(0, 2).map((reason, i) => (
-              <li key={`${item.templateId}-reason-${i}`} className={styles.reason}>
-                <span className={styles.reasonDot} aria-hidden="true" />
-                {reason}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </Link>
   );
@@ -197,18 +181,12 @@ type Props = {
 };
 
 export default function RecommendedActivities({
-  title = "Intelligent Picks for You",
+  title = "Recommended for you",
   limit = 6,
 }: Props) {
   const [items, setItems] = useState<RecommendationItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const categoryMap = useMemo(
-    () => new Map(categories.map((c) => [c.id, c.name])),
-    [categories]
-  );
 
   useEffect(() => {
     let active = true;
@@ -217,19 +195,13 @@ export default function RecommendedActivities({
       try {
         setLoading(true);
         setError(null);
-
-        const [recommendations, categoryData] = await Promise.all([
-          getMyRecommendations(limit),
-          listCategories(),
-        ]);
-
+        const recommendations = await getMyRecommendations(limit);
         if (!active) return;
         setItems(recommendations ?? []);
-        setCategories(categoryData ?? []);
       } catch (err) {
         console.error("Failed to load recommendations", err);
         if (!active) return;
-        setError("Could not load recommendations right now. Please try again.");
+        setError("Could not load recommendations right now.");
       } finally {
         if (active) setLoading(false);
       }
@@ -245,7 +217,7 @@ export default function RecommendedActivities({
 
       {loading && (
         <div className={styles.grid}>
-          {Array.from({ length: Math.min(limit, 3) }).map((_, i) => (
+          {Array.from({ length: Math.min(limit, 4) }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
@@ -271,11 +243,7 @@ export default function RecommendedActivities({
       {!loading && !error && items.length > 0 && (
         <div className={styles.grid}>
           {items.map((item) => (
-            <ActivityCard
-              key={item.templateId}
-              item={item}
-              categoryMap={categoryMap}
-            />
+            <RecoCard key={item.templateId} item={item} />
           ))}
         </div>
       )}

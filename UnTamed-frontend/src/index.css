@@ -10,3 +10,22 @@ html, body {
   overflow: visible;
 }
 
+/* index.css or global.css */
+:root {
+  --header-h:    80px;
+  --header-h-sm: 68px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --header-h:    64px;
+    --header-h-sm: 58px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --header-h:    58px;
+    --header-h-sm: 54px;
+  }
+}

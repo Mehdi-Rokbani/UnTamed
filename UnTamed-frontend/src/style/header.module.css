@@ -1,14 +1,7 @@
 /* header.module.css */
-
-/* ══════════════════════════════════════════
-   HEADER HEIGHT TOKENS
-   Referenced by createActivity.module.css and any other
-   page that needs to offset content below the fixed header.
-══════════════════════════════════════════ */
-:root {
-  --header-h:    68px;
-  --header-h-sm: 60px;
-}
+/* ── NOTE: --header-h / --header-h-sm must be in your global CSS (index.css),
+         not here. CSS Modules scope :root so these vars won't be visible to
+         other stylesheets if declared inside a module file. ── */
 
 /* ══════════════════════════════════════════
    BASE HEADER
@@ -32,7 +25,6 @@
     box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Scrolled state ── */
 .scrolled {
   height: var(--header-h-sm);
   background: rgba(26, 77, 46, 0.95);
@@ -43,10 +35,6 @@
               0 4px 24px rgba(26, 77, 46, 0.22);
 }
 
-/* ── Opaque variant ──
-   Use on form / dashboard pages that sit above white/cream
-   content (no hero image underneath the header).
-   Pass opaque prop to <Header> to apply this class.          */
 .opaque {
   background: rgba(26, 77, 46, 0.97);
   backdrop-filter: blur(20px);
@@ -58,8 +46,6 @@
 
 /* ══════════════════════════════════════════
    STEP PROGRESS BAR
-   Rendered as a sibling element immediately after <header>.
-   Stays pinned directly below the header at all breakpoints.
 ══════════════════════════════════════════ */
 .progressBar {
   position: fixed;
@@ -88,13 +74,15 @@
    CONTAINER
 ══════════════════════════════════════════ */
 .headerContainer {
-  max-width: 1400px;
+  max-width: 1440px;
+  
   width: 100%;
   margin: 0 auto;
-  padding: 0 40px;
-  display: flex;
+  padding: 0 32px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
 }
 
 /* ══════════════════════════════════════════
@@ -110,8 +98,8 @@
   color: var(--white, #ffffff);
   transition: transform 0.3s ease;
   white-space: nowrap;
-  flex-shrink: 0;
   letter-spacing: -0.5px;
+  justify-self: start;
 }
 .headerBrand:hover { transform: translateY(-1px); }
 
@@ -133,18 +121,20 @@
 .brandText { color: var(--white, #ffffff); }
 
 /* ══════════════════════════════════════════
-   CENTER SLOT — compact search bar
+   CENTER SLOT
 ══════════════════════════════════════════ */
 .centerSlot {
-  flex: 1;
   display: flex;
   justify-content: center;
-  min-width: 0;
+  align-items: center;
+  min-width: 300px;
+  max-width: 560px;
+  width: 100%;
 }
 
 .compactSearchWrap {
   width: 100%;
-  max-width: 480px;
+  margin-top: 25px;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -181,7 +171,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
+  justify-self: end;
 }
 
 /* ══════════════════════════════════════════
@@ -191,11 +181,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 28px;
+  padding: 11px 26px;
   background: linear-gradient(135deg, var(--sunset-orange, #ff8c42) 0%, var(--sunset-peach, #ffa566) 100%);
   color: var(--white, #ffffff);
   text-decoration: none;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   border-radius: 50px;
   transition: all 0.3s ease;
@@ -216,7 +206,7 @@
 .headerLogin {
   display: inline-flex;
   align-items: center;
-  padding: 12px 22px;
+  padding: 11px 22px;
   background: transparent;
   color: var(--white, #ffffff);
   text-decoration: none;
@@ -237,13 +227,14 @@
 ══════════════════════════════════════════ */
 .profileWrapper {
   position: relative;
+  margin-top: 20px;
 }
 
 .profileButton {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px 6px 6px;
+  padding: 6px 14px 6px 6px;
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -260,15 +251,15 @@
 }
 
 .profileAvatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.8);
 }
 .profileAvatarPlaceholder {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--sunset-orange, #ff8c42), var(--sunset-peach, #ffa566));
   display: flex;
@@ -308,7 +299,7 @@
 ══════════════════════════════════════════ */
 .dropdown {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 12px);
   right: 0;
   min-width: 220px;
   background: #fff;
@@ -430,21 +421,25 @@
 /* ══════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════ */
-@media (max-width: 1024px) {
-  .headerContainer { padding: 0 28px; }
+@media (max-width: 1100px) {
+  .headerContainer {
+    padding: 0 24px;
+    gap: 16px;
+  }
+  .centerSlot {
+    min-width: 240px;
+    max-width: 420px;
+  }
   .headerBrand { font-size: 24px; }
-  .headerCta { padding: 10px 24px; font-size: 15px; }
-  .profileName { max-width: 80px; }
-  .compactSearchWrap { max-width: 340px; }
+  .profileName { max-width: 90px; }
 }
 
 @media (max-width: 768px) {
-  :root {
-    --header-h:    60px;
-    --header-h-sm: 56px;
+  .headerContainer {
+    padding: 0 20px;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
   }
-
-  .headerContainer { padding: 0 20px; }
   .headerBrand { font-size: 22px; }
   .mobileToggle { display: flex; }
   .centerSlot { display: none; }
@@ -488,15 +483,10 @@
 }
 
 @media (max-width: 480px) {
-  :root {
-    --header-h:    56px;
-    --header-h-sm: 52px;
-  }
-
-  .headerContainer { padding: 0 16px; }
+  .headerContainer { padding: 0 16px; gap: 8px; }
   .headerBrand { font-size: 20px; }
   .brandText { display: none; }
-  .headerCta { padding: 10px 20px; font-size: 14px; }
+  .headerCta { padding: 10px 18px; font-size: 14px; }
   .profileName { display: none; }
   .progressBar { top: var(--header-h); }
 }
