@@ -56,6 +56,7 @@ public class ActivityTemplatePublicService {
                 .map(s -> new PublicSessionDto(
                         s.getId(),
                         s.getStartAt(),
+                        s.getEndAt(),
                         s.getCapacity(),
                         s.getBookedCount()
                 ))

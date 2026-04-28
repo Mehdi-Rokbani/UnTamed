@@ -4,7 +4,8 @@ import java.time.Instant;
 
 public record PublicSessionDto(
         String id,
-        Instant date,
+        Instant startAt,
+        Instant endAt,
         int capacity,
         int bookedCount
 ) {}

@@ -1,4 +1,3 @@
-// src/pages/ActivityDetailsPage.tsx
 import { useEffect, useMemo, useState, useCallback, useRef, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PublicSession, PublicTemplateCard } from "../types/activity";
@@ -9,6 +8,7 @@ import {
   getPublicTemplateById,
   listPublicTemplateSessions,
 } from "../api/activity.api";
+import { getDailyForecast } from "../api/weather.api";
 import { getMyRecommendations, getSimilarActivities } from "../api/recommendation.api";
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/auth.store";
@@ -17,14 +17,58 @@ import * as ReviewApi from "../api/review.api";
 import ReviewList from "../components/review/ReviewList";
 import { getParticipantsPreview } from "../api/session.api";
 import type { ParticipantsPreviewResponse } from "../types/participants";
+import { WeatherWidget } from "../components/Weatherwidget";
 
 type LoadState = "loading" | "error" | "done" | "notfound";
 type BookingStep = "idle" | "selecting" | "confirming" | "success";
 type SuggestionItem = RecommendationItem | SimilarActivityItem;
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
+type SessionWeatherDay = {
+  date: string;
+  weatherCode: number;
+  tempMax: number;
+  tempMin: number;
+  precipitationMax: number;
+  windMax: number;
+};
+
+type SessionWeather = {
+  mode: "single" | "range";
+  days: SessionWeatherDay[];
+};
+
+function toDateOnlyLocal(value: string | Date) {
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysLocal(dateStr: string, days: number) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() + days);
+  return toDateOnlyLocal(dt);
+}
+
+function listDateRangeLocal(startDate: string, endDate: string) {
+  if (!startDate || !endDate) return [];
+  const out: string[] = [];
+  let cursor = startDate;
+  let guard = 0;
+  while (cursor <= endDate && guard < 40) {
+    out.push(cursor);
+    cursor = addDaysLocal(cursor, 1);
+    guard += 1;
+  }
+  return out;
+}
+
+function isSameLocalDate(startIso: string, endIso: string) {
+  return toDateOnlyLocal(startIso) === toDateOnlyLocal(endIso);
+}
 
 function formatPrice(price: number) {
   if (Number.isNaN(price)) return "";
@@ -57,6 +101,32 @@ function formatCountdown(ms: number) {
   return `${m}m`;
 }
 
+function formatSessionDateLabel(startAt: string, endAt: string) {
+  if (isSameLocalDate(startAt, endAt)) return formatDateShort(startAt);
+  return `${formatDateCompact(startAt)} → ${formatDateShort(endAt)}`;
+}
+
+function formatSessionTimeLabel(startAt: string, endAt: string) {
+  return `${formatTime(startAt)} - ${formatTime(endAt)}`;
+}
+
+function formatDurationLabel(startAt: string, endAt: string) {
+  const start = new Date(startAt).getTime();
+  const end = new Date(endAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "—";
+
+  const totalMinutes = Math.round((end - start) / 60000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 && days === 0) parts.push(`${minutes}m`);
+  return parts.join(" ") || "—";
+}
+
 const CARD_GRADIENTS = [
   "linear-gradient(135deg,#1a4d2e,#4d7c3f)",
   "linear-gradient(135deg,#2d5f3e,#ff8c42)",
@@ -72,9 +142,9 @@ function getBg(id: string) {
 }
 
 const DIFF_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
-  EASY:   { bg: "#dcfce7", color: "#166534", label: "Easy" },
+  EASY: { bg: "#dcfce7", color: "#166534", label: "Easy" },
   MEDIUM: { bg: "#fef9c3", color: "#854d0e", label: "Medium" },
-  HARD:   { bg: "#fee2e2", color: "#991b1b", label: "Hard" },
+  HARD: { bg: "#fee2e2", color: "#991b1b", label: "Hard" },
 };
 
 function mapSuggestionToCard(item: SuggestionItem): PublicTemplateCard {
@@ -92,16 +162,12 @@ function mapSuggestionToCard(item: SuggestionItem): PublicTemplateCard {
       : [],
     rating: { average: item.ratingAverage ?? 0, count: item.ratingCount ?? 0 },
     nextSession: item.nextSessionDate
-      ? { id: `${item.templateId}-next`, startAt: item.nextSessionDate, capacity: 999, bookedCount: 0 }
+      ? { id: `${item.templateId}-next`, startAt: item.nextSessionDate, endAt: item.nextSessionDate, capacity: 999, bookedCount: 0 }
       : null,
     upcomingSessionsCount: item.nextSessionDate ? 1 : 0,
     totalBookedCount: 0,
   } as PublicTemplateCard;
 }
-
-// ─────────────────────────────────────────────
-// Carousel Card (compact Airbnb-style)
-// ─────────────────────────────────────────────
 
 function CarouselCard({ activity }: { activity: PublicTemplateCard }) {
   const { id, title, difficulty, price, coverImageUrl, rating, nextSession } = activity;
@@ -130,9 +196,7 @@ function CarouselCard({ activity }: { activity: PublicTemplateCard }) {
         <div className={styles.carouselCardFoot}>
           <div className={styles.carouselRating}>
             <span className={styles.carouselStar}>★</span>
-            <span className={styles.carouselRatingVal}>
-              {avg > 0 ? avg.toFixed(1) : "New"}
-            </span>
+            <span className={styles.carouselRatingVal}>{avg > 0 ? avg.toFixed(1) : "New"}</span>
             {cnt > 0 && <span className={styles.carouselRatingCnt}>({cnt})</span>}
           </div>
           {nextSession?.startAt && (
@@ -143,10 +207,6 @@ function CarouselCard({ activity }: { activity: PublicTemplateCard }) {
     </Link>
   );
 }
-
-// ─────────────────────────────────────────────
-// Suggestion Carousel (replaces SuggestionSection)
-// ─────────────────────────────────────────────
 
 const SCROLL_AMT = 228;
 
@@ -199,12 +259,14 @@ function SuggestionCarousel({
     scrollX.current = trackRef.current?.scrollLeft ?? 0;
     if (trackRef.current) trackRef.current.style.cursor = "grabbing";
   }
+
   function onMouseMove(e: React.MouseEvent) {
     if (!isDragging.current || !trackRef.current) return;
     e.preventDefault();
     const x = e.pageX - trackRef.current.offsetLeft;
     trackRef.current.scrollLeft = scrollX.current - (x - startX.current);
   }
+
   function onMouseUp() {
     isDragging.current = false;
     if (trackRef.current) trackRef.current.style.cursor = "grab";
@@ -226,7 +288,9 @@ function SuggestionCarousel({
               type="button"
               aria-label="Scroll left"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6" /></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
             </button>
             <button
               className={styles.carouselNavBtn}
@@ -235,7 +299,9 @@ function SuggestionCarousel({
               type="button"
               aria-label="Scroll right"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </button>
           </div>
         </div>
@@ -273,10 +339,6 @@ function SuggestionCarousel({
     </section>
   );
 }
-
-// ─────────────────────────────────────────────
-// SVG Icons
-// ─────────────────────────────────────────────
 
 const IcoArrowLeft = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -404,9 +466,12 @@ const IcoClose = () => (
 
 const StarIcon = ({ state }: { state: "full" | "half" | "empty" }) => (
   <svg
-    width="13" height="13" viewBox="0 0 24 24"
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
     fill={state !== "empty" ? "#f5a623" : "none"}
-    stroke="#f5a623" strokeWidth="1.5"
+    stroke="#f5a623"
+    strokeWidth="1.5"
     style={{ opacity: state === "half" ? 0.55 : 1 }}
   >
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -437,22 +502,20 @@ function ConfettiBurst() {
         <div
           key={i}
           className={styles.confettiPiece}
-          style={{
-            "--angle": `${(i / pieces.length) * 360}deg`,
-            "--dist": `${40 + Math.random() * 50}px`,
-            "--color": colors[i % colors.length],
-            "--delay": `${Math.random() * 0.2}s`,
-            "--size": `${5 + Math.random() * 5}px`,
-          } as CSSProperties}
+          style={
+            {
+              "--angle": `${(i / pieces.length) * 360}deg`,
+              "--dist": `${40 + Math.random() * 50}px`,
+              "--color": colors[i % colors.length],
+              "--delay": `${Math.random() * 0.2}s`,
+              "--size": `${5 + Math.random() * 5}px`,
+            } as CSSProperties
+          }
         />
       ))}
     </div>
   );
 }
-
-// ─────────────────────────────────────────────
-// Review Modal
-// ─────────────────────────────────────────────
 
 type ReviewModalProps = {
   open: boolean;
@@ -465,7 +528,16 @@ type ReviewModalProps = {
   onSubmit: (payload: { rating: number; comment: string }) => Promise<void>;
 };
 
-function ReviewModal({ open, mode, submitting, initialRating, initialComment, error, onClose, onSubmit }: ReviewModalProps) {
+function ReviewModal({
+  open,
+  mode,
+  submitting,
+  initialRating,
+  initialComment,
+  error,
+  onClose,
+  onSubmit,
+}: ReviewModalProps) {
   const [rating, setRating] = useState(initialRating);
   const [comment, setComment] = useState(initialComment);
 
@@ -486,11 +558,27 @@ function ReviewModal({ open, mode, submitting, initialRating, initialComment, er
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: 16,
+      }}
       onClick={onClose}
     >
       <div
-        style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 20, boxShadow: "0 20px 50px rgba(0,0,0,0.18)", padding: 24 }}
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          background: "#fff",
+          borderRadius: 20,
+          boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
+          padding: 24,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#1a1a1a" }}>
@@ -505,31 +593,79 @@ function ReviewModal({ open, mode, submitting, initialRating, initialComment, er
               const value = i + 1;
               return (
                 <button
-                  key={value} type="button"
+                  key={value}
+                  type="button"
                   onClick={() => !submitting && setRating(value)}
-                  style={{ fontSize: 30, lineHeight: 1, background: "transparent", border: "none", cursor: submitting ? "default" : "pointer", color: value <= rating ? "#f5a623" : "#d8cfc8", padding: 0 }}
+                  style={{
+                    fontSize: 30,
+                    lineHeight: 1,
+                    background: "transparent",
+                    border: "none",
+                    cursor: submitting ? "default" : "pointer",
+                    color: value <= rating ? "#f5a623" : "#d8cfc8",
+                    padding: 0,
+                  }}
                   aria-label={`Rate ${value} star${value > 1 ? "s" : ""}`}
-                >★</button>
+                >
+                  ★
+                </button>
               );
             })}
           </div>
           <textarea
-            value={comment} onChange={(e) => setComment(e.target.value)}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
             placeholder="Tell people what made this activity special..."
-            style={{ width: "100%", minHeight: 120, resize: "vertical", borderRadius: 12, border: "1px solid #ddd2c8", padding: 12, fontSize: 14, outline: "none", color: "#1a1a1a", background: "#fffdfb", boxSizing: "border-box" }}
-            disabled={submitting} maxLength={1000}
+            style={{
+              width: "100%",
+              minHeight: 120,
+              resize: "vertical",
+              borderRadius: 12,
+              border: "1px solid #ddd2c8",
+              padding: 12,
+              fontSize: 14,
+              outline: "none",
+              color: "#1a1a1a",
+              background: "#fffdfb",
+              boxSizing: "border-box",
+            }}
+            disabled={submitting}
+            maxLength={1000}
           />
           {error && <p style={{ marginTop: 10, color: "#b42318", fontWeight: 600, fontSize: 13 }}>{error}</p>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
-            <button type="button" onClick={onClose}
-              style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #d8cfc8", background: "#fff", fontWeight: 700, cursor: submitting ? "default" : "pointer", fontSize: 13 }}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "9px 14px",
+                borderRadius: 10,
+                border: "1px solid #d8cfc8",
+                background: "#fff",
+                fontWeight: 700,
+                cursor: submitting ? "default" : "pointer",
+                fontSize: 13,
+              }}
               disabled={submitting}
-            >Cancel</button>
-            <button type="submit"
-              style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#1a4d2e", color: "#fff", fontWeight: 700, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1, fontSize: 13 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: "9px 14px",
+                borderRadius: 10,
+                border: "none",
+                background: "#1a4d2e",
+                color: "#fff",
+                fontWeight: 700,
+                cursor: submitting ? "default" : "pointer",
+                opacity: submitting ? 0.7 : 1,
+                fontSize: 13,
+              }}
               disabled={submitting || !rating || !comment.trim()}
             >
-              {submitting ? (mode === "edit" ? "Saving..." : "Posting...") : (mode === "edit" ? "Save changes" : "Post review")}
+              {submitting ? (mode === "edit" ? "Saving..." : "Posting...") : mode === "edit" ? "Save changes" : "Post review"}
             </button>
           </div>
         </form>
@@ -538,17 +674,15 @@ function ReviewModal({ open, mode, submitting, initialRating, initialComment, er
   );
 }
 
-// ─────────────────────────────────────────────
-// Participants Modal
-// ─────────────────────────────────────────────
-
 function ParticipantsModal({ preview, onClose }: { preview: ParticipantsPreviewResponse; onClose: () => void }) {
   return (
     <div className={styles.participantsModal} onClick={onClose}>
       <div className={styles.participantsModalCard} onClick={(e) => e.stopPropagation()}>
         <div className={styles.participantsModalHeader}>
           <h3>Who's joining</h3>
-          <button className={styles.modalCloseBtn} onClick={onClose} type="button"><IcoClose /></button>
+          <button className={styles.modalCloseBtn} onClick={onClose} type="button">
+            <IcoClose />
+          </button>
         </div>
         {preview.participants.map((p) => (
           <div key={p.userId} className={styles.participantRow}>
@@ -567,10 +701,6 @@ function ParticipantsModal({ preview, onClose }: { preview: ParticipantsPreviewR
     </div>
   );
 }
-
-// ─────────────────────────────────────────────
-// Main Page
-// ─────────────────────────────────────────────
 
 export default function ActivityDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -600,6 +730,9 @@ export default function ActivityDetailsPage() {
   const [recommendedActivities, setRecommendedActivities] = useState<RecommendationItem[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
+  const [weather, setWeather] = useState<SessionWeather | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -626,7 +759,10 @@ export default function ActivityDetailsPage() {
   const guide = tplAny?.guide ?? null;
 
   const loadAll = useCallback(async () => {
-    if (!id) { setState("notfound"); return; }
+    if (!id) {
+      setState("notfound");
+      return;
+    }
     setState("loading");
     try {
       const [tpl, sess] = await Promise.all([getPublicTemplateById(id), listPublicTemplateSessions(id)]);
@@ -642,14 +778,21 @@ export default function ActivityDetailsPage() {
   }, [id]);
 
   const loadMyReview = useCallback(async () => {
-    if (!id || !user) { setMyReview(null); return; }
+    if (!id || !user) {
+      setMyReview(null);
+      return;
+    }
     try {
       const data = await ReviewApi.getMyReviewForTemplate(id);
       setMyReview(data);
-    } catch { setMyReview(null); }
+    } catch {
+      setMyReview(null);
+    }
   }, [id, user]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
     if (!id) return;
@@ -661,19 +804,27 @@ export default function ActivityDetailsPage() {
         setLoadingSimilar(true);
         const similar = await getSimilarActivities(currentTemplateId, 8);
         if (!cancelled) setSimilarActivities((similar ?? []).filter((item) => item.templateId !== currentTemplateId));
-      } catch { if (!cancelled) setSimilarActivities([]); }
-      finally { if (!cancelled) setLoadingSimilar(false); }
+      } catch {
+        if (!cancelled) setSimilarActivities([]);
+      } finally {
+        if (!cancelled) setLoadingSimilar(false);
+      }
 
       try {
         setLoadingRecommended(true);
         const recommendations = await getMyRecommendations(8);
         if (!cancelled) setRecommendedActivities((recommendations ?? []).filter((item) => item.templateId !== currentTemplateId));
-      } catch { if (!cancelled) setRecommendedActivities([]); }
-      finally { if (!cancelled) setLoadingRecommended(false); }
+      } catch {
+        if (!cancelled) setRecommendedActivities([]);
+      } finally {
+        if (!cancelled) setLoadingRecommended(false);
+      }
     }
 
     loadSuggestions();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -681,27 +832,107 @@ export default function ActivityDetailsPage() {
   }, [authLoading, loadMyReview]);
 
   useEffect(() => {
-    if (!selectedSessionId) { setParticipantsPreview(null); return; }
+    if (!selectedSessionId) {
+      setParticipantsPreview(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setParticipantsLoading(true);
         const data = await getParticipantsPreview(selectedSessionId);
         if (!cancelled) setParticipantsPreview(data);
-      } catch { if (!cancelled) setParticipantsPreview(null); }
-      finally { if (!cancelled) setParticipantsLoading(false); }
+      } catch {
+        if (!cancelled) setParticipantsPreview(null);
+      } finally {
+        if (!cancelled) setParticipantsLoading(false);
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSessionId]);
 
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
-  const spotsLeft = useMemo(() => selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null, [selectedSession]);
+  const spotsLeft = useMemo(() => (selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null), [selectedSession]);
 
   useEffect(() => {
     if (spotsLeft == null || spotsLeft <= 0) return;
     if (people > spotsLeft) setPeople(spotsLeft);
     if (people <= 0) setPeople(1);
   }, [spotsLeft, selectedSessionId, people]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWeather() {
+      if (!selectedSession || latitude == null || longitude == null) {
+        setWeather(null);
+        setWeatherError(null);
+        setWeatherLoading(false);
+        return;
+      }
+
+      const startDay = toDateOnlyLocal(selectedSession.startAt);
+      const endDay = toDateOnlyLocal(selectedSession.endAt || selectedSession.startAt);
+
+      if (!startDay || !endDay) {
+        setWeather(null);
+        setWeatherError("Weather unavailable");
+        setWeatherLoading(false);
+        return;
+      }
+
+      try {
+        setWeatherLoading(true);
+        setWeatherError(null);
+
+        const forecast = await getDailyForecast(latitude, longitude, 16);
+        if (cancelled) return;
+
+        const daily = forecast?.daily;
+        const wantedDates = listDateRangeLocal(startDay, endDay);
+
+        const matchedDays: SessionWeatherDay[] = wantedDates
+          .map((date) => {
+            const idx = daily?.time?.findIndex((t) => t === date) ?? -1;
+            if (idx < 0) return null;
+            return {
+              date,
+              weatherCode: Number(daily.weathercode[idx] ?? 0),
+              tempMax: Number(daily.temperature_2m_max[idx] ?? 0),
+              tempMin: Number(daily.temperature_2m_min[idx] ?? 0),
+              precipitationMax: Number(daily.precipitation_probability_max[idx] ?? 0),
+              windMax: Number(daily.windspeed_10m_max[idx] ?? 0),
+            };
+          })
+          .filter((item): item is SessionWeatherDay => item !== null);
+
+        if (matchedDays.length === 0) {
+          setWeather(null);
+          setWeatherError("Forecast not available yet");
+          return;
+        }
+
+        setWeather({
+          mode: matchedDays.length === 1 ? "single" : "range",
+          days: matchedDays,
+        });
+      } catch {
+        if (!cancelled) {
+          setWeather(null);
+          setWeatherError("Could not load weather");
+        }
+      } finally {
+        if (!cancelled) setWeatherLoading(false);
+      }
+    }
+
+    loadWeather();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSession, latitude, longitude]);
 
   const allImages = useMemo(() => {
     if (!template) return [];
@@ -710,10 +941,7 @@ export default function ActivityDetailsPage() {
     return [];
   }, [template, templateImages, coverImageUrl, templateTitle]);
 
-  const guideOwnerId = useMemo(
-    () => ((selectedSession as any)?.guideId ?? tplAny?.guideId ?? guide?.id ?? null) as string | null,
-    [selectedSession, tplAny, guide]
-  );
+  const guideOwnerId = useMemo(() => ((selectedSession as any)?.guideId ?? tplAny?.guideId ?? guide?.id ?? null) as string | null, [selectedSession, tplAny, guide]);
   const isGuideOwner = useMemo(() => !!(user && guideOwnerId && user.id === guideOwnerId), [user, guideOwnerId]);
 
   const cutoffMs = useMemo(() => {
@@ -740,7 +968,11 @@ export default function ActivityDetailsPage() {
   }, [sessions]);
 
   const canWriteOrEditReview = !!user && !isGuideOwner && !!template;
-  const openReviewModal = useCallback(() => { setReviewError(null); setReviewModalOpen(true); }, []);
+
+  const openReviewModal = useCallback(() => {
+    setReviewError(null);
+    setReviewModalOpen(true);
+  }, []);
 
   async function onBook() {
     if (!canBook || !selectedSessionId || !id) return;
@@ -786,8 +1018,6 @@ export default function ActivityDetailsPage() {
       setReviewSubmitting(false);
     }
   }
-
-  // ── Loading / Error states ──
 
   if (state === "loading") {
     return (
@@ -835,7 +1065,12 @@ export default function ActivityDetailsPage() {
         initialRating={myReview?.rating ?? 0}
         initialComment={myReview?.comment ?? ""}
         error={reviewError}
-        onClose={() => { if (!reviewSubmitting) { setReviewModalOpen(false); setReviewError(null); } }}
+        onClose={() => {
+          if (!reviewSubmitting) {
+            setReviewModalOpen(false);
+            setReviewError(null);
+          }
+        }}
         onSubmit={handleReviewSubmit}
       />
 
@@ -846,16 +1081,39 @@ export default function ActivityDetailsPage() {
       {galleryOpen && allImages.length > 0 && (
         <div className={styles.lightboxOverlay} onClick={() => setGalleryOpen(false)}>
           <button className={styles.lightboxClose} onClick={() => setGalleryOpen(false)} type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
-          <button className={`${styles.lightboxNav} ${styles.lbPrev}`} onClick={(e) => { e.stopPropagation(); setActiveImageIdx((i) => (i - 1 + allImages.length) % allImages.length); }} type="button">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
+          <button
+            className={`${styles.lightboxNav} ${styles.lbPrev}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveImageIdx((i) => (i - 1 + allImages.length) % allImages.length);
+            }}
+            type="button"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </button>
           <img src={allImages[activeImageIdx]?.url} alt={allImages[activeImageIdx]?.alt ?? ""} className={styles.lightboxImg} onClick={(e) => e.stopPropagation()} />
-          <button className={`${styles.lightboxNav} ${styles.lbNext}`} onClick={(e) => { e.stopPropagation(); setActiveImageIdx((i) => (i + 1) % allImages.length); }} type="button">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
+          <button
+            className={`${styles.lightboxNav} ${styles.lbNext}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveImageIdx((i) => (i + 1) % allImages.length);
+            }}
+            type="button"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </button>
-          <div className={styles.lightboxCounter}>{activeImageIdx + 1} / {allImages.length}</div>
+          <div className={styles.lightboxCounter}>
+            {activeImageIdx + 1} / {allImages.length}
+          </div>
         </div>
       )}
 
@@ -869,15 +1127,15 @@ export default function ActivityDetailsPage() {
         <div className={styles.pageWrapper}>
           <div className={styles.contentGrid}>
             <div className={styles.leftCol}>
-
-              {/* Title block */}
               <div className={styles.titleBlock}>
                 <div className={styles.badgeRow}>
                   <span className={`${styles.diffBadge} ${styles[`diff${safeDiff}`]}`}>
                     <IcoMountain /> {DIFF_LABELS[safeDiff] ?? safeDiff}
                   </span>
                   {templateTags.slice(0, 3).map((t: string) => (
-                    <span key={t} className={styles.tagChip}><IcoTag /> {t}</span>
+                    <span key={t} className={styles.tagChip}>
+                      <IcoTag /> {t}
+                    </span>
                   ))}
                 </div>
                 <h1 className={styles.activityTitle}>{templateTitle}</h1>
@@ -885,9 +1143,13 @@ export default function ActivityDetailsPage() {
                   <StarRating average={ratingAverage} count={ratingCount} />
                   <span className={styles.dot}>·</span>
                   {totalBooked > 0 ? (
-                    <span className={styles.bookedPill}><IcoTrend /> {totalBooked} booked</span>
+                    <span className={styles.bookedPill}>
+                      <IcoTrend /> {totalBooked} booked
+                    </span>
                   ) : (
-                    <span className={styles.firstPill}><IcoSparkle /> Be the first to book</span>
+                    <span className={styles.firstPill}>
+                      <IcoSparkle /> Be the first to book
+                    </span>
                   )}
                   {upcomingSessionsCount > 0 && (
                     <>
@@ -898,42 +1160,71 @@ export default function ActivityDetailsPage() {
                 </div>
               </div>
 
-              {/* Hero gallery */}
               {allImages.length > 1 ? (
                 <div className={styles.heroGallery}>
-                  <div className={styles.heroMain} onClick={() => { setActiveImageIdx(0); setGalleryOpen(true); }}>
+                  <div
+                    className={styles.heroMain}
+                    onClick={() => {
+                      setActiveImageIdx(0);
+                      setGalleryOpen(true);
+                    }}
+                  >
                     <img src={allImages[0]?.url} alt={allImages[0]?.alt ?? templateTitle} />
                   </div>
                   <div className={styles.heroThumbsCol}>
                     {allImages.slice(1, 3).map((img: any, idx: number) => (
-                      <div key={img.url} className={styles.heroThumb} onClick={() => { setActiveImageIdx(idx + 1); setGalleryOpen(true); }}>
+                      <div
+                        key={img.url}
+                        className={styles.heroThumb}
+                        onClick={() => {
+                          setActiveImageIdx(idx + 1);
+                          setGalleryOpen(true);
+                        }}
+                      >
                         <img src={img.url} alt={img.alt ?? ""} />
                         {idx === 1 && allImages.length > 3 && <div className={styles.moreOverlay}>+{allImages.length - 3}</div>}
                       </div>
                     ))}
                   </div>
-                  <button className={styles.viewAllBtn} onClick={() => { setActiveImageIdx(0); setGalleryOpen(true); }} type="button">
+                  <button
+                    className={styles.viewAllBtn}
+                    onClick={() => {
+                      setActiveImageIdx(0);
+                      setGalleryOpen(true);
+                    }}
+                    type="button"
+                  >
                     <IcoPhoto /> Show all {allImages.length} photos
                   </button>
                 </div>
               ) : allImages.length === 1 ? (
-                <div className={styles.heroSingle} onClick={() => { setActiveImageIdx(0); setGalleryOpen(true); }}>
+                <div
+                  className={styles.heroSingle}
+                  onClick={() => {
+                    setActiveImageIdx(0);
+                    setGalleryOpen(true);
+                  }}
+                >
                   <img src={allImages[0]?.url} alt={allImages[0]?.alt ?? templateTitle} />
                 </div>
               ) : null}
 
               <div className={styles.divider} />
 
-              {/* Available dates */}
               <section className={styles.datesSection}>
                 <div className={styles.datesSectionHead}>
                   <h2 className={styles.sectionTitle}>Available dates</h2>
                   {sessions.length > 0 && (
-                    <span className={styles.datesCountBadge}>{sessions.length} date{sessions.length !== 1 ? "s" : ""}</span>
+                    <span className={styles.datesCountBadge}>
+                      {sessions.length} date{sessions.length !== 1 ? "s" : ""}
+                    </span>
                   )}
                 </div>
                 {sessions.length === 0 ? (
-                  <div className={styles.noDates}><IcoCalendar /><span>No upcoming dates. Check back soon.</span></div>
+                  <div className={styles.noDates}>
+                    <IcoCalendar />
+                    <span>No upcoming dates. Check back soon.</span>
+                  </div>
                 ) : (
                   <div className={styles.sessionGrid}>
                     {sessions.map((s) => {
@@ -942,21 +1233,38 @@ export default function ActivityDetailsPage() {
                       const soldOut = left === 0;
                       const scarce = !soldOut && left <= 3;
                       const popular = s.id === mostBookedSessionId && s.bookedCount > 0;
+
                       return (
                         <button
-                          key={s.id} type="button" disabled={soldOut}
+                          key={s.id}
+                          type="button"
+                          disabled={soldOut}
                           onClick={() => !soldOut && onSessionSelect(s.id)}
                           className={`${styles.sessionCard} ${active ? styles.sessionActive : ""} ${soldOut ? styles.sessionSoldOut : ""}`}
                         >
-                          {popular && !soldOut && <span className={styles.popularBadge}><IcoFire /> Popular</span>}
-                          {active && <span className={styles.sessionCheckmark}><IcoCheck /></span>}
+                          {popular && !soldOut && (
+                            <span className={styles.popularBadge}>
+                              <IcoFire /> Popular
+                            </span>
+                          )}
+                          {active && (
+                            <span className={styles.sessionCheckmark}>
+                              <IcoCheck />
+                            </span>
+                          )}
                           {scarce && !soldOut && <span className={styles.scarcePulse} />}
-                          <div className={styles.sessionDateLine}>{formatDateShort(s.startAt)}</div>
-                          <div className={styles.sessionTimeLine}>{formatTime(s.startAt)}</div>
+                          <div className={styles.sessionDateLine}>{formatSessionDateLabel(s.startAt, s.endAt)}</div>
+                          <div className={styles.sessionTimeLine}>{formatSessionTimeLabel(s.startAt, s.endAt)}</div>
                           <div className={styles.sessionSpotsLine}>
-                            {soldOut ? <span className={styles.tagSoldOut}>Sold out</span>
-                              : scarce ? <span className={styles.tagScarce}>{left} spot{left > 1 ? "s" : ""} left</span>
-                              : <span className={styles.tagOk}>{left}/{s.capacity} spots</span>}
+                            {soldOut ? (
+                              <span className={styles.tagSoldOut}>Sold out</span>
+                            ) : scarce ? (
+                              <span className={styles.tagScarce}>{left} spot{left > 1 ? "s" : ""} left</span>
+                            ) : (
+                              <span className={styles.tagOk}>
+                                {left}/{s.capacity} spots
+                              </span>
+                            )}
                           </div>
                         </button>
                       );
@@ -967,7 +1275,6 @@ export default function ActivityDetailsPage() {
 
               <div className={styles.divider} />
 
-              {/* Guide card */}
               {guide && (
                 <div className={styles.guideCard}>
                   <div className={styles.guideAvatarWrap}>
@@ -976,18 +1283,31 @@ export default function ActivityDetailsPage() {
                     ) : (
                       <div className={styles.guidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
                     )}
-                    {guide.verifiedBadge && <div className={styles.guideBadgeRing}><IcoShield /></div>}
+                    {guide.verifiedBadge && (
+                      <div className={styles.guideBadgeRing}>
+                        <IcoShield />
+                      </div>
+                    )}
                   </div>
                   <div className={styles.guideInfo}>
                     <div className={styles.guideLabel}>Your guide</div>
                     <div className={styles.guideName}>
                       {guide.username}
-                      {guide.verifiedBadge && <span className={styles.verifiedChip}><IcoCheck /> Verified</span>}
+                      {guide.verifiedBadge && (
+                        <span className={styles.verifiedChip}>
+                          <IcoCheck /> Verified
+                        </span>
+                      )}
                     </div>
                     <div className={styles.guideMeta}>
                       {guide.experienceYears != null && <span>{guide.experienceYears} yrs experience</span>}
                       {(guide.rating?.count ?? 0) > 0 && (
-                        <><span className={styles.dot}>·</span><span>{Number(guide.rating.average).toFixed(1)} rating ({guide.rating.count})</span></>
+                        <>
+                          <span className={styles.dot}>·</span>
+                          <span>
+                            {Number(guide.rating.average).toFixed(1)} rating ({guide.rating.count})
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -996,44 +1316,63 @@ export default function ActivityDetailsPage() {
 
               <div className={styles.divider} />
 
-              {/* About */}
               <section className={styles.section}>
                 <h2 className={styles.sectionTitle}>About this adventure</h2>
                 <p className={styles.description}>{templateDescription}</p>
               </section>
 
-              {/* Quick info */}
               <div className={styles.quickGrid}>
                 <div className={styles.quickItem}>
-                  <div className={styles.quickIcon}><IcoMountain /></div>
-                  <div><div className={styles.quickLabel}>Difficulty</div><div className={styles.quickVal}>{DIFF_LABELS[safeDiff] ?? safeDiff}</div></div>
+                  <div className={styles.quickIcon}>
+                    <IcoMountain />
+                  </div>
+                  <div>
+                    <div className={styles.quickLabel}>Difficulty</div>
+                    <div className={styles.quickVal}>{DIFF_LABELS[safeDiff] ?? safeDiff}</div>
+                  </div>
                 </div>
                 <div className={styles.quickItem}>
-                  <div className={styles.quickIcon}><IcoDollar /></div>
-                  <div><div className={styles.quickLabel}>Price</div><div className={styles.quickVal}>{formatPrice(templatePrice)}</div></div>
+                  <div className={styles.quickIcon}>
+                    <IcoDollar />
+                  </div>
+                  <div>
+                    <div className={styles.quickLabel}>Price</div>
+                    <div className={styles.quickVal}>{formatPrice(templatePrice)}</div>
+                  </div>
                 </div>
                 {selectedSession && (
                   <div className={styles.quickItem}>
-                    <div className={styles.quickIcon}><IcoUsers /></div>
-                    <div><div className={styles.quickLabel}>Spots left</div><div className={styles.quickVal}>{spotsLeft}/{selectedSession.capacity}</div></div>
+                    <div className={styles.quickIcon}>
+                      <IcoClock />
+                    </div>
+                    <div>
+                      <div className={styles.quickLabel}>Duration</div>
+                      <div className={styles.quickVal}>{formatDurationLabel(selectedSession.startAt, selectedSession.endAt)}</div>
+                    </div>
                   </div>
                 )}
                 {addressDisplayName && (
                   <div className={styles.quickItem}>
-                    <div className={styles.quickIcon}><IcoMapPin /></div>
-                    <div><div className={styles.quickLabel}>Location</div><div className={styles.quickVal}>{governorate ?? addressDisplayName}</div></div>
+                    <div className={styles.quickIcon}>
+                      <IcoMapPin />
+                    </div>
+                    <div>
+                      <div className={styles.quickLabel}>Location</div>
+                      <div className={styles.quickVal}>{governorate ?? addressDisplayName}</div>
+                    </div>
                   </div>
                 )}
               </div>
 
               <div className={styles.divider} />
 
-              {/* Meeting point */}
               {addressDisplayName && (
                 <section className={styles.section}>
                   <h2 className={styles.sectionTitle}>Meeting point</h2>
                   <div className={styles.locationCard}>
-                    <div className={styles.locationIconBox}><IcoMapPin /></div>
+                    <div className={styles.locationIconBox}>
+                      <IcoMapPin />
+                    </div>
                     <div>
                       <div className={styles.locationName}>{addressDisplayName}</div>
                       {governorate && <div className={styles.locationSub}>{governorate}</div>}
@@ -1049,7 +1388,6 @@ export default function ActivityDetailsPage() {
 
               <div className={styles.divider} />
 
-              {/* Reviews */}
               <section className={styles.section} id="reviews-section">
                 {!user && <p className={styles.noCharge} style={{ marginBottom: 14 }}>Login to write a review.</p>}
                 {user && isGuideOwner && <p className={styles.noCharge} style={{ marginBottom: 14 }}>Guides cannot review their own activity.</p>}
@@ -1066,7 +1404,6 @@ export default function ActivityDetailsPage() {
 
               <div className={styles.divider} />
 
-              {/* Similar activities carousel */}
               <SuggestionCarousel
                 title="Similar experiences"
                 items={similarActivities}
@@ -1076,7 +1413,6 @@ export default function ActivityDetailsPage() {
 
               <div className={styles.divider} />
 
-              {/* Recommended carousel */}
               <SuggestionCarousel
                 title="You may also like"
                 items={recommendedActivities}
@@ -1087,19 +1423,20 @@ export default function ActivityDetailsPage() {
               <div style={{ height: 48 }} />
             </div>
 
-            {/* Sidebar */}
             <aside className={styles.sidebar}>
               <div className={styles.sidebarCard}>
                 {bookingStep === "success" && bookingSuccessId ? (
                   <div className={styles.successState}>
                     <ConfettiBurst />
                     <div className={styles.successIcon}>
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                     </div>
                     <h3 className={styles.successTitle}>You're booked!</h3>
                     <p className={styles.successSub}>
                       {people} {people === 1 ? "spot" : "spots"} confirmed for{" "}
-                      <strong>{selectedSession ? formatDateShort(selectedSession.startAt) : "your adventure"}</strong>
+                      <strong>{selectedSession ? formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt) : "your adventure"}</strong>
                     </p>
                     {templatePrice > 0 && (
                       <div className={styles.successPriceLine}>
@@ -1111,7 +1448,14 @@ export default function ActivityDetailsPage() {
                     <Link to="/my-bookings" className={styles.successBtn}>
                       <IcoBookmark /> View my bookings <IcoArrowRight />
                     </Link>
-                    <button className={styles.successSecondary} type="button" onClick={() => { setBookingStep("idle"); setBookingSuccessId(null); }}>
+                    <button
+                      className={styles.successSecondary}
+                      type="button"
+                      onClick={() => {
+                        setBookingStep("idle");
+                        setBookingSuccessId(null);
+                      }}
+                    >
                       Book another date
                     </button>
                   </div>
@@ -1128,44 +1472,114 @@ export default function ActivityDetailsPage() {
                     {isWarnCutoff && cutoffMs !== null && (
                       <div className={styles.cutoffWarning}>
                         <IcoClock />
-                        <span>Booking closes in <strong>{formatCountdown(cutoffMs)}</strong> — book soon!</span>
+                        <span>
+                          Booking closes in <strong>{formatCountdown(cutoffMs)}</strong> — book soon!
+                        </span>
                       </div>
                     )}
 
                     <div className={styles.sidebarFields}>
                       <div className={styles.sidebarField}>
-                        <span className={styles.sidebarFieldLabel}><IcoCalendar /> Date</span>
-                        <span className={styles.sidebarFieldVal}>{selectedSession ? formatDateShort(selectedSession.startAt) : "—"}</span>
-                      </div>
-                      {selectedSession && (
-                        <div className={styles.sidebarField}>
-                          <span className={styles.sidebarFieldLabel}><IcoClock /> Time</span>
-                          <span className={styles.sidebarFieldVal}>{formatTime(selectedSession.startAt)}</span>
-                        </div>
-                      )}
-                      <div className={styles.sidebarField}>
-                        <span className={styles.sidebarFieldLabel}><IcoUsers /> Availability</span>
+                        <span className={styles.sidebarFieldLabel}>
+                          <IcoCalendar /> Dates
+                        </span>
                         <span className={styles.sidebarFieldVal}>
-                          {spotsLeft == null ? "—"
-                            : spotsLeft === 0 ? <span className={styles.tagSoldOut}>Sold out</span>
-                            : spotsLeft <= 3 ? <span className={styles.tagScarce}>{spotsLeft} spots left</span>
-                            : `${spotsLeft} spots`}
+                          {selectedSession ? formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt) : "—"}
                         </span>
                       </div>
+
+                      {selectedSession && (
+                        <div className={styles.sidebarField}>
+                          <span className={styles.sidebarFieldLabel}>
+                            <IcoClock /> Time
+                          </span>
+                          <span className={styles.sidebarFieldVal}>{formatSessionTimeLabel(selectedSession.startAt, selectedSession.endAt)}</span>
+                        </div>
+                      )}
+
+                      {selectedSession && (
+                        <div className={styles.sidebarField}>
+                          <span className={styles.sidebarFieldLabel}>
+                            <IcoClock /> Duration
+                          </span>
+                          <span className={styles.sidebarFieldVal}>{formatDurationLabel(selectedSession.startAt, selectedSession.endAt)}</span>
+                        </div>
+                      )}
+
                       <div className={styles.sidebarField}>
-                        <span className={styles.sidebarFieldLabel}><IcoUsers /> Guests</span>
+                        <span className={styles.sidebarFieldLabel}>
+                          <IcoUsers /> Availability
+                        </span>
+                        <span className={styles.sidebarFieldVal}>
+                          {spotsLeft == null ? (
+                            "—"
+                          ) : spotsLeft === 0 ? (
+                            <span className={styles.tagSoldOut}>Sold out</span>
+                          ) : spotsLeft <= 3 ? (
+                            <span className={styles.tagScarce}>{spotsLeft} spots left</span>
+                          ) : (
+                            `${spotsLeft} spots`
+                          )}
+                        </span>
+                      </div>
+
+                      <div className={styles.sidebarField}>
+                        <span className={styles.sidebarFieldLabel}>
+                          <IcoUsers /> Guests
+                        </span>
                         <div className={styles.peopleStepper}>
-                          <button className={styles.stepperBtn} type="button" onClick={() => setPeople((p) => Math.max(1, p - 1))} disabled={people <= 1 || !selectedSession || (spotsLeft ?? 0) <= 0}>−</button>
+                          <button
+                            className={styles.stepperBtn}
+                            type="button"
+                            onClick={() => setPeople((p) => Math.max(1, p - 1))}
+                            disabled={people <= 1 || !selectedSession || (spotsLeft ?? 0) <= 0}
+                          >
+                            −
+                          </button>
                           <span className={styles.stepperVal}>{people}</span>
-                          <button className={styles.stepperBtn} type="button" onClick={() => setPeople((p) => Math.min(Math.min(10, spotsLeft ?? 10), p + 1))} disabled={people >= Math.min(10, spotsLeft ?? 10) || !selectedSession || (spotsLeft ?? 0) <= 0}>+</button>
+                          <button
+                            className={styles.stepperBtn}
+                            type="button"
+                            onClick={() => setPeople((p) => Math.min(Math.min(10, spotsLeft ?? 10), p + 1))}
+                            disabled={people >= Math.min(10, spotsLeft ?? 10) || !selectedSession || (spotsLeft ?? 0) <= 0}
+                          >
+                            +
+                          </button>
                         </div>
                       </div>
                     </div>
 
+                    {!selectedSession ? (
+                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
+                        <div className={styles.weatherLoading}>Select a session to see the forecast.</div>
+                      </div>
+                    ) : weatherLoading ? (
+                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
+                        <div className={styles.weatherLoading}>
+                          <div className={styles.spinner} style={{ width: 16, height: 16 }} />
+                          <span>Loading forecast...</span>
+                        </div>
+                      </div>
+                    ) : weather ? (
+                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
+                        <WeatherWidget
+                          weather={weather}
+                          location={addressDisplayName ?? governorate ?? undefined}
+                          activityDateLabel={formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt)}
+                        />
+                      </div>
+                    ) : (
+                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
+                        <div className={styles.weatherLoading}>{weatherError ?? "Forecast not available yet."}</div>
+                      </div>
+                    )}
+
                     {templatePrice > 0 && selectedSession && (spotsLeft ?? 0) > 0 && (
                       <div className={styles.priceSummary}>
                         <div className={styles.priceSummaryRow}>
-                          <span>{templatePrice} TND × {people} {people === 1 ? "person" : "people"}</span>
+                          <span>
+                            {templatePrice} TND × {people} {people === 1 ? "person" : "people"}
+                          </span>
                           <span>{templatePrice * people} TND</span>
                         </div>
                         <div className={styles.priceSummaryTotal}>
@@ -1177,9 +1591,13 @@ export default function ActivityDetailsPage() {
 
                     <div className={styles.sidebarBookedRow}>
                       {totalBooked > 0 ? (
-                        <span className={styles.bookedPill}><IcoTrend /> {totalBooked} people booked this</span>
+                        <span className={styles.bookedPill}>
+                          <IcoTrend /> {totalBooked} people booked this
+                        </span>
                       ) : (
-                        <span className={styles.firstPill}><IcoSparkle /> Be the first to book</span>
+                        <span className={styles.firstPill}>
+                          <IcoSparkle /> Be the first to book
+                        </span>
                       )}
                     </div>
 
@@ -1190,15 +1608,25 @@ export default function ActivityDetailsPage() {
                       onClick={onBook}
                     >
                       {bookingStep === "confirming" ? (
-                        <><div className={styles.bookBtnSpinner} /><span>Confirming...</span></>
+                        <>
+                          <div className={styles.bookBtnSpinner} />
+                          <span>Confirming...</span>
+                        </>
                       ) : (
-                        <span>Book This Adventure{templatePrice > 0 && selectedSession && (spotsLeft ?? 0) > 0 ? ` · ${totalPrice} TND` : ""}</span>
+                        <span>
+                          Book This Adventure
+                          {templatePrice > 0 && selectedSession && (spotsLeft ?? 0) > 0 ? ` · ${totalPrice} TND` : ""}
+                        </span>
                       )}
                     </button>
 
                     {!authLoading && !user && <p className={styles.noCharge}>Login to book</p>}
                     {user && isGuideOwner && <p className={styles.noCharge}>You can't book your own activity.</p>}
-                    {user && isWithinCutoff && <p className={styles.noCharge} style={{ color: "#c4360c" }}>⏰ Booking closed — starts within 5 hours.</p>}
+                    {user && isWithinCutoff && (
+                      <p className={styles.noCharge} style={{ color: "#c4360c" }}>
+                        ⏰ Booking closed — starts within 5 hours.
+                      </p>
+                    )}
                     {bookingError && <p className={styles.bookingError}>{bookingError}</p>}
                     {!bookingError && !isWithinCutoff && <p className={styles.noCharge}>You won't be charged yet</p>}
 
@@ -1217,17 +1645,21 @@ export default function ActivityDetailsPage() {
                                 {p.profileImageUrl ? <img src={p.profileImageUrl} alt={p.username} /> : <span>{p.username.charAt(0).toUpperCase()}</span>}
                               </div>
                             ))}
-                            {participantsPreview.totalConfirmed > 4 && (
-                              <div className={styles.moreAvatar}>+{participantsPreview.totalConfirmed - 4}</div>
-                            )}
+                            {participantsPreview.totalConfirmed > 4 && <div className={styles.moreAvatar}>+{participantsPreview.totalConfirmed - 4}</div>}
                           </div>
+
                           <div className={styles.whoJoiningText}>
                             <div className={styles.whoJoiningCount}>{participantsPreview.totalConfirmed} joined already</div>
                             {participantsPreview.seatsLeft != null && (
-                              <div className={styles.whoJoiningSeats}>{participantsPreview.seatsLeft} seat{participantsPreview.seatsLeft !== 1 ? "s" : ""} left</div>
+                              <div className={styles.whoJoiningSeats}>
+                                {participantsPreview.seatsLeft} seat{participantsPreview.seatsLeft !== 1 ? "s" : ""} left
+                              </div>
                             )}
                           </div>
-                          <button className={styles.viewAllBtn2} type="button" onClick={() => setParticipantsModalOpen(true)}>View all</button>
+
+                          <button className={styles.viewAllBtn2} type="button" onClick={() => setParticipantsModalOpen(true)}>
+                            View all
+                          </button>
                         </div>
                       )}
                     </div>

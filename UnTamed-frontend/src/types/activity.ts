@@ -126,6 +126,7 @@ export type ActivitySessionResponse = {
 export type PublicNextSession = {
   id: string;
   startAt: string;
+  endAt: string;
   capacity: number;
   bookedCount: number;
 };
@@ -133,9 +134,11 @@ export type PublicNextSession = {
 export type PublicSession = {
   id: string;
   startAt: string;
+  endAt: string;
   capacity: number;
   bookedCount: number;
 };
+
 
 export type TemplateWithAddress = ActivityTemplateResponse & {
   address?: AddressResponse | null;
