@@ -15,7 +15,7 @@
   align-items: stretch;
   background: #ffffff;
   border-radius: 50px;
-  border: 1px solid #e5e7eb;
+  border: none;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
   overflow: visible;
   max-width: 780px;

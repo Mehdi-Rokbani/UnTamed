@@ -19,6 +19,17 @@ import { semanticSearch } from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";
 
+const QUICK_SUGGESTIONS = [
+  "Hiking",
+  "Camping",
+  "Surfing",
+  "Climbing",
+  "Mountain Biking",
+  "Diving",
+  "Kayaking",
+  "Trekking",
+];
+
 export default function HomePage() {
   const { user } = useAuth();
 
@@ -39,6 +50,7 @@ export default function HomePage() {
 
   const [scrolled, setScrolled] = useState(false);
   const [showCompactSearch, setShowCompactSearch] = useState(false);
+  const [heroVisible, setHeroVisible] = useState(true);
   const resultsRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
 
@@ -50,6 +62,7 @@ export default function HomePage() {
 
       setScrolled(window.scrollY > 80);
       setShowCompactSearch(heroBottom < 80);
+      setHeroVisible(heroBottom > 0);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -253,6 +266,11 @@ export default function HomePage() {
     setSort("popular");
   };
 
+  const handleQuickSuggestion = (label: string) => {
+    setQueryInput(label);
+    scrollToResults();
+  };
+
   const scrollToResults = () => {
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -286,25 +304,38 @@ export default function HomePage() {
       </div>
 
       <main className={styles.home}>
-        <section ref={heroRef} className={styles.homeHero}>
-          <div className={styles.heroBackground} />
+        {/* ── COMPACT HERO ── */}
+        <section
+          ref={heroRef}
+          className={`${styles.homeHero} ${!heroVisible ? styles.homeHeroHidden : ""}`}
+        >
+          {/* Subtle decorative background blobs */}
+          <div className={styles.heroBlob1} aria-hidden="true" />
+          <div className={styles.heroBlob2} aria-hidden="true" />
+          <div className={styles.heroPattern} aria-hidden="true" />
 
           <div className={styles.heroContent}>
-            <div className={styles.heroBadge}>
-              <span>✦ AI-POWERED ADVENTURE SEARCH</span>
+            {/* Trust bar — top */}
+            <div className={styles.heroTrustBar}>
+              <span className={styles.trustItem}>
+                <span className={styles.trustDot} />
+                200+ experiences
+              </span>
+              <span className={styles.trustSep}>·</span>
+              <span className={styles.trustItem}>50+ expert guides</span>
+              <span className={styles.trustSep}>·</span>
+              <span className={styles.trustItem}>⭐ 4.8 avg rating</span>
             </div>
 
+            {/* Headline */}
             <h1 className={styles.homeTitle}>
-              Find your next <span className={styles.accent}>UnTamed</span> adventure
+              Find your next{" "}
+              <span className={styles.accent}>UnTamed</span>{" "}
+              adventure
             </h1>
 
-            <p className={styles.homeSubtitle}>
-              Browse curated outdoor experiences posted by expert guides.
-              <br />
-              Book, explore, and reconnect with nature.
-            </p>
-
-            <div className={styles.heroSearchStack}>
+            {/* Search card — the star */}
+            <div className={styles.searchCard}>
               <HeroSearchBar
                 queryInput={queryInput}
                 locationInput={locationInput}
@@ -317,87 +348,70 @@ export default function HomePage() {
                 onDateFromChange={setDateFrom}
                 onDateToChange={setDateTo}
               />
-
-              <ActiveFilterChips
-                addressInput={locationInput}
-                selectedAddressId={selectedAddressId}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                difficulty={difficulty}
-                categoryIds={categoryIds}
-                minPrice={minPrice}
-                maxPrice={maxPrice}
-                categories={categoryOptions}
-                onClearAddress={() => {
-                  setLocationInput("");
-                  setSelectedAddressId(null);
-                }}
-                onClearDateFrom={() => setDateFrom("")}
-                onClearDateTo={() => setDateTo("")}
-                onClearDifficulty={() => setDifficulty("All")}
-                onRemoveCategory={(id) =>
-                  setCategoryIds((prev) => prev.filter((x) => x !== id))
-                }
-                onClearMinPrice={() => setMinPrice("")}
-                onClearMaxPrice={() => setMaxPrice("")}
-                onClearAll={handleClearFilters}
-              />
-
-              {state === "done" && (
-                <div className={styles.statsBar}>
-                  <div className={styles.stat}>
-                    <span className={styles.statNumber}>{templates.length}</span>
-                    <span className={styles.statLabel}>Showing</span>
-                  </div>
-
-                  {hasActiveFilters && (
-                    <>
-                      <div className={styles.statDivider} />
-                      <div className={styles.stat}>
-                        <span className={styles.statIcon}>⚡</span>
-                        <span className={styles.statLabel}>Auto-updated</span>
-                      </div>
-                    </>
-                  )}
-
-                  {hasLocationFilter && (
-                    <>
-                      <div className={styles.statDivider} />
-                      <div className={styles.stat}>
-                        <span className={styles.statIcon}>📍</span>
-                        <span className={styles.statLabel}>Location applied</span>
-                      </div>
-                    </>
-                  )}
-
-                  {templates.length > 0 && (
-                    <>
-                      <div className={styles.statDivider} />
-                      <button
-                        type="button"
-                        className={styles.seeResultsBtn}
-                        onClick={scrollToResults}
-                      >
-                        See results ↓
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
 
-            <div className={styles.heroStats}>
-              {[
-                ["200+", "Experiences"],
-                ["50+", "Expert guides"],
-                ["4.8★", "Avg rating"],
-              ].map(([num, label]) => (
-                <div key={label} className={styles.heroStat}>
-                  <span className={styles.heroStatNum}>{num}</span>
-                  <span className={styles.heroStatLabel}>{label}</span>
-                </div>
+            {/* Quick-suggestion chips */}
+            <div className={styles.quickSuggestions}>
+              <span className={styles.quickLabel}>Popular:</span>
+              {QUICK_SUGGESTIONS.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={`${styles.chip} ${
+                    queryInput === label ? styles.chipActive : ""
+                  }`}
+                  onClick={() => handleQuickSuggestion(label)}
+                >
+                  {label}
+                </button>
               ))}
             </div>
+
+            {/* Live result pill — appears once search returns */}
+            {state === "done" && hasActiveFilters && (
+              <div className={styles.resultsPill}>
+                <span className={styles.resultsPillDot} />
+                <span>
+                  <strong>{templates.length}</strong>{" "}
+                  {templates.length === 1 ? "experience" : "experiences"} found
+                </span>
+                {templates.length > 0 && (
+                  <button
+                    type="button"
+                    className={styles.seeResultsBtn}
+                    onClick={scrollToResults}
+                  >
+                    See results ↓
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Active filter chips */}
+            <ActiveFilterChips
+              addressInput={locationInput}
+              selectedAddressId={selectedAddressId}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              difficulty={difficulty}
+              categoryIds={categoryIds}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              categories={categoryOptions}
+              onClearAddress={() => {
+                setLocationInput("");
+                setSelectedAddressId(null);
+              }}
+              onClearDateFrom={() => setDateFrom("")}
+              onClearDateTo={() => setDateTo("")}
+              onClearDifficulty={() => setDifficulty("All")}
+              onRemoveCategory={(id) =>
+                setCategoryIds((prev) => prev.filter((x) => x !== id))
+              }
+              onClearMinPrice={() => setMinPrice("")}
+              onClearMaxPrice={() => setMaxPrice("")}
+              onClearAll={handleClearFilters}
+            />
           </div>
         </section>
 

@@ -26,15 +26,10 @@
   width: 100%;
   min-height: 100vh;
   background: var(--cream);
-  /* No padding-top here — the hero section intentionally
-     underlaps the transparent header. The heroContent inside
-     adds its own top padding to clear the bar. */
 }
 
 /* ══════════════════════════════════════════
    HEADER WRAP
-   — The Header component is positioned fixed on its own.
-     This wrapper is just a mounting point; it adds nothing.
 ══════════════════════════════════════════ */
 .headerWrap {
   position: fixed;
@@ -43,94 +38,140 @@
   right: 0;
   z-index: 1000;
 }
-.headerWrapHero    {}   /* transparent state — no overrides needed */
-.headerWrapScrolled {}  /* scrolled state — Header handles its own styles */
+.headerWrapHero    {}
+.headerWrapScrolled {}
 
 /* ══════════════════════════════════════════
-   HERO SECTION
-   — Full-bleed behind the transparent header.
-     padding-top = header height + desired breathing room.
+   COMPACT HERO — 40–55 vh, no full-screen waste
 ══════════════════════════════════════════ */
 .homeHero {
   position: relative;
-  /* top padding = header bar + 60px breathing room
-     bottom padding stays as designed */
-  padding: calc(var(--header-h) + 60px) 24px 80px;
-  background: linear-gradient(165deg, var(--forest-deep) 0%, var(--forest-mid) 100%);
+  padding: calc(var(--header-h, 64px) + 28px) 24px 40px;
+  background: linear-gradient(150deg, var(--forest-deep) 0%, #1e5535 55%, #27643f 100%);
   overflow: hidden;
   color: var(--white);
+  /* Max hero height: lets activities peek above the fold */
+  min-height: clamp(320px, 48vh, 520px);
+  display: flex;
+  align-items: center;
+  transition: min-height 0.4s ease;
 }
 
-.heroBackground {
+.homeHeroHidden {
+  /* Keeps layout stable when hero scrolls out */
+}
+
+/* ── Decorative background blobs ── */
+.heroBlob1 {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.1;
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 15 L35 25 L45 25 L37 31 L40 41 L30 35 L20 41 L23 31 L15 25 L25 25 Z' fill='%23ffffff' opacity='0.1'/%3E%3C/svg%3E");
+  top: -80px;
+  right: -120px;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(255, 140, 66, 0.18) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: blobFloat 12s ease-in-out infinite;
+}
+
+.heroBlob2 {
+  position: absolute;
+  bottom: -60px;
+  left: -80px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(77, 124, 63, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: blobFloat 16s ease-in-out infinite reverse;
+}
+
+@keyframes blobFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(12px, -18px) scale(1.06); }
+}
+
+.heroPattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1.5' fill='%23ffffff'/%3E%3C/svg%3E");
+  background-size: 40px 40px;
   pointer-events: none;
 }
 
-.heroBackground::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(255, 140, 66, 0.2) 0%, transparent 70%);
-  border-radius: 50%;
-  animation: pulse 10s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.6; }
-  50%       { transform: scale(1.1) translate(-20px, 20px); opacity: 0.8; }
-}
-
+/* ══════════════════════════════════════════
+   HERO CONTENT
+══════════════════════════════════════════ */
 .heroContent {
-  max-width: 900px;
+  width: 100%;
+  max-width: 860px;
   margin: 0 auto;
-  text-align: center;
   position: relative;
   z-index: 1;
-}
-
-/* ══════════════════════════════════════════
-   HERO BADGE
-══════════════════════════════════════════ */
-.heroBadge {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
-  background: rgba(255, 140, 66, 0.18);
-  border: 1px solid rgba(255, 140, 66, 0.45);
-  border-radius: 50px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--sunset-orange);
-  margin-bottom: 24px;
-  text-transform: uppercase;
+  gap: 16px;
+  animation: heroFadeUp 0.7s ease both;
+}
+
+@keyframes heroFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ══════════════════════════════════════════
-   HERO TYPOGRAPHY
+   TRUST BAR (social proof strip)
+══════════════════════════════════════════ */
+.heroTrustBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px 16px;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+  flex-wrap: wrap;
+  justify-content: center;
+  animation: heroFadeUp 0.7s ease 0.1s both;
+}
+
+.trustDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  display: inline-block;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+}
+
+.trustItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.trustSep {
+  opacity: 0.35;
+}
+
+/* ══════════════════════════════════════════
+   HERO HEADLINE — short, single line
 ══════════════════════════════════════════ */
 .homeTitle {
   font-family: 'Outfit', sans-serif;
-  font-size: clamp(36px, 6vw, 64px);
+  font-size: clamp(28px, 4.5vw, 52px);
   font-weight: 800;
-  line-height: 1.2;
-  margin-bottom: 20px;
-  animation: fadeInUp 0.8s ease;
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to   { opacity: 1; transform: translateY(0); }
+  line-height: 1.15;
+  margin: 0;
+  text-align: center;
+  animation: heroFadeUp 0.7s ease 0.15s both;
 }
 
 .accent {
@@ -141,137 +182,166 @@
 .accent::after {
   content: '';
   position: absolute;
-  bottom: 4px;
+  bottom: 3px;
   left: 0;
   right: 0;
-  height: 12px;
+  height: 10px;
   background: var(--sunset-orange);
-  opacity: 0.3;
+  opacity: 0.22;
   z-index: -1;
-}
-
-.homeSubtitle {
-  font-size: clamp(16px, 2vw, 20px);
-  line-height: 1.6;
-  opacity: 0.95;
-  margin-bottom: 48px;
-  font-weight: 300;
-  animation: fadeInUp 0.8s ease 0.2s both;
+  border-radius: 4px;
 }
 
 /* ══════════════════════════════════════════
-   HERO SEARCH STACK
+   SEARCH CARD — floating, the primary element
 ══════════════════════════════════════════ */
-.heroSearchStack {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: min(100%, 980px);
-  margin: 32px auto 0;
+.searchCard {
+  width: 100%;
+  background: var(--white);
+  border-radius: 100px;
+  box-shadow:
+    0 4px 6px -2px rgba(26, 77, 46, 0.08),
+    0 12px 32px -4px rgba(26, 77, 46, 0.18),
+    0 0 0 1px rgba(26, 77, 46, 0.04);
+  padding: 6px;
+  animation: heroFadeUp 0.7s ease 0.25s both;
+  transition: box-shadow 0.3s ease;
 }
 
-@media (max-width: 980px) {
-  .heroSearchStack { width: 100%; }
+.searchCard:focus-within {
+  box-shadow:
+    0 4px 6px -2px rgba(26, 77, 46, 0.1),
+    0 20px 48px -4px rgba(26, 77, 46, 0.24),
+    0 0 0 2px rgba(255, 140, 66, 0.3);
+}
+
+/* Force inner HeroSearchBar inputs to inherit pill shape */
+.searchCard > * {
+  border-radius: 100px !important;
+  overflow: hidden;
+}
+
+.searchCard input,
+.searchCard [class*="input"],
+.searchCard [class*="field"],
+.searchCard [class*="wrap"] {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 /* ══════════════════════════════════════════
-   STATS BAR (inside hero)
+   QUICK SUGGESTION CHIPS
 ══════════════════════════════════════════ */
-.statsBar {
+.quickSuggestions {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 24px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  animation: fadeInUp 0.8s ease 0.6s both;
+  animation: heroFadeUp 0.7s ease 0.35s both;
 }
 
-.stat {
-  display: flex;
-  flex-direction: column;
+.quickLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chip {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-.statNumber {
-  font-family: 'Outfit', sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--sunset-orange);
-}
-.statLabel {
+  gap: 5px;
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50px;
   font-size: 13px;
-  opacity: 0.9;
   font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Poppins', sans-serif;
+  white-space: nowrap;
 }
-.statIcon   { font-size: 24px; }
-.statDivider {
-  width: 1px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
+
+.chip:hover {
+  background: rgba(255, 140, 66, 0.2);
+  border-color: rgba(255, 140, 66, 0.5);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.chipActive {
+  background: var(--sunset-orange) !important;
+  border-color: var(--sunset-orange) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.4);
+}
+
+/* ══════════════════════════════════════════
+   LIVE RESULTS PILL
+══════════════════════════════════════════ */
+.resultsPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 16px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  animation: pillPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes pillPop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.resultsPillDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25);
+  flex-shrink: 0;
 }
 
 /* ══════════════════════════════════════════
    SEE RESULTS BUTTON
 ══════════════════════════════════════════ */
 .seeResultsBtn {
-  padding: 10px 24px;
+  padding: 6px 18px;
   background: var(--sunset-orange);
   color: #fff;
   border: none;
   border-radius: 50px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
   font-family: inherit;
   white-space: nowrap;
 }
 .seeResultsBtn:hover {
   background: var(--sunset-peach);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(255, 140, 66, 0.4);
-}
-
-/* ══════════════════════════════════════════
-   HERO BOTTOM STATS (200+, 50+, 4.8★)
-══════════════════════════════════════════ */
-.heroStats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 48px;
-  margin-top: 40px;
-  padding-top: 32px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-}
-.heroStat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.heroStatNum {
-  font-family: 'Outfit', sans-serif;
-  font-size: 34px;
-  font-weight: 800;
-  color: var(--sunset-orange);
-  line-height: 1;
-}
-.heroStatLabel {
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.75);
-  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.4);
 }
 
 /* ══════════════════════════════════════════
    ACTIVITIES SECTION
 ══════════════════════════════════════════ */
 .activitiesSection {
-  padding: 80px 0;
+  padding: 64px 0;
 }
 
 .container {
@@ -285,20 +355,20 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 48px;
+  margin-bottom: 36px;
   flex-wrap: wrap;
 }
 
 .sectionTitle {
   font-family: 'Outfit', sans-serif;
-  font-size: clamp(32px, 5vw, 48px);
+  font-size: clamp(24px, 4vw, 38px);
   font-weight: 700;
   color: var(--text-dark);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .sectionSubtitle {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-muted);
 }
 
@@ -370,18 +440,18 @@
   margin-bottom: 24px;
 }
 .loadingSpinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid var(--border-light);
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-light);
   border-top-color: var(--sunset-orange);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .btnSecondary {
-  padding: 14px 32px;
+  padding: 12px 28px;
   border: 2px solid var(--border-light);
   border-radius: 12px;
   background: var(--white);
@@ -409,12 +479,25 @@
 /* ══════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════ */
-@media (max-width: 968px) {
-  .statsBar {
-    flex-wrap: wrap;
-    gap: 16px;
+@media (max-width: 768px) {
+  .homeHero {
+    padding: calc(var(--header-h, 56px) + 16px) 16px 32px;
+    min-height: clamp(280px, 52vh, 420px);
   }
-  .statDivider { display: none; }
+
+  .heroTrustBar {
+    font-size: 11px;
+    gap: 6px;
+    padding: 5px 12px;
+  }
+
+  .trustSep { display: none; }
+
+  .homeTitle {
+    font-size: clamp(24px, 7vw, 36px);
+  }
+
+  .chip { font-size: 12px; padding: 4px 12px; }
 
   .activityGrid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -422,18 +505,12 @@
   }
 }
 
-@media (max-width: 640px) {
-  .homeHero {
-    padding: calc(var(--header-h) + 32px) 16px 48px;
-  }
-
-  .activitiesSection { padding: 48px 0; }
-  .container         { padding: 0 16px; }
-  .sectionHeader     { margin-bottom: 32px; }
-  .activityGrid      { grid-template-columns: 1fr; }
-
-  .heroStats  { gap: 28px; }
-  .heroStatNum { font-size: 26px; }
+@media (max-width: 480px) {
+  .quickSuggestions { gap: 6px; }
+  .activityGrid { grid-template-columns: 1fr; }
+  .activitiesSection { padding: 40px 0; }
+  .container { padding: 0 16px; }
+  .sectionHeader { margin-bottom: 24px; }
 }
 
 /* ══════════════════════════════════════════
@@ -449,6 +526,7 @@
 
 .btnSecondary:focus-visible,
 .seeResultsBtn:focus-visible,
+.chip:focus-visible,
 .sortSelect:focus-visible {
   outline: 2px solid var(--sunset-orange);
   outline-offset: 4px;
