@@ -60,6 +60,7 @@ export type ActivityTemplateResponse = {
   addressId: string;
 
   tags: string[];
+  safetyNotes: string[];
   rating: RatingSummary;
 
   images: ActivityImage[];

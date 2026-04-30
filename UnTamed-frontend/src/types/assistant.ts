@@ -11,12 +11,17 @@ export type GenerateActivityDraftRequest = {
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
+
 export type GenerateActivityDraftResponse = {
+  warnings(warnings: any, arg1: number): unknown;
   title: string;
   description: string;
   difficulty: Difficulty;
 
   tags: string[];
+  newTagSuggestions: string[];
+  tagSuggestionsReason?: string[];
+
   semanticHints: string[];
 
   suggestedCategoryIds: string[];
@@ -32,11 +37,13 @@ export type GenerateActivityDraftResponse = {
   includedItems: string[];
   whatToBring: string[];
 
-  warnings: string[];
+  safetyNotes: string[]; // ✅ renamed
+
   missingDetails: string[];
 
   meetingPointSuggestion: string | null;
   sessionNoteSuggestion: string | null;
 
   rationale: string | null;
+  confidenceScore?: number;
 };

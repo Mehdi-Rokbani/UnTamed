@@ -197,38 +197,18 @@
 ══════════════════════════════════════════ */
 .searchCard {
   width: 100%;
-  background: var(--white);
-  border-radius: 100px;
-  box-shadow:
-    0 4px 6px -2px rgba(26, 77, 46, 0.08),
-    0 12px 32px -4px rgba(26, 77, 46, 0.18),
-    0 0 0 1px rgba(26, 77, 46, 0.04);
-  padding: 6px;
+  /* Transparent passthrough — the inner HeroSearchBar .pill owns the shadow */
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
   animation: heroFadeUp 0.7s ease 0.25s both;
-  transition: box-shadow 0.3s ease;
 }
 
+/* On focus, add an orange glow directly to the inner pill via a wrapper glow */
 .searchCard:focus-within {
-  box-shadow:
-    0 4px 6px -2px rgba(26, 77, 46, 0.1),
-    0 20px 48px -4px rgba(26, 77, 46, 0.24),
-    0 0 0 2px rgba(255, 140, 66, 0.3);
-}
-
-/* Force inner HeroSearchBar inputs to inherit pill shape */
-.searchCard > * {
-  border-radius: 100px !important;
-  overflow: hidden;
-}
-
-.searchCard input,
-.searchCard [class*="input"],
-.searchCard [class*="field"],
-.searchCard [class*="wrap"] {
-  border: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
+  /* Let HeroSearchBar.module.css .pill:focus-within handle its own shadow */
+  box-shadow: none;
 }
 
 /* ══════════════════════════════════════════

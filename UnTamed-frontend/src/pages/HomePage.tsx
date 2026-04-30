@@ -13,8 +13,8 @@ import {
 } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
-import { ExperienceFiltersBar } from "../components/search/ExperienceFiltersBar";
 import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
+import { SmartDiscoveryBar } from "../components/search/SmartDiscoveryBar";
 import { semanticSearch } from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";
@@ -350,9 +350,9 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Quick-suggestion chips */}
+            {/* Quick-suggestion chips — renamed label to "Try:" */}
             <div className={styles.quickSuggestions}>
-              <span className={styles.quickLabel}>Popular:</span>
+              <span className={styles.quickLabel}>Try:</span>
               {QUICK_SUGGESTIONS.map((label) => (
                 <button
                   key={label}
@@ -415,21 +415,31 @@ export default function HomePage() {
           </div>
         </section>
 
-        <ExperienceFiltersBar
+        {/* ── SMART DISCOVERY BAR (replaces ExperienceFiltersBar) ── */}
+        <SmartDiscoveryBar
           difficulty={difficulty}
           categoryIds={categoryIds}
           sort={sort}
           minPrice={minPrice}
           maxPrice={maxPrice}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           categories={categoryOptions}
+          resultCount={state === "done" ? templates.length : undefined}
+          hasActiveFilters={hasActiveFilters}
+          searchQuery={queryInput.trim()}
+          isLoggedIn={!!user}
           onDifficultyChange={setDifficulty}
           onToggleCategory={handleToggleCategory}
           onSortChange={setSort}
           onMinPriceChange={setMinPrice}
           onMaxPriceChange={setMaxPrice}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
           onClearAll={handleClearFilters}
         />
 
+        {/* ── AI RECOMMENDED (logged-in only) ── */}
         {user && (
           <section className={styles.activitiesSection}>
             <div className={styles.container}>
@@ -438,6 +448,7 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* ── RESULTS SECTION ── */}
         <section ref={resultsRef} className={styles.activitiesSection}>
           <div className={styles.container}>
             {state === "loading" && (

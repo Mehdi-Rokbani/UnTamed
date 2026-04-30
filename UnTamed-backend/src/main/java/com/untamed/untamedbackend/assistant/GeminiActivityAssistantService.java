@@ -7,6 +7,7 @@ import com.untamed.untamedbackend.model.Difficulty;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.service.TagService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -33,6 +34,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final RestTemplateBuilder restTemplateBuilder;
+    private final TagService tagService;
 
     @Override
     public GenerateActivityDraftResponse generateDraft(GenerateActivityDraftRequest request, String authEmail) {
@@ -57,7 +59,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", properties.getModel());
-        body.put("temperature", 0.4);
+        body.put("temperature", 0.55);
 
         body.set("messages",
                 objectMapper.createArrayNode()
@@ -65,7 +67,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
                                 .put("role", "system")
                                 .put("content", """
                                         You are an expert AI assistant for outdoor activity guides in Tunisia.
-                                        Your job is to generate realistic, useful, marketable activity draft suggestions.
+                                        Generate realistic, useful, marketable activity draft suggestions.
                                         Always return strict JSON only.
                                         Never return markdown.
                                         Never return code fences.
@@ -119,13 +121,9 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
                 Do not add explanations.
                 Do not add markdown.
                 Do not use ``` fences.
-                Do not write any text before or after the JSON.
+                Do not write text before or after the JSON.
 
                 You are helping a guide create a strong outdoor activity draft for Tunisia.
-
-                The location field is only contextual. Do not invent exact address facts.
-                If location is missing, still generate a useful draft.
-                Be practical, realistic, and commercially useful.
 
                 Required JSON format:
                 {
@@ -150,17 +148,36 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
                   "rationale": "string"
                 }
 
-                Rules:
-                - title must be catchy, concise, and natural
-                - description must be 3 to 5 sentences and suitable for a booking page
-                - difficulty must be EASY, MEDIUM, or HARD
-                - tags must contain 4 to 8 short lowercase tags
-                - semanticHints must contain 4 to 8 short search-oriented phrases
-                - suggestedPriceMin and suggestedPriceMax must be realistic non-negative numbers
-                - suggestedDurationMinutes and suggestedCapacity must be realistic positive integers
-                - warnings should mention uncertainty or operational risks
-                - missingDetails should mention what the guide still needs to confirm
-                - if uncertain, make conservative suggestions
+                Tag rules:
+                - Generate 4 to 8 precise lowercase tag slugs.
+                - Tags must describe the real activity type, environment, effort, vibe, or requirements.
+                - Use reusable slugs, not sentences.
+                - Good examples:
+                  running, marathon, endurance, fitness, long-distance, physically-demanding,
+                  hiking, mountain, forest, waterfall, camping, desert, stargazing,
+                  kayaking, sea, diving, snorkeling, quad-biking, caving,
+                  beginner-friendly, family-friendly, adrenaline, relaxing, premium, budget-friendly.
+                - Do NOT use vague tags like: fun, nice, cool, friends, outdoor, activity, trip, challenge.
+                - Do NOT use city/place names as tags unless they describe an environment.
+                - If the activity is a marathon, running race, expert run, endurance run, or long run:
+                  tags MUST include running, endurance, long-distance, physically-demanding.
+                  difficulty must be MEDIUM or HARD.
+                  do NOT include beginner-friendly or relaxing.
+                - If the input says beginner, easy, family, children, slow pace, or no experience needed:
+                  beginner-friendly is allowed.
+                - Otherwise, do not use beginner-friendly.
+
+                Other rules:
+                - title must be catchy, concise, and natural.
+                - description must be 3 to 5 sentences and suitable for a booking page.
+                - difficulty must be EASY, MEDIUM, or HARD.
+                - semanticHints must contain 4 to 8 short search-oriented phrases.
+                - suggestedPriceMin and suggestedPriceMax must be realistic non-negative numbers.
+                - suggestedDurationMinutes and suggestedCapacity must be realistic positive integers.
+                - warnings should mention uncertainty or operational risks.
+                - missingDetails should mention what the guide still needs to confirm.
+                - If uncertain, make conservative suggestions.
+                - The location field is contextual only. Do not invent exact address facts.
 
                 Input:
                 Idea: %s
@@ -211,13 +228,14 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
             if (!StringUtils.hasText(title)) {
                 throw new IllegalStateException("Assistant did not return title");
             }
+
             if (!StringUtils.hasText(description)) {
                 throw new IllegalStateException("Assistant did not return description");
             }
 
             Difficulty difficulty = parseDifficulty(json.path("difficulty").asText(null));
 
-            List<String> tags = cleanList(toList(json.path("tags")), 8);
+            List<String> rawAiTags = cleanList(toList(json.path("tags")), 8);
             List<String> semanticHints = cleanList(toList(json.path("semanticHints")), 8);
 
             List<String> suggestedCategoryIds = cleanList(toList(json.path("suggestedCategoryIds")), 5);
@@ -225,12 +243,15 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
             BigDecimal suggestedPriceMin = parseBigDecimal(json.path("suggestedPriceMin"));
             BigDecimal suggestedPriceMax = parseBigDecimal(json.path("suggestedPriceMax"));
+
             if (suggestedPriceMin != null && suggestedPriceMin.compareTo(BigDecimal.ZERO) < 0) {
                 suggestedPriceMin = BigDecimal.ZERO;
             }
+
             if (suggestedPriceMax != null && suggestedPriceMax.compareTo(BigDecimal.ZERO) < 0) {
                 suggestedPriceMax = BigDecimal.ZERO;
             }
+
             if (suggestedPriceMin != null && suggestedPriceMax != null
                     && suggestedPriceMax.compareTo(suggestedPriceMin) < 0) {
                 suggestedPriceMax = suggestedPriceMin;
@@ -249,33 +270,81 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
             String sessionNoteSuggestion = trimToNull(json.path("sessionNoteSuggestion").asText(null));
             String rationale = trimToNull(json.path("rationale").asText(null));
 
-            if (tags.isEmpty()) {
-                tags = fallbackTags(request);
+            if (rawAiTags.isEmpty()) {
+                rawAiTags = fallbackTags(request);
             }
+
+            String allInput = (
+                    safeLower(request.idea()) + " " +
+                            safeLower(request.vibe()) + " " +
+                            safeLower(request.notes()) + " " +
+                            safeLower(request.durationPreference()) + " " +
+                            safeLower(request.targetAudience())
+            );
+
+            boolean isRunningEndurance =
+                    allInput.contains("marathon")
+                            || allInput.contains("running")
+                            || allInput.contains("run ")
+                            || allInput.contains("endurance")
+                            || allInput.contains("expert");
+
+            if (isRunningEndurance) {
+                Set<String> corrected = new LinkedHashSet<>(rawAiTags);
+
+                corrected.remove("beginner-friendly");
+                corrected.remove("relaxing");
+                corrected.remove("friends");
+                corrected.remove("challenge");
+
+                corrected.add("running");
+                corrected.add("endurance");
+                corrected.add("long-distance");
+                corrected.add("physically-demanding");
+                corrected.add("fitness");
+
+                if (allInput.contains("marathon")) {
+                    corrected.add("marathon");
+                }
+
+                rawAiTags = corrected.stream().limit(8).toList();
+
+                if (difficulty == Difficulty.EASY) {
+                    difficulty = Difficulty.HARD;
+                }
+            }
+
             if (semanticHints.isEmpty()) {
                 semanticHints = fallbackSemanticHints(request);
             }
+
             if (warnings.isEmpty()) {
                 warnings = List.of("Review logistics, pricing, and exact meeting instructions before publishing.");
             }
+
             if (missingDetails.isEmpty()) {
                 missingDetails = fallbackMissingDetails(request);
             }
+
             if (suggestedDurationMinutes == null) {
                 suggestedDurationMinutes = 180;
             }
+
             if (suggestedCapacity == null) {
                 suggestedCapacity = 10;
             }
+
             if (difficulty == null) {
                 difficulty = Difficulty.MEDIUM;
             }
+
+            List<String> finalTags = tagService.processAiTags(rawAiTags);
 
             return new GenerateActivityDraftResponse(
                     title,
                     description,
                     difficulty,
-                    tags,
+                    finalTags,
                     semanticHints,
                     suggestedCategoryIds,
                     suggestedCategoryNames,
@@ -324,6 +393,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
     private GenerateActivityDraftResponse fallbackResponse(GenerateActivityDraftRequest request) {
         String baseTitle = trimToNull(request.idea());
+
         if (!StringUtils.hasText(baseTitle)) {
             baseTitle = "Guided outdoor experience";
         }
@@ -331,20 +401,25 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         String title = capitalize(shorten(baseTitle, 60));
 
         StringBuilder description = new StringBuilder("A guided outdoor experience");
+
         if (StringUtils.hasText(request.targetAudience())) {
             description.append(" designed for ").append(request.targetAudience().trim());
         }
+
         if (StringUtils.hasText(request.placeLabel())) {
             description.append(" around ").append(request.placeLabel().trim());
         }
+
         description.append(". It offers a practical and enjoyable way to discover the destination with the support of a guide. ");
         description.append("Review the operational details, inclusions, and exact logistics before publishing.");
+
+        List<String> finalTags = tagService.processAiTags(fallbackTags(request));
 
         return new GenerateActivityDraftResponse(
                 title,
                 description.toString(),
                 Difficulty.MEDIUM,
-                fallbackTags(request),
+                finalTags,
                 fallbackSemanticHints(request),
                 List.of(),
                 List.of(),
@@ -365,17 +440,64 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
     private List<String> fallbackTags(GenerateActivityDraftRequest request) {
         Set<String> tags = new LinkedHashSet<>();
-        tags.add("outdoor");
-        tags.add("guided");
 
         String idea = safeLower(request.idea());
-        if (idea.contains("hike") || idea.contains("trail") || idea.contains("trek")) tags.add("hiking");
-        if (idea.contains("camp")) tags.add("camping");
-        if (idea.contains("water") || idea.contains("kayak") || idea.contains("boat")) tags.add("water-activity");
-        if (idea.contains("forest")) tags.add("nature");
-        if (idea.contains("sunset")) tags.add("sunset");
-        if (idea.contains("family")) tags.add("family-friendly");
-        if (idea.contains("beginner")) tags.add("beginner-friendly");
+        String vibe = safeLower(request.vibe());
+        String notes = safeLower(request.notes());
+        String audience = safeLower(request.targetAudience());
+
+        String all = idea + " " + vibe + " " + notes + " " + audience;
+
+        if (all.contains("run") || all.contains("marathon") || all.contains("jog") || all.contains("endurance")) {
+            tags.add("running");
+            tags.add("fitness");
+            tags.add("endurance");
+            tags.add("physically-demanding");
+            tags.add("long-distance");
+
+            if (all.contains("marathon")) {
+                tags.add("marathon");
+            }
+        }
+
+        if (all.contains("hike") || all.contains("trail") || all.contains("trek")) {
+            tags.add("hiking");
+            tags.add("mountain");
+            tags.add("adventure");
+        }
+
+        if (all.contains("camp")) {
+            tags.add("camping");
+        }
+
+        if (all.contains("waterfall")) {
+            tags.add("waterfall");
+        }
+
+        if (all.contains("forest")) {
+            tags.add("forest");
+        }
+
+        if (all.contains("sea") || all.contains("beach") || all.contains("kayak") || all.contains("boat")) {
+            tags.add("sea");
+            tags.add("beach");
+        }
+
+        if (all.contains("desert")) {
+            tags.add("desert");
+        }
+
+        if (all.contains("family")) {
+            tags.add("family-friendly");
+        }
+
+        if (all.contains("beginner") || all.contains("easy")) {
+            tags.add("beginner-friendly");
+        }
+
+        if (tags.isEmpty()) {
+            tags.add("adventure");
+        }
 
         return tags.stream().limit(8).toList();
     }
@@ -386,12 +508,18 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         hints.add("nature experience");
         hints.add("local adventure");
 
+        if (StringUtils.hasText(request.idea())) {
+            hints.add(request.idea().trim().toLowerCase(Locale.ROOT));
+        }
+
         if (StringUtils.hasText(request.targetAudience())) {
             hints.add(request.targetAudience().trim().toLowerCase(Locale.ROOT));
         }
+
         if (StringUtils.hasText(request.vibe())) {
             hints.add(request.vibe().trim().toLowerCase(Locale.ROOT));
         }
+
         if (StringUtils.hasText(request.placeLabel())) {
             hints.add(request.placeLabel().trim().toLowerCase(Locale.ROOT));
         }
@@ -401,16 +529,21 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
 
     private List<String> fallbackMissingDetails(GenerateActivityDraftRequest request) {
         List<String> missing = new ArrayList<>();
+
         if (!StringUtils.hasText(request.placeLabel()) && !StringUtils.hasText(request.addressId())) {
             missing.add("Select a precise address.");
         }
+
         if (!StringUtils.hasText(request.durationPreference())) {
             missing.add("Confirm the target duration.");
         }
+
         if (!StringUtils.hasText(request.budgetStyle())) {
             missing.add("Confirm the intended price positioning.");
         }
+
         missing.add("Review capacity, inclusions, and meeting point.");
+
         return missing;
     }
 
@@ -431,13 +564,17 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
             if (node == null || node.isMissingNode() || node.isNull()) {
                 return null;
             }
+
             if (node.isNumber()) {
                 return node.decimalValue();
             }
+
             String text = trimToNull(node.asText(null));
+
             if (!StringUtils.hasText(text)) {
                 return null;
             }
+
             return new BigDecimal(text);
         } catch (Exception e) {
             return null;
@@ -449,7 +586,9 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
             if (node == null || node.isMissingNode() || node.isNull()) {
                 return null;
             }
+
             int value = node.isNumber() ? node.asInt() : Integer.parseInt(node.asText());
+
             return value > 0 ? value : null;
         } catch (Exception e) {
             return null;
@@ -462,12 +601,15 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         }
 
         List<String> list = new ArrayList<>();
+
         for (JsonNode n : node) {
             String value = trimToNull(n.asText(null));
+
             if (value != null) {
                 list.add(value);
             }
         }
+
         return list;
     }
 
@@ -477,11 +619,14 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         }
 
         Set<String> cleaned = new LinkedHashSet<>();
+
         for (String item : input) {
             String value = trimToNull(item);
+
             if (value != null) {
                 cleaned.add(value);
             }
+
             if (cleaned.size() >= maxSize) {
                 break;
             }
@@ -502,6 +647,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         if (!StringUtils.hasText(value)) {
             return null;
         }
+
         return value.trim();
     }
 
@@ -509,6 +655,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         if (value == null || value.length() <= max) {
             return value;
         }
+
         return value.substring(0, max).trim();
     }
 
@@ -516,6 +663,7 @@ public class GeminiActivityAssistantService implements AiActivityAssistantServic
         if (!StringUtils.hasText(value)) {
             return value;
         }
+
         return value.substring(0, 1).toUpperCase(Locale.ROOT) + value.substring(1);
     }
 }

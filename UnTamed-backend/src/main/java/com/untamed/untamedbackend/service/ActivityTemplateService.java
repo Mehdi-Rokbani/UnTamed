@@ -31,6 +31,7 @@ public class ActivityTemplateService {
     private final CloudinaryService cloudinaryService;
     private final GeoService geoService;
     private final N8nWebhookService n8nWebhookService;
+    private final TagService tagService;
 
     // -------- Reads --------
 
@@ -65,7 +66,7 @@ public class ActivityTemplateService {
                 .description(req.description())
                 .difficulty(req.difficulty())
                 .price(req.price())
-                .tags(req.tags() == null ? List.of() : req.tags())
+                .tags(tagService.validateUsableTags(req.tags()))
                 .images(toImageModels(req.images()))
                 .categoryIds(req.categoryIds())
                 .guideId(guide.getId())
@@ -106,7 +107,9 @@ public class ActivityTemplateService {
             t.setImages(toImageModels(req.images()));
         }
 
-        if (req.tags() != null) t.setTags(req.tags());
+        if (req.tags() != null) {
+            t.setTags(tagService.validateUsableTags(req.tags()));
+        }
 
         if (req.address() != null) {
             Address newAddress = getOrCreateAddress(req.address());

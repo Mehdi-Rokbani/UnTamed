@@ -47,9 +47,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/search/semantic").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
 
                         // Stripe webhook must be public
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
+
 
                         // Stripe payment creation must be authenticated
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create/**").authenticated()

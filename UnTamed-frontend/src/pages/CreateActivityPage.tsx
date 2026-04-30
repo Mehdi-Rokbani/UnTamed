@@ -9,10 +9,12 @@ import type {
 } from "../types/activity";
 import type { AddressResponse } from "../types/geo";
 import type { Category } from "../types/category";
+import type { Tag } from "../types/tag";
 
 import { addTemplateImage, createTemplate, createSession } from "../api/activity.api";
 import { generateActivityDraft } from "../api/assistant.api";
 import { listCategories } from "../api/category.api";
+import { listTags } from "../api/tag.api";
 
 import LocationPicker from "../components/LocationPicker";
 import { Header } from "../components/Header";
@@ -78,12 +80,17 @@ const IconX = () => (
 const isImageUrl = (url: string | undefined): boolean =>
   !!url && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/"));
 
-const cleanList = (values: string[] | null | undefined, max = 8): string[] => {
-  if (!values?.length) return [];
+function cleanList(value: unknown, max = 8): string[] {
+  if (!Array.isArray(value)) return [];
+
   return Array.from(
-    new Set(values.map((v) => v?.trim()).filter((v): v is string => !!v))
+    new Set(
+      value
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean)
+    )
   ).slice(0, max);
-};
+}
 
 /* ── Difficulty config ── */
 const DIFFICULTY_OPTIONS = [
@@ -99,47 +106,139 @@ const AI_EXAMPLES = [
   "desert stargazing camp in Douz, 2 days",
 ];
 
-/* ── TagInput sub-component ── */
-interface TagInputProps {
-  tags: string[];
-  onChange: (tags: string[]) => void;
+/* ── Controlled Tag Selector sub-component ── */
+interface TagSelectorProps {
+  availableTags: Tag[];
+  selectedSlugs: string[];
+  onChange: (slugs: string[]) => void;
+  aiSuggestedSlugs?: string[];
   isAiFilled?: boolean;
 }
-function TagInput({ tags, onChange, isAiFilled }: TagInputProps) {
-  const [inputVal, setInputVal] = useState("");
 
-  const addTag = (val: string) => {
-    const trimmed = val.trim().toLowerCase().replace(/\s+/g, "-");
-    if (trimmed && !tags.includes(trimmed) && tags.length < 8) {
-      onChange([...tags, trimmed]);
+const TAG_TYPE_LABELS: Record<string, string> = {
+  ENVIRONMENT: "Environment",
+  VIBE: "Vibe",
+  EFFORT: "Effort",
+  REQUIREMENT: "Requirements",
+  BUDGET: "Budget",
+  AI_SUGGESTED: "AI suggested",
+};
+
+const TAG_TYPE_ORDER = ["ENVIRONMENT", "VIBE", "EFFORT", "REQUIREMENT", "BUDGET", "AI_SUGGESTED"];
+
+const COMMON_ACTIVITY_TAG_SLUGS = new Set([
+  "hiking",
+  "camping",
+  "diving",
+  "quad-biking",
+  "running",
+  "marathon",
+  "trail-running",
+  "kayaking",
+  "cycling",
+  "caving",
+  "snorkeling",
+  "race",
+  "guided-run",
+]);
+
+function isActivityTypeSlug(slug: string, availableTags: Tag[]) {
+  const found = availableTags.find((tag) => tag.slug === slug);
+  return found?.type === "ACTIVITY" || COMMON_ACTIVITY_TAG_SLUGS.has(slug);
+}
+
+function TagSelector({
+  availableTags,
+  selectedSlugs,
+  onChange,
+  aiSuggestedSlugs = [],
+  isAiFilled,
+}: TagSelectorProps) {
+  
+  const visibleTags = availableTags.filter((tag) => tag.type !== "ACTIVITY");
+
+  const grouped = visibleTags.reduce<Record<string, Tag[]>>((acc, tag) => {
+    acc[tag.type] ??= [];
+    acc[tag.type].push(tag);
+    return acc;
+  }, {});
+
+  const orderedGroups = Object.entries(grouped).sort(([a], [b]) => {
+    const ai = TAG_TYPE_ORDER.indexOf(a);
+    const bi = TAG_TYPE_ORDER.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  const toggle = (slug: string) => {
+    if (selectedSlugs.includes(slug)) {
+      onChange(selectedSlugs.filter((s) => s !== slug));
+      return;
     }
-    setInputVal("");
+
+    if (selectedSlugs.length >= 8) return;
+    onChange([...selectedSlugs, slug]);
   };
 
-  const removeTag = (tag: string) => onChange(tags.filter((t) => t !== tag));
+  const missingSelectedTags = selectedSlugs.filter(
+    (slug) =>
+      !isActivityTypeSlug(slug, availableTags) &&
+      !visibleTags.some((tag) => tag.slug === slug)
+  );
 
   return (
-    <div className={`${styles.tagInputWrapper} ${isAiFilled ? styles.aiFilled : ""}`}>
-      {tags.map((tag) => (
-        <span key={tag} className={styles.tagChip}>
-          #{tag}
-          <button type="button" onClick={() => removeTag(tag)} className={styles.tagRemove} aria-label={`Remove ${tag}`}>
-            <IconX />
-          </button>
-        </span>
+    <div className={`${styles.tagSelectorBox} ${isAiFilled ? styles.aiFilled : ""}`}>
+      {missingSelectedTags.length > 0 && (
+        <div className={styles.tagGroup}>
+          <div className={styles.tagGroupTitle}>AI generated tags</div>
+          <div className={styles.tagChipRow}>
+            {missingSelectedTags.map((slug) => (
+              <button
+                key={slug}
+                type="button"
+                className={`${styles.selectableTagChip} ${styles.selectedTagChip} ${styles.aiSuggestedTagChip}`}
+                onClick={() => toggle(slug)}
+                aria-pressed={true}
+              >
+                <IconCheck />
+                {slug.replaceAll("-", " ")}
+                <span aria-label="AI generated">✨</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {orderedGroups.map(([type, group]) => (
+        <div key={type} className={styles.tagGroup}>
+          <div className={styles.tagGroupTitle}>{TAG_TYPE_LABELS[type] ?? type}</div>
+
+          <div className={styles.tagChipRow}>
+            {group.map((tag) => {
+              const selected = selectedSlugs.includes(tag.slug);
+              const aiSuggested = aiSuggestedSlugs.includes(tag.slug);
+
+              return (
+                <button
+                  key={tag.slug}
+                  type="button"
+                  className={`${styles.selectableTagChip} ${
+                    selected ? styles.selectedTagChip : ""
+                  } ${aiSuggested ? styles.aiSuggestedTagChip : ""}`}
+                  onClick={() => toggle(tag.slug)}
+                  aria-pressed={selected}
+                >
+                  {selected && <IconCheck />}
+                  {tag.name}
+                  {aiSuggested && <span aria-label="AI suggested">✨</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ))}
-      {tags.length < 8 && (
-        <input
-          type="text"
-          className={styles.tagInlineInput}
-          value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(inputVal); }
-            if (e.key === "Backspace" && !inputVal && tags.length) removeTag(tags[tags.length - 1]);
-          }}
-          placeholder={tags.length === 0 ? "Add tags… (press Enter)" : ""}
-        />
+
+      {visibleTags.length === 0 && selectedSlugs.length === 0 && (
+        <div className={styles.infoCard}>No usable descriptors found. Check that `/api/tags` returns active tags that are not rejected.</div>
       )}
     </div>
   );
@@ -182,6 +281,7 @@ export default function CreateActivityPage() {
   const [sessionNote, setSessionNote] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [location, setLocation] = useState<AddressResponse | null>(null);
   const [createdTemplate, setCreatedTemplate] = useState<ActivityTemplateResponse | null>(null);
@@ -201,6 +301,7 @@ export default function CreateActivityPage() {
   const [aiIncludedItems, setAiIncludedItems] = useState<string[]>([]);
   const [aiWhatToBring, setAiWhatToBring] = useState<string[]>([]);
   const [aiRationale, setAiRationale] = useState<string | null>(null);
+  const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
 
@@ -221,6 +322,39 @@ export default function CreateActivityPage() {
         setCategories(sorted);
       })
       .catch(() => setCategories([]));
+  }, []);
+
+  const loadTags = async (): Promise<Tag[]> => {
+    try {
+      const items = await listTags();
+
+      const clean = items
+        .filter((tag) => tag.active && tag.status !== "REJECTED")
+        .sort((a, b) => {
+          const typeA = TAG_TYPE_ORDER.indexOf(a.type);
+          const typeB = TAG_TYPE_ORDER.indexOf(b.type);
+
+          if (typeA !== typeB) {
+            return (typeA === -1 ? 999 : typeA) - (typeB === -1 ? 999 : typeB);
+          }
+
+          if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+            return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          }
+
+          return a.name.localeCompare(b.name);
+        });
+
+      setAvailableTags(clean);
+      return clean;
+    } catch {
+      setAvailableTags([]);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    void loadTags();
   }, []);
 
 
@@ -249,7 +383,7 @@ export default function CreateActivityPage() {
     { n: 2 as Step, title: "Details", desc: "Difficulty & price", emoji: "⚙️" },
     { n: 3 as Step, title: "Location", desc: "Meeting point", emoji: "📍" },
     { n: 4 as Step, title: "Schedule", desc: "Session timing", emoji: "📅" },
-    { n: 5 as Step, title: "Categories", desc: "Choose tags", emoji: "🏷️" },
+    { n: 5 as Step, title: "Categories", desc: "Activity type", emoji: "🏷️" },
     { n: 6 as Step, title: "Photos", desc: "Upload images", emoji: "📸" },
   ], []);
 
@@ -278,6 +412,8 @@ export default function CreateActivityPage() {
         addressId: location?.id,
       });
 
+      const freshTags = await loadTags();
+
       const warningList = cleanList(res.warnings, 6);
       const missingList = cleanList(res.missingDetails, 6);
       const highlightList = cleanList(res.highlights, 6);
@@ -301,7 +437,16 @@ export default function CreateActivityPage() {
       setTimeout(() => { setDifficulty(res.difficulty); setAiFilledFields((p) => new Set([...p, "difficulty"])); }, 750);
 
       if (res.tags?.length) {
-        setTimeout(() => { setTags(cleanList(res.tags, 8)); setAiFilledFields((p) => new Set([...p, "tags"])); }, 1000);
+        const generatedTags = cleanList(res.tags, 12);
+        const descriptorTags = generatedTags
+          .filter((slug) => !isActivityTypeSlug(slug, freshTags))
+          .slice(0, 8);
+
+        setAiSuggestedTags(descriptorTags);
+        setTimeout(() => {
+          setTags(descriptorTags);
+          setAiFilledFields((p) => new Set([...p, "tags"]));
+        }, 1000);
       }
       if (res.suggestedPriceMin != null) {
         setTimeout(() => { setPrice(Number(res.suggestedPriceMin) || 0); setAiFilledFields((p) => new Set([...p, "price"])); }, 1150);
@@ -463,7 +608,7 @@ export default function CreateActivityPage() {
     setAiIdea(""); setAiPlace(""); setAiAudience(""); setAiVibe(""); setAiNotes("");
     setAiDurationPreference(""); setAiBudgetStyle("");
     setAiWarnings([]); setAiMissingDetails([]); setAiHighlights([]);
-    setAiIncludedItems([]); setAiWhatToBring([]); setAiRationale(null);
+    setAiIncludedItems([]); setAiWhatToBring([]); setAiRationale(null); setAiSuggestedTags([]);
     setAiFilledFields(new Set());
     setStatus(null); setSubmitting(false); setUploading(false); setAiLoading(false);
   }
@@ -633,41 +778,6 @@ export default function CreateActivityPage() {
               })}
             </nav>
 
-            {(aiWarnings.length > 0 || aiMissingDetails.length > 0 || aiHighlights.length > 0) && (
-              <div className={styles.infoCard} style={{ marginTop: 18 }}>
-                <strong>AI notes</strong>
-                {aiHighlights.length > 0 && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Highlights</div>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {aiHighlights.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {aiWarnings.length > 0 && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Warnings</div>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {aiWarnings.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {aiMissingDetails.length > 0 && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Missing details</div>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {aiMissingDetails.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {aiRationale && (
-                  <div style={{ marginTop: 10, opacity: 0.9 }}>
-                    <strong>Why this draft:</strong> {aiRationale}
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className={styles.decorativeQuote}>
               <p>"Every great adventure starts with a single step"</p>
             </div>
@@ -677,6 +787,47 @@ export default function CreateActivityPage() {
         {/* ── Right scrollable content ── */}
         <div className={styles.rightPanel}>
           <form ref={formRef} className={styles.activityForm} onSubmit={(e) => e.preventDefault()}>
+
+            {/* ── AI Notes Panel ── */}
+            {(aiWarnings.length > 0 || aiMissingDetails.length > 0 || aiHighlights.length > 0 || aiRationale) && (
+              <div className={styles.aiNotesPanel}>
+                <div className={styles.aiNotesPanelHeader}>
+                  <IconSparkles />
+                  <span>AI Notes</span>
+                </div>
+                <div className={styles.aiNotesPanelBody}>
+                  {aiHighlights.length > 0 && (
+                    <div className={styles.aiNotesSection}>
+                      <div className={styles.aiNotesSectionTitle}>✨ Highlights</div>
+                      <ul className={styles.aiNotesList}>
+                        {aiHighlights.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {aiWarnings.length > 0 && (
+                    <div className={styles.aiNotesSection}>
+                      <div className={styles.aiNotesSectionTitle}>⚠️ Warnings</div>
+                      <ul className={styles.aiNotesList}>
+                        {aiWarnings.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {aiMissingDetails.length > 0 && (
+                    <div className={styles.aiNotesSection}>
+                      <div className={styles.aiNotesSectionTitle}>📋 Missing details</div>
+                      <ul className={styles.aiNotesList}>
+                        {aiMissingDetails.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {aiRationale && (
+                    <div className={styles.aiNotesRationale}>
+                      <strong>Why this draft:</strong> {aiRationale}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Step 1: Basic Info ── */}
             {step === 1 && (
@@ -732,14 +883,19 @@ export default function CreateActivityPage() {
 
                 <div className={styles.formGroup}>
                   <div className={styles.labelRow}>
-                    <label>Tags</label>
+                    <label>Activity descriptors</label>
                     {aiFilledFields.has("tags") && (
                       <span className={styles.aiFilledBadge}><IconSparkles /> AI suggested</span>
                     )}
                   </div>
-                  <TagInput tags={tags} onChange={(t) => { setTags(t); handleFieldEdit("tags"); }}
-                    isAiFilled={aiFilledFields.has("tags")} />
-                  <div className={styles.inputHint}>Up to 8 tags — press Enter or comma to add</div>
+                  <TagSelector
+                    availableTags={availableTags}
+                    selectedSlugs={tags}
+                    aiSuggestedSlugs={aiSuggestedTags}
+                    onChange={(next) => { setTags(next); handleFieldEdit("tags"); }}
+                    isAiFilled={aiFilledFields.has("tags")}
+                  />
+                  <div className={styles.inputHint}>Choose up to 8 descriptors for environment, vibe, effort, budget, and AI-generated details. Activity type belongs in Categories.</div>
                 </div>
 
                 {safetyNotes.length > 0 && (
