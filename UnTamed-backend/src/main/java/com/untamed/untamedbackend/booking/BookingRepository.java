@@ -38,4 +38,10 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     List<Booking> findBySessionIdAndStatus(String sessionId, BookingStatus status);
     List<Booking> findByUserId(String userId);
     List<Booking> findBySessionIdInAndStatusIn(Collection<String> sessionIds, Collection<BookingStatus> statuses);
+    boolean existsBySessionIdAndStatusIn(String sessionId, Collection<BookingStatus> statuses);
+
+    List<Booking> findBySessionIdAndStatusInOrderByCreatedAtAsc(
+            String sessionId,
+            Collection<BookingStatus> statuses
+    );
 }

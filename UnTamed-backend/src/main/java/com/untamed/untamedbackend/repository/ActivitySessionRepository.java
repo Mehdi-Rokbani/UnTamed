@@ -46,4 +46,9 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
     List<ActivitySession> findByStatusAndStartAtBefore(ActivityStatus status, Instant to);
 
     List<ActivitySession> findByTemplateIdOrderByStartAtAsc(String templateId);
+    List<ActivitySession> findByGuideIdAndStartAtBeforeOrderByStartAtDesc(String guideId, Instant now);
+
+    List<ActivitySession> findByGuideIdAndStartAtAfterOrderByStartAtAsc(String guideId, Instant now);
+
+    List<ActivitySession> findByGuideIdAndStatusOrderByStartAtDesc(String guideId, ActivityStatus status);
 }

@@ -1,10 +1,10 @@
 package com.untamed.untamedbackend.service;
 
-import com.untamed.untamedbackend.dto.ActivitySessionCreateRequest;
-import com.untamed.untamedbackend.dto.ActivitySessionResponse;
-import com.untamed.untamedbackend.dto.ActivitySessionUpdateRequest;
-import com.untamed.untamedbackend.dto.ActivityTemplateMiniDto;
-import com.untamed.untamedbackend.dto.RatingSummaryDto;
+import com.untamed.untamedbackend.booking.Booking;
+import com.untamed.untamedbackend.booking.BookingRepository;
+import com.untamed.untamedbackend.booking.BookingStatus;
+import com.untamed.untamedbackend.booking.SessionSeatOps;
+import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.model.ActivityImage;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
@@ -16,9 +16,12 @@ import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -28,6 +31,200 @@ public class ActivitySessionService {
     private final ActivitySessionRepository sessionRepo;
     private final ActivityTemplateRepository templateRepo;
     private final UserRepository userRepo;
+    private final BookingRepository bookingRepo;
+    private final SessionSeatOps sessionSeatOps;
+
+    private static final List<BookingStatus> ACTIVE_BOOKING_STATUSES = List.of(
+            BookingStatus.PENDING,
+            BookingStatus.PAYING,
+            BookingStatus.COMPLETED
+    );
+
+    private static final List<BookingStatus> NON_BLOCKING_BOOKING_STATUSES = List.of(
+            BookingStatus.CANCELLED,
+            BookingStatus.EXPIRED
+    );
+
+    public List<ActivitySessionResponse> listMinePast(String authEmail) {
+        User guide = getGuideByEmail(authEmail);
+        Instant now = Instant.now();
+
+        return sessionRepo.findByGuideId(guide.getId())
+                .stream()
+                .filter(s ->
+                        s.getStartAt() != null && s.getStartAt().isBefore(now)
+                                || s.getStatus() == ActivityStatus.COMPLETED
+                                || s.getStatus() == ActivityStatus.CANCELLED
+                )
+                .sorted(Comparator.comparing(ActivitySession::getStartAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toSessionResponse)
+                .toList();
+    }
+
+    public List<ActivitySessionResponse> listMineUpcoming(String authEmail) {
+        User guide = getGuideByEmail(authEmail);
+        Instant now = Instant.now();
+
+        return sessionRepo.findByGuideId(guide.getId())
+                .stream()
+                .filter(s ->
+                        s.getStartAt() != null
+                                && s.getStartAt().isAfter(now)
+                                && s.getStatus() != ActivityStatus.COMPLETED
+                                && s.getStatus() != ActivityStatus.CANCELLED
+                )
+                .sorted(Comparator.comparing(ActivitySession::getStartAt))
+                .map(this::toSessionResponse)
+                .toList();
+    }
+
+    public GuideSessionDetailsResponse getGuideSessionDetails(String sessionId, String authEmail) {
+        User guide = getGuideByEmail(authEmail);
+
+        ActivitySession session = sessionRepo.findByIdAndGuideId(sessionId, guide.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Session not found"
+                ));
+
+        List<Booking> bookings = bookingRepo.findBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        List<GuideParticipantDto> bookingDtos = bookings.stream()
+                .map(booking -> {
+                    User user = userRepo.findById(booking.getUserId()).orElse(null);
+
+                    return new GuideParticipantDto(
+                            booking.getId(),
+                            booking.getUserId(),
+                            user != null ? user.getUsername() : null,
+                            user != null ? user.getEmail() : booking.getUserId(),
+                            user != null ? user.getProfileImageUrl() : null,
+                            booking.getNumberOfPeople(),
+                            booking.getStatus(),
+                            booking.getCreatedAt()
+                    );
+                })
+                .toList();
+
+        int totalPeople = bookings.stream()
+                .mapToInt(Booking::getNumberOfPeople)
+                .sum();
+
+        return new GuideSessionDetailsResponse(
+                toSessionResponse(session),
+                bookingDtos,
+                bookings.size(),
+                totalPeople,
+                countStatus(bookings, BookingStatus.PENDING),
+                countStatus(bookings, BookingStatus.PAYING),
+                countStatus(bookings, BookingStatus.COMPLETED),
+                countStatus(bookings, BookingStatus.CANCELLED),
+                countStatus(bookings, BookingStatus.EXPIRED)
+        );
+    }
+
+    public ActivitySessionDeleteResponse deleteOrCancelSession(String sessionId, String authEmail) {
+        User guide = getGuideByEmail(authEmail);
+
+        ActivitySession session = sessionRepo.findByIdAndGuideId(sessionId, guide.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Session not found"
+                ));
+
+        Instant now = Instant.now();
+        boolean isPast = session.getStartAt() != null && !session.getStartAt().isAfter(now);
+
+        List<Booking> bookings = bookingRepo.findBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        if (bookings.isEmpty()) {
+            if (isPast) {
+                session.setStatus(ActivityStatus.CANCELLED);
+                sessionRepo.save(session);
+
+                return new ActivitySessionDeleteResponse(
+                        sessionId,
+                        "KEPT_HISTORY",
+                        "Past session was kept in history and marked as cancelled."
+                );
+            }
+
+            sessionRepo.deleteById(sessionId);
+
+            return new ActivitySessionDeleteResponse(
+                    sessionId,
+                    "DELETED",
+                    "Session deleted successfully."
+            );
+        }
+
+        boolean hasCompleted = bookings.stream()
+                .anyMatch(b -> b.getStatus() == BookingStatus.COMPLETED);
+
+        boolean hasPaying = bookings.stream()
+                .anyMatch(b -> b.getStatus() == BookingStatus.PAYING);
+
+        if (hasPaying) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot delete this session because at least one booking is currently in progress."
+            );
+        }
+
+        if (hasCompleted) {
+            if (!isPast && session.getStatus() != ActivityStatus.CANCELLED) {
+                session.setStatus(ActivityStatus.CANCELLED);
+                sessionRepo.save(session);
+            }
+
+            return new ActivitySessionDeleteResponse(
+                    sessionId,
+                    "KEPT_HISTORY",
+                    "Session has confirmed bookings, so it was kept for history."
+            );
+        }
+
+        List<Booking> pendingBookings = bookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.PENDING)
+                .toList();
+
+        int seatsToRelease = pendingBookings.stream()
+                .mapToInt(Booking::getNumberOfPeople)
+                .sum();
+
+        if (seatsToRelease > 0) {
+            sessionSeatOps.releaseSeats(sessionId, seatsToRelease);
+        }
+
+        Instant updateTime = Instant.now();
+
+        for (Booking booking : pendingBookings) {
+            booking.setNumberOfPeople(0);
+            booking.setStatus(BookingStatus.CANCELLED);
+            booking.setUpdatedAt(updateTime);
+            booking.setExpiresAt(null);
+        }
+
+        if (!pendingBookings.isEmpty()) {
+            bookingRepo.saveAll(pendingBookings);
+        }
+
+        session.setStatus(ActivityStatus.CANCELLED);
+        sessionRepo.save(session);
+
+        return new ActivitySessionDeleteResponse(
+                sessionId,
+                "CANCELLED",
+                "Session was cancelled and pending bookings were cancelled."
+        );
+    }
+
+    private int countStatus(List<Booking> bookings, BookingStatus status) {
+        return (int) bookings.stream()
+                .filter(b -> b.getStatus() == status)
+                .count();
+    }
 
     // list published sessions (public)
     public List<ActivitySessionResponse> listPublished() {
@@ -256,4 +453,5 @@ public class ActivitySessionService {
                 ratingDto
         );
     }
+
 }
