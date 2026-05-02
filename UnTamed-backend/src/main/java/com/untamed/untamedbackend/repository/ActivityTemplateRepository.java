@@ -13,4 +13,9 @@ public interface ActivityTemplateRepository extends MongoRepository<ActivityTemp
     Optional<ActivityTemplate> findByIdAndGuideId(String id, String guideId);
 
     boolean existsByIdAndGuideId(String id, String guideId);
+    List<ActivityTemplate> findByGuideIdAndArchivedFalse(String guideId);
+
+    Optional<ActivityTemplate> findByIdAndGuideIdAndArchivedFalse(String id, String guideId);
+
+    boolean existsByIdAndGuideIdAndArchivedFalse(String id, String guideId);
 }

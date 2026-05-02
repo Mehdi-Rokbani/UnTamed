@@ -33,6 +33,12 @@ public class ActivityTemplate {
     @Indexed
     private String title;
 
+    @Builder.Default
+    @Indexed
+    private boolean archived = false;
+
+    private Instant archivedAt;
+
     @NotBlank
     private String description;
 

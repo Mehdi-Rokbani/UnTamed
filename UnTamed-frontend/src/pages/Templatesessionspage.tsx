@@ -1,39 +1,177 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   ActivitySessionResponse,
   ActivityStatus,
   ActivityTemplateResponse,
+  BookingStatus,
+  GuideSessionDetailsResponse,
 } from "../types/activity";
 import {
-  getTemplateById,
+  listMyTemplates,
   listMySessions,
   createSession,
-  setSessionStatus,
   updateSession,
+  deleteOrCancelSession,
+  getGuideSessionDetails,
+  restoreSession,
+  permanentlyDeleteSession,
 } from "../api/activity.api";
 import styles from "../style/templateSessions.module.css";
-import type { Participant } from "../types/guide";
-import {
-  getSessionBookings,
-  cancelPendingBookingByGuide,
-} from "../api/guide.api";
 
-type Modal = null | "add";
+const Icon = {
+  ArrowLeft: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M5 12l7 7M5 12l7-7" />
+    </svg>
+  ),
 
-const STATUS_ORDER: ActivityStatus[] = ["DRAFT", "PUBLISHED", "CANCELLED"];
+  RefreshCw: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
+  ),
 
-function statusColor(s: ActivityStatus) {
-  if (s === "PUBLISHED") return "published";
-  if (s === "CANCELLED") return "cancelled";
-  return "draft";
+  Plus: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+
+  Clock: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  ),
+
+  MapPin: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+
+  Users: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+
+  Edit: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </svg>
+  ),
+
+  XCircle: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="15" y1="9" x2="9" y2="15" />
+      <line x1="9" y1="9" x2="15" y2="15" />
+    </svg>
+  ),
+
+  Restore: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 3v6h6" />
+    </svg>
+  ),
+
+  Trash: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 16H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  ),
+
+  Calendar: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
+
+  X: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
+};
+
+type ModalState =
+  | null
+  | { kind: "add" }
+  | { kind: "edit"; session: ActivitySessionResponse };
+
+type ParticipantFilter = "ALL" | BookingStatus;
+
+type ToastType = "success" | "error" | "warning";
+
+type ToastMessage = {
+  id: number;
+  type: ToastType;
+  message: string;
+};
+
+type ConfirmAction =
+  | null
+  | {
+      kind: "session-cancel-delete" | "session-permanent-delete";
+      session: ActivitySessionResponse;
+      title: string;
+      message: string;
+      confirmLabel: string;
+      danger: boolean;
+    };
+
+let toastId = 0;
+
+function toLocalDateTimeInputValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-function formatDate(iso: string) {
+function formatMainDate(iso: string) {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return "Invalid date";
+
   return d.toLocaleDateString("en-US", {
     weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  return d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Invalid date";
+
+  return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -42,53 +180,79 @@ function formatDate(iso: string) {
   });
 }
 
-function spotsLeft(s: ActivitySessionResponse) {
-  return Math.max(0, s.capacity - s.bookedCount);
+function getApiErrorMessage(e: unknown) {
+  if (typeof e === "object" && e !== null && "response" in e) {
+    const err = e as { response?: { data?: { message?: string } } };
+    return err.response?.data?.message ?? "Request failed";
+  }
+
+  return e instanceof Error ? e.message : "Request failed";
 }
 
-// ── Accordion section for participants modal ──
-function ParticipantAccordion({
-  label,
-  count,
-  accentCls,
-  defaultOpen = false,
-  children,
-}: {
-  label: string;
-  count: number;
-  accentCls: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (count === 0) return null;
+function friendlyApiMessage(message: string) {
+  if (message.includes("confirmed bookings")) {
+    return "This session has confirmed bookings, so it cannot be cancelled. Contact participants or wait until the session ends.";
+  }
+
+  if (message.includes("payment")) {
+    return "This session has a booking currently in payment. Try again after payment is completed or expired.";
+  }
+
+  if (message.includes("archived")) {
+    return "This activity is archived, so its sessions cannot be changed.";
+  }
+
+  if (message.includes("Only cancelled sessions can be restored")) {
+    return "Only cancelled sessions can be restored.";
+  }
+
+  if (message.includes("Cannot restore a past session")) {
+    return "Past sessions cannot be restored.";
+  }
+
+  return message;
+}
+
+function statusLabel(status: ActivityStatus) {
+  if (status === "PUBLISHED") return "Live";
+  if (status === "CANCELLED") return "Cancelled";
+  if (status === "COMPLETED") return "Completed";
+  return "Draft";
+}
+
+function rowClass(status: ActivityStatus, history: boolean) {
+  if (history) return styles.rowHistory;
+  if (status === "PUBLISHED") return styles.rowLive;
+  if (status === "CANCELLED") return styles.rowCancelled;
+  return styles.rowDraft;
+}
+
+function dotClass(status: ActivityStatus) {
+  if (status === "PUBLISHED") return styles.dotLive;
+  if (status === "CANCELLED") return styles.dotCancelled;
+  if (status === "COMPLETED") return styles.dotCompleted;
+  return styles.dotDraft;
+}
+
+function participantInitial(username?: string | null, email?: string | null) {
+  return (username ?? email ?? "U").slice(0, 1).toUpperCase();
+}
+
+function participantStatusClass(status: BookingStatus) {
+  if (status === "COMPLETED") return styles.pStatusConfirmed;
+  if (status === "CANCELLED" || status === "EXPIRED") return styles.pStatusCancelled;
+  return styles.pStatusPending;
+}
+
+function isPastSession(session: ActivitySessionResponse) {
+  return new Date(session.endAt).getTime() < Date.now();
+}
+
+function isHistorySession(session: ActivitySessionResponse) {
   return (
-    <div className={`${styles.accordion} ${open ? styles.accordionOpen : ""}`}>
-      <button
-        type="button"
-        className={styles.accordionHeader}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <div className={styles.accordionLeft}>
-          <span className={`${styles.accordionDot} ${styles[accentCls]}`} />
-          <span className={styles.accordionLabel}>{label}</span>
-          <span className={`${styles.accordionCount} ${styles[accentCls + "Count"]}`}>
-            {count}
-          </span>
-        </div>
-        <span className={`${styles.accordionChevron} ${open ? styles.accordionChevronOpen : ""}`}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </span>
-      </button>
-      {open && (
-        <ul className={styles.participantsList}>
-          {children}
-        </ul>
-      )}
-    </div>
+    isPastSession(session) ||
+    session.status === "COMPLETED" ||
+    session.status === "CANCELLED"
   );
 }
 
@@ -98,510 +262,1156 @@ export default function TemplateSessionsPage() {
 
   const [template, setTemplate] = useState<ActivityTemplateResponse | null>(null);
   const [sessions, setSessions] = useState<ActivitySessionResponse[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const [modal, setModal] = useState<Modal>(null);
-  const [newDate, setNewDate] = useState("");
-  const [newCapacity, setNewCapacity] = useState(10);
-  const [adding, setAdding] = useState(false);
+  const [tab, setTab] = useState<"active" | "history">("active");
 
-  const [participantsModal, setParticipantsModal] = useState<string | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [modal, setModal] = useState<ModalState>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
-  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(null);
-  const [changingId, setChangingId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  async function loadParticipants(sessionId: string) {
-    setLoadingParticipants(true);
-    setErr(null);
-    try {
-      const data = await getSessionBookings(sessionId);
-      setParticipants(data);
-      setParticipantsModal(sessionId);
-    } catch (e) {
-      setErr("Failed to load bookings");
-    } finally {
-      setLoadingParticipants(false);
-    }
+  const [participantsModal, setParticipantsModal] =
+    useState<GuideSessionDetailsResponse | null>(null);
+  const [participantFilter, setParticipantFilter] =
+    useState<ParticipantFilter>("ALL");
+  const [loadingParticipantsId, setLoadingParticipantsId] =
+    useState<string | null>(null);
+
+  const [formStartAt, setFormStartAt] = useState("");
+  const [formEndAt, setFormEndAt] = useState("");
+  const [formCapacity, setFormCapacity] = useState(10);
+  const [formMeetingPoint, setFormMeetingPoint] = useState("");
+  const [formSessionNote, setFormSessionNote] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savingForm, setSavingForm] = useState(false);
+
+  function showToast(type: ToastType, message: string) {
+    const toast: ToastMessage = {
+      id: ++toastId,
+      type,
+      message,
+    };
+
+    setToasts((prev) => [...prev, toast]);
+
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== toast.id));
+    }, 4500);
   }
 
-  async function handleGuideCancelPending(bookingId: string) {
-    setCancellingBookingId(bookingId);
-    setErr(null);
-    try {
-      await cancelPendingBookingByGuide(bookingId);
-      setParticipants((prev) =>
-        prev.map((p) =>
-          p.bookingId === bookingId
-            ? { ...p, status: "CANCELLED", numberOfPeople: 0 }
-            : p
-        )
-      );
-      await load();
-      showToast("Pending booking cancelled");
-    } catch (e) {
-      setErr("Failed to cancel pending booking");
-    } finally {
-      setCancellingBookingId(null);
-    }
+  function closeToast(id: number) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }
-
-  async function load() {
+  async function refresh() {
     if (!id) return;
+
     setLoading(true);
     setErr(null);
+
     try {
-      const [tmpl, allSessions] = await Promise.all([
-        getTemplateById(id),
+      const [templates, allSessions] = await Promise.all([
+        listMyTemplates(),
         listMySessions(),
       ]);
-      setTemplate(tmpl);
-      setSessions(allSessions.filter((s) => s.templateId === id));
+
+      const foundTemplate = templates.find((t) => t.id === id) ?? null;
+
+      const templateSessions = allSessions
+        .filter((s) => s.templateId === id)
+        .sort(
+          (a, b) =>
+            new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+        );
+
+      setTemplate(foundTemplate);
+      setSessions(templateSessions);
+
+      if (!foundTemplate) {
+        setErr("Activity template not found.");
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to load");
+      setErr(getApiErrorMessage(e));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    refresh();
+  }, [id]);
 
-  async function handleStatusChange(session: ActivitySessionResponse, next: ActivityStatus) {
-    setChangingId(session.id);
-    setErr(null);
-    try {
-      const updated = await setSessionStatus(session.id, next);
-      setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-      showToast(
-        next === "PUBLISHED" ? "Session published ✅"
-        : next === "CANCELLED" ? "Session cancelled"
-        : "Moved to draft"
-      );
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Status change failed");
-    } finally {
-      setChangingId(null);
+  const activeSessions = useMemo(() => {
+    return sessions.filter((s) => !isHistorySession(s));
+  }, [sessions]);
+
+  const historySessions = useMemo(() => {
+    return sessions.filter((s) => isHistorySession(s));
+  }, [sessions]);
+
+  const visibleSessions = tab === "active" ? activeSessions : historySessions;
+
+  const publishedCount = useMemo(() => {
+    return sessions.filter((s) => s.status === "PUBLISHED").length;
+  }, [sessions]);
+
+  const totalBooked = useMemo(() => {
+    return sessions.reduce((sum, s) => sum + (s.bookedCount ?? 0), 0);
+  }, [sessions]);
+
+  const filteredParticipants = useMemo(() => {
+    if (!participantsModal) return [];
+
+    if (participantFilter === "ALL") {
+      return participantsModal.bookings;
+    }
+
+    return participantsModal.bookings.filter(
+      (p) => p.status === participantFilter
+    );
+  }, [participantsModal, participantFilter]);
+
+  function resetForm() {
+    setFormStartAt("");
+    setFormEndAt("");
+    setFormCapacity(10);
+    setFormMeetingPoint("");
+    setFormSessionNote("");
+    setFormError(null);
+  }
+
+  function closeModal() {
+    setModal(null);
+    resetForm();
+  }
+
+  function openAddSessionModal() {
+    const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+
+    setFormStartAt(toLocalDateTimeInputValue(start));
+    setFormEndAt(toLocalDateTimeInputValue(end));
+    setFormCapacity(10);
+    setFormMeetingPoint("");
+    setFormSessionNote("");
+    setFormError(null);
+    setModal({ kind: "add" });
+  }
+
+  function openEditSessionModal(session: ActivitySessionResponse) {
+    setFormStartAt(toLocalDateTimeInputValue(new Date(session.startAt)));
+    setFormEndAt(toLocalDateTimeInputValue(new Date(session.endAt)));
+    setFormCapacity(session.capacity);
+    setFormMeetingPoint(session.meetingPoint ?? "");
+    setFormSessionNote(session.sessionNote ?? "");
+    setFormError(null);
+    setModal({ kind: "edit", session });
+  }
+
+  function handleStartAtChange(value: string) {
+    setFormStartAt(value);
+
+    if (!value) return;
+
+    const start = new Date(value);
+    const currentEnd = formEndAt ? new Date(formEndAt) : null;
+
+    if (!currentEnd || currentEnd <= start) {
+      const suggestedEnd = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+      setFormEndAt(toLocalDateTimeInputValue(suggestedEnd));
     }
   }
 
+  function validateSessionForm(editingSession?: ActivitySessionResponse) {
+    if (!formStartAt || !formEndAt) {
+      return "Start and end date are required.";
+    }
+
+    const startAt = new Date(formStartAt);
+    const endAt = new Date(formEndAt);
+
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+      return "Invalid session date.";
+    }
+
+    if (startAt <= new Date()) {
+      return "Start time must be in the future.";
+    }
+
+    if (endAt <= startAt) {
+      return "End time must be after start time.";
+    }
+
+    if (formCapacity < 3) {
+      return "Capacity must be at least 3 participants.";
+    }
+
+    if (editingSession && formCapacity < (editingSession.bookedCount ?? 0)) {
+      return "Capacity cannot be lower than booked seats.";
+    }
+
+    if (formMeetingPoint.length > 300) {
+      return "Meeting point must be 300 characters or less.";
+    }
+
+    if (formSessionNote.length > 1000) {
+      return "Session note must be 1000 characters or less.";
+    }
+
+    return null;
+  }
+
   async function handleAddSession() {
-  if (!id || !newDate) return;
-  setAdding(true);
-  setErr(null);
+    if (!id) return;
 
-  try {
-    const startAt = new Date(newDate);
-    const endAt = new Date(startAt.getTime() + 3 * 60 * 60 * 1000);
+    const validationError = validateSessionForm();
 
-    const created = await createSession(id, {
-      startAt: startAt.toISOString(),
-      endAt: endAt.toISOString(),
-      capacity: newCapacity,
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    setSavingForm(true);
+    setFormError(null);
+    setErr(null);
+
+    try {
+      const startAt = new Date(formStartAt);
+      const endAt = new Date(formEndAt);
+
+      const created = await createSession(id, {
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        capacity: formCapacity,
+        meetingPoint: formMeetingPoint.trim() || null,
+        sessionNote: formSessionNote.trim() || null,
+      });
+
+      setSessions((prev) =>
+        [...prev, created].sort(
+          (a, b) =>
+            new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+        )
+      );
+
+      closeModal();
+      setTab("active");
+      showToast("success", "Session added successfully.");
+    } catch (e) {
+      setFormError(getApiErrorMessage(e));
+    } finally {
+      setSavingForm(false);
+    }
+  }
+
+  async function handleEditSession(session: ActivitySessionResponse) {
+    const validationError = validateSessionForm(session);
+
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    setSavingForm(true);
+    setFormError(null);
+    setErr(null);
+
+    try {
+      const startAt = new Date(formStartAt);
+      const endAt = new Date(formEndAt);
+
+      const updated = await updateSession(session.id, {
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        capacity: formCapacity,
+        meetingPoint: formMeetingPoint.trim(),
+        sessionNote: formSessionNote.trim(),
+      });
+
+      setSessions((prev) =>
+        prev
+          .map((s) => (s.id === updated.id ? updated : s))
+          .sort(
+            (a, b) =>
+              new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+          )
+      );
+
+      closeModal();
+      showToast("success", "Session updated successfully.");
+    } catch (e) {
+      setFormError(getApiErrorMessage(e));
+    } finally {
+      setSavingForm(false);
+    }
+  }
+
+  async function handlePublish(sessionId: string, published: boolean) {
+    setBusyId(sessionId);
+    setErr(null);
+
+    try {
+      const updated = await updateSession(sessionId, {
+        status: published ? "PUBLISHED" : "DRAFT",
+      });
+
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? updated : s))
+      );
+
+      showToast(
+        "success",
+        published ? "Session published." : "Session moved to draft."
+      );
+    } catch (e) {
+      showToast("error", friendlyApiMessage(getApiErrorMessage(e)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function handleCancelOrDelete(session: ActivitySessionResponse) {
+    const booked = session.bookedCount ?? 0;
+    const hasBookings = booked > 0;
+
+    setConfirmAction({
+      kind: "session-cancel-delete",
+      session,
+      title: hasBookings ? "Cancel this session?" : "Delete this session?",
+      message: hasBookings
+        ? "This session has pending bookings. Cancelling it will cancel pending bookings, release seats, and move the session to history."
+        : "This session has no bookings and can be permanently deleted.",
+      confirmLabel: hasBookings ? "Cancel session" : "Delete session",
+      danger: true,
     });
-
-    setSessions((prev) => [...prev, created]);
-    setModal(null);
-    setNewDate("");
-    setNewCapacity(10);
-    showToast("Session added ✅");
-  } catch (e) {
-    setErr(e instanceof Error ? e.message : "Failed to add session");
-  } finally {
-    setAdding(false);
-  }
-}
-
-  const now = Date.now();
-  const sorted = [...sessions].sort((a, b) => {
-    const aTime = new Date(a.startAt).getTime();
-    const bTime = new Date(b.startAt).getTime();
-    const aFuture = aTime >= now;
-    const bFuture = bTime >= now;
-    if (aFuture !== bFuture) return aFuture ? -1 : 1;
-    return aTime - bTime;
-  });
-
-  const published = sessions.filter((s) => s.status === "PUBLISHED").length;
-  const upcoming  = sessions.filter((s) => new Date(s.startAt).getTime() >= now).length;
-
-  // ── Participant groups ──
-  const confirmedBookings = participants.filter((p) => p.status === "COMPLETED");
-  const pendingBookings   = participants.filter((p) => p.status === "PENDING");
-  const cancelledBookings = participants.filter((p) => p.status === "CANCELLED");
-  const expiredBookings   = participants.filter((p) => p.status === "EXPIRED");
-  const otherBookings     = participants.filter(
-    (p) => !["COMPLETED", "PENDING", "CANCELLED", "EXPIRED"].includes(p.status)
-  );
-
-  const totalSeats = participants.reduce((s, p) => s + (p.numberOfPeople ?? 0), 0);
-
-  // ── Single participant row ──
-  function renderBookingRow(p: Participant, idx: number, showCancel = false) {
-    const initials = (p.username || "?")
-      .split(" ")
-      .map((w: string) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-
-    const busy = cancellingBookingId === p.bookingId;
-
-    return (
-      <li key={p.bookingId} className={styles.participantRow} style={{ animationDelay: `${idx * 0.04}s` }}>
-        <div className={styles.participantAvatar}>
-          {p.profileImageUrl ? (
-            <img
-              src={p.profileImageUrl}
-              alt={p.username || "participant"}
-              className={styles.participantAvatarImg}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-                (e.currentTarget.nextSibling as HTMLElement).style.display = "flex";
-              }}
-            />
-          ) : null}
-          <span style={{ display: p.profileImageUrl ? "none" : "flex" }}>{initials}</span>
-        </div>
-
-        <div className={styles.participantInfo}>
-          <span className={styles.participantName}>{p.username || "Unknown user"}</span>
-          <span className={styles.participantEmail}>{p.email || "No email"}</span>
-        </div>
-
-        <div className={styles.participantMeta}>
-          <span className={styles.participantSeats}>
-            {p.numberOfPeople} {p.numberOfPeople === 1 ? "seat" : "seats"}
-          </span>
-          {showCancel && p.status === "PENDING" && (
-            <button
-              type="button"
-              className={styles.cancelPendingBtn}
-              disabled={busy}
-              onClick={() => handleGuideCancelPending(p.bookingId)}
-            >
-              {busy ? "Cancelling…" : "Cancel"}
-            </button>
-          )}
-        </div>
-      </li>
-    );
   }
 
-  if (loading) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.loadingState}>
-          <div className={styles.spinner} />
-          <span>Loading sessions…</span>
-        </div>
-      </div>
-    );
+  function handlePermanentDelete(session: ActivitySessionResponse) {
+    setConfirmAction({
+      kind: "session-permanent-delete",
+      session,
+      title: "Delete cancelled session permanently?",
+      message:
+        "This will permanently delete the cancelled session and its cancelled booking history. This action cannot be undone.",
+      confirmLabel: "Delete permanently",
+      danger: true,
+    });
+  }
+
+  async function handleRestoreSession(session: ActivitySessionResponse) {
+    setBusyId(session.id);
+    setErr(null);
+
+    try {
+      const restored = await restoreSession(session.id);
+
+      setSessions((prev) =>
+        prev
+          .map((s) => (s.id === restored.id ? restored : s))
+          .sort(
+            (a, b) =>
+              new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+          )
+      );
+
+      setTab("active");
+      showToast("success", "Session restored as draft.");
+    } catch (e) {
+      showToast("error", friendlyApiMessage(getApiErrorMessage(e)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmSessionAction() {
+    if (!confirmAction) return;
+
+    const session = confirmAction.session;
+    const kind = confirmAction.kind;
+
+    setConfirmAction(null);
+    setBusyId(session.id);
+    setErr(null);
+
+    try {
+      if (kind === "session-permanent-delete") {
+        const res = await permanentlyDeleteSession(session.id);
+
+        setSessions((prev) => prev.filter((s) => s.id !== session.id));
+
+        showToast(
+          "success",
+          res.message || "Cancelled session was permanently deleted."
+        );
+
+        return;
+      }
+
+      const res = await deleteOrCancelSession(session.id);
+
+      if (res.action === "DELETED") {
+        setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        showToast("success", res.message || "Session deleted successfully.");
+        return;
+      }
+
+      await refresh();
+
+      if (res.action === "CANCELLED") {
+        setTab("history");
+        showToast("warning", res.message || "Session was cancelled.");
+        return;
+      }
+
+      showToast("warning", res.message || "Session was kept for history.");
+    } catch (e) {
+      showToast("error", friendlyApiMessage(getApiErrorMessage(e)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleViewParticipants(sessionId: string) {
+    setLoadingParticipantsId(sessionId);
+    setErr(null);
+
+    try {
+      const details = await getGuideSessionDetails(sessionId);
+      setParticipantFilter("ALL");
+      setParticipantsModal(details);
+    } catch (e) {
+      showToast("error", getApiErrorMessage(e));
+    } finally {
+      setLoadingParticipantsId(null);
+    }
   }
 
   return (
-    <div className={styles.page}>
-      {/* ── TOAST ── */}
-      {toast && <div className={styles.toast}>{toast}</div>}
+    <div className={styles.shell}>
+      <header className={styles.header}>
+        <button
+          type="button"
+          className={styles.backBtn}
+          onClick={() => nav("/guide/activities")}
+        >
+          <span className={styles.backArrow}>
+            <Icon.ArrowLeft />
+          </span>
+          Activities
+        </button>
 
-      {/* ── HEADER ── */}
-      <div className={styles.pageHeader}>
-        <div className={styles.headerLeft}>
-          <button className={styles.backBtn} type="button" onClick={() => nav("/guide/activities")}>
-            ← Back
-          </button>
-          <div>
-            <div className={styles.kicker}>Sessions</div>
-            <h1 className={styles.pageTitle}>{template?.title ?? "Template"}</h1>
-            <p className={styles.pageSub}>Manage dates for this activity. Publish a session to make it bookable.</p>
+        <div className={styles.headerTop}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.pageTitle}>
+              {template?.title ?? "Activity Sessions"}
+            </h1>
+
+            {template?.archived && (
+              <span className={styles.archivedChip}>Archived</span>
+            )}
+          </div>
+
+          <div className={styles.headerActions}>
+            <button type="button" className={styles.btnGhost} onClick={refresh}>
+              <Icon.RefreshCw />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={openAddSessionModal}
+              disabled={template?.archived}
+              title={
+                template?.archived
+                  ? "Archived activities cannot receive new sessions."
+                  : undefined
+              }
+            >
+              <Icon.Plus />
+              New Session
+            </button>
           </div>
         </div>
-        <div className={styles.headerActions}>
-          <button className={styles.btnEdit} type="button" onClick={() => nav(`/guide/templates/${id}/edit`)}>
-            ✏️ Edit Template
-          </button>
-          <button className={styles.btnAdd} type="button" onClick={() => setModal("add")}>
-            + Add Session
-          </button>
-        </div>
-      </div>
+      </header>
 
-      {/* ── STATS ── */}
-      <div className={styles.statsStrip}>
-        <div className={styles.statPill}>
-          <span className={styles.statNum}>{sessions.length}</span>
-          <span className={styles.statLbl}>Total</span>
+      {template?.archived && (
+        <div className={styles.noticeBanner}>
+          This activity is archived. You can view its history, but you cannot add,
+          edit, or publish sessions.
         </div>
-        <div className={styles.statDivider} />
-        <div className={styles.statPill}>
-          <span className={`${styles.statNum} ${styles.statGreen}`}>{published}</span>
-          <span className={styles.statLbl}>Published</span>
+      )}
+
+      <section className={styles.metricsBar}>
+        <div className={styles.metric}>
+          <span className={styles.metricVal}>{sessions.length}</span>
+          <span className={styles.metricLabel}>Total sessions</span>
         </div>
-        <div className={styles.statDivider} />
-        <div className={styles.statPill}>
-          <span className={styles.statNum}>{upcoming}</span>
-          <span className={styles.statLbl}>Upcoming</span>
+
+        <div className={styles.metric}>
+          <span className={`${styles.metricVal} ${styles.metricGreen}`}>
+            {publishedCount}
+          </span>
+          <span className={styles.metricLabel}>Published</span>
         </div>
-      </div>
+
+        <div className={styles.metric}>
+          <span className={`${styles.metricVal} ${styles.metricBlue}`}>
+            {activeSessions.length}
+          </span>
+          <span className={styles.metricLabel}>Active</span>
+        </div>
+
+        <div className={styles.metric}>
+          <span className={styles.metricVal}>{historySessions.length}</span>
+          <span className={styles.metricLabel}>Past</span>
+        </div>
+
+        <div className={styles.metric}>
+          <span className={styles.metricVal}>{totalBooked}</span>
+          <span className={styles.metricLabel}>Booked seats</span>
+        </div>
+      </section>
 
       {err && <div className={styles.errBanner}>⚠️ {err}</div>}
 
-      {sessions.length === 0 && !loading && (
+      {loading && (
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          Loading sessions…
+        </div>
+      )}
+
+      {!loading && sessions.length === 0 && (
         <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}>📅</div>
-          <div className={styles.emptyTitle}>No sessions yet</div>
-          <div className={styles.emptySub}>Add your first session to start accepting bookings.</div>
-          <button className={styles.btnAdd} type="button" onClick={() => setModal("add")}>+ Add First Session</button>
+          <div className={styles.emptyIcon}>
+            <Icon.Calendar />
+          </div>
+
+          <p className={styles.emptyTitle}>No sessions yet</p>
+          <p className={styles.emptySub}>
+            Add your first session to schedule this activity.
+          </p>
+
+          {!template?.archived && (
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={openAddSessionModal}
+            >
+              <Icon.Plus />
+              Add First Session
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── SESSION LIST ── */}
-      {sorted.length > 0 && (
-        <div className={styles.sessionList}>
-          {sorted.map((session, idx) => {
-            const isPast = new Date(session.startAt).getTime() < now;
-            const left = spotsLeft(session);
-            const fillPct = Math.round((session.bookedCount / session.capacity) * 100);
-            const isChanging = changingId === session.id;
+      {!loading && sessions.length > 0 && (
+        <>
+          <div className={styles.tabBar}>
+            <button
+              type="button"
+              className={`${styles.tab} ${tab === "active" ? styles.tabActive : ""}`}
+              onClick={() => setTab("active")}
+            >
+              Active & Upcoming
+              <span className={styles.tabCount}>{activeSessions.length}</span>
+            </button>
 
-            return (
-              <div
-                key={session.id}
-                className={`${styles.sessionCard} ${isPast ? styles.sessionPast : ""}`}
-                style={{ animationDelay: `${idx * 0.04}s` }}
-              >
-                <div className={styles.sessionLeft}>
-                  <div className={styles.sessionDate}>
-                    <div className={styles.dateDay}>{new Date(session.startAt).toLocaleDateString("en-US", { day: "2-digit" })}</div>
-                    <div className={styles.dateMonth}>{new Date(session.startAt).toLocaleDateString("en-US", { month: "short" })}</div>
-                    <div className={styles.dateYear}>{new Date(session.startAt).toLocaleDateString("en-US", { year: "numeric" })}</div>
-                  </div>
-                  <span className={`${styles.statusBadge} ${styles[statusColor(session.status)]}`}>{session.status}</span>
-                  {isPast && <span className={styles.pastBadge}>Past</span>}
+            <button
+              type="button"
+              className={`${styles.tab} ${tab === "history" ? styles.tabActive : ""}`}
+              onClick={() => setTab("history")}
+            >
+              History
+              <span className={styles.tabCount}>{historySessions.length}</span>
+            </button>
+          </div>
+
+          <section className={styles.sessionTable}>
+            <div className={styles.tableHeader}>
+              <span>Date & Time</span>
+              <span>Capacity</span>
+              <span>Actions</span>
+            </div>
+
+            <div className={styles.tableBody}>
+              {visibleSessions.length === 0 ? (
+                <div className={styles.emptyTab}>
+                  {tab === "active"
+                    ? "No active or upcoming sessions."
+                    : "No past sessions yet."}
                 </div>
+              ) : (
+                visibleSessions.map((s) => {
+                  const isBusy = busyId === s.id;
+                  const isPublished = s.status === "PUBLISHED";
+                  const isHistory = isHistorySession(s);
+                  const isCancelled = s.status === "CANCELLED";
+                  const isCompleted = s.status === "COMPLETED";
+                  const isPast = isPastSession(s);
 
-                <div className={styles.sessionCenter}>
-                  <div className={styles.sessionTime}>
-                    🕐 {new Date(session.startAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                  </div>
-                  <div className={styles.capacityRow}>
-                    <span className={styles.capacityLabel}>{session.bookedCount} / {session.capacity} booked</span>
-                    <span className={`${styles.spotsLeft} ${left === 0 ? styles.spotsNone : left <= 3 ? styles.spotsLow : ""}`}>
-                      {left === 0 ? "Sold out" : `${left} spots left`}
-                    </span>
-                  </div>
-                  <div className={styles.fillBar}>
-                    <div
-                      className={styles.fillBarInner}
-                      style={{ width: `${fillPct}%`, background: fillPct >= 90 ? "#d4463c" : fillPct >= 60 ? "#f59e0b" : "#4d7c3f" }}
-                    />
-                  </div>
-                </div>
+                  const canManage = !template?.archived && !isHistory;
+                  const canEdit = canManage;
+                  const canTogglePublish = canManage && (s.bookedCount ?? 0) === 0;
+                  const canCancelOrDelete =
+                    !template?.archived &&
+                    !isCompleted &&
+                    !isPast &&
+                    !isHistory;
 
-                <div className={styles.sessionActions}>
-                  <button className={styles.actionBtn} type="button" onClick={() => loadParticipants(session.id)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
-                    Bookings
-                  </button>
+                  const canRestoreOrPermanentDelete =
+                    isHistory &&
+                    s.status === "CANCELLED" &&
+                    !isPast &&
+                    !template?.archived;
 
-                  {session.status === "DRAFT" && !isPast && (
-                    <button className={`${styles.actionBtn} ${styles.actionPublish}`} type="button" disabled={isChanging} onClick={() => handleStatusChange(session, "PUBLISHED")}>
-                      {isChanging ? "…" : "▶ Publish"}
-                    </button>
-                  )}
-                  {session.status === "PUBLISHED" && (
-                    <button className={`${styles.actionBtn} ${styles.actionUnpublish}`} type="button" disabled={isChanging} onClick={() => handleStatusChange(session, "DRAFT")}>
-                      {isChanging ? "…" : "⏸ Unpublish"}
-                    </button>
-                  )}
-                  {session.status !== "CANCELLED" && (
-                    <button className={`${styles.actionBtn} ${styles.actionCancel}`} type="button" disabled={isChanging} onClick={() => handleStatusChange(session, "CANCELLED")}>
-                      {isChanging ? "…" : "✕ Cancel"}
-                    </button>
-                  )}
-                  {session.status === "CANCELLED" && (
-                    <button className={`${styles.actionBtn} ${styles.actionRestore}`} type="button" disabled={isChanging} onClick={() => handleStatusChange(session, "DRAFT")}>
-                      {isChanging ? "…" : "↩ Restore"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                  const booked = s.bookedCount ?? 0;
+                  const capacity = Math.max(s.capacity ?? 0, 1);
+                  const percent = Math.min(100, Math.round((booked / capacity) * 100));
+                  const spotsLeft = Math.max(0, capacity - booked);
+
+                  const fillClass =
+                    percent >= 100
+                      ? styles.fillFull
+                      : percent >= 70
+                        ? styles.fillWarn
+                        : styles.fillOk;
+
+                  const spotsClass =
+                    spotsLeft <= 0
+                      ? styles.spotsFull
+                      : spotsLeft <= 3
+                        ? styles.spotsWarn
+                        : "";
+
+                  return (
+                    <article
+                      key={s.id}
+                      className={`${styles.sessionRow} ${rowClass(s.status, isHistory)}`}
+                    >
+                      <div className={styles.rowMain}>
+                        <div className={styles.rowStatusLine}>
+                          <span className={`${styles.statusDot} ${dotClass(s.status)}`} />
+                          <span className={styles.statusText}>
+                            {isHistory && !isCancelled && !isCompleted
+                              ? "History"
+                              : statusLabel(s.status)}
+                          </span>
+
+                          {!isHistory && <span className={styles.upcomingBadge}>Upcoming</span>}
+                        </div>
+
+                        <div className={styles.rowDate}>{formatMainDate(s.startAt)}</div>
+
+                        <div className={styles.rowTimeLine}>
+                          <span className={styles.rowTimeIcon}>
+                            <Icon.Clock />
+                          </span>
+
+                          <span className={styles.rowTimeText}>
+                            {formatTime(s.startAt)} — {formatTime(s.endAt)}
+                          </span>
+
+                          {s.meetingPoint && (
+                            <>
+                              <span className={styles.rowTimeDivider} />
+                              <span className={styles.rowMeetingIcon}>
+                                <Icon.MapPin />
+                              </span>
+                              <span className={styles.rowMeetingText}>
+                                {s.meetingPoint}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {s.sessionNote && <div className={styles.rowNote}>{s.sessionNote}</div>}
+                      </div>
+
+                      <div className={styles.rowCapacity}>
+                        <div className={styles.capacityNums}>
+                          <span className={styles.capacityBooked}>{booked}</span>
+                          <span className={styles.capacitySlash}>/</span>
+                          <span className={styles.capacityTotal}>{capacity}</span>
+                        </div>
+
+                        <div className={styles.capacityBar}>
+                          <div
+                            className={`${styles.capacityFill} ${fillClass}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+
+                        {!isHistory && (
+                          <span className={`${styles.spotsLeft} ${spotsClass}`}>
+                            {spotsLeft} open
+                          </span>
+                        )}
+                      </div>
+
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={`${styles.actBtn} ${styles.actBtnParticipants}`}
+                          disabled={loadingParticipantsId === s.id}
+                          onClick={() => handleViewParticipants(s.id)}
+                        >
+                          <Icon.Users />
+                          {booked}
+                        </button>
+
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className={styles.actBtn}
+                            disabled={isBusy}
+                            onClick={() => openEditSessionModal(s)}
+                          >
+                            <Icon.Edit />
+                            Edit
+                          </button>
+                        )}
+
+                        {canTogglePublish && (
+                          <button
+                            type="button"
+                            className={
+                              isPublished ? styles.actBtnSecondary : styles.actBtnPrimary
+                            }
+                            disabled={isBusy}
+                            onClick={() => handlePublish(s.id, !isPublished)}
+                          >
+                            {isBusy
+                              ? "Working..."
+                              : isPublished
+                                ? "Unpublish"
+                                : "Publish"}
+                          </button>
+                        )}
+
+                        {canCancelOrDelete && (
+                          <button
+                            type="button"
+                            className={styles.actBtnDangerText}
+                            disabled={isBusy}
+                            onClick={() => handleCancelOrDelete(s)}
+                            title={booked > 0 ? "Cancel session" : "Delete session"}
+                          >
+                            <Icon.XCircle />
+                            {booked > 0 ? "Cancel" : "Delete"}
+                          </button>
+                        )}
+
+                        {canRestoreOrPermanentDelete && (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.actBtnRestore}
+                              disabled={isBusy}
+                              onClick={() => handleRestoreSession(s)}
+                              title="Restore session as draft"
+                            >
+                              <Icon.Restore />
+                              Restore
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.actBtnDangerText}
+                              disabled={isBusy}
+                              onClick={() => handlePermanentDelete(s)}
+                              title="Delete permanently"
+                            >
+                              <Icon.Trash />
+                              Delete permanently
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </>
       )}
 
-      {/* ── ADD SESSION MODAL ── */}
-      {modal === "add" && (
-        <div className={styles.modalBackdrop} onClick={() => setModal(null)}>
+      {participantsModal && (
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => setParticipantsModal(null)}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h2 className={styles.modalTitle}>Add New Session</h2>
-              <button className={styles.modalClose} type="button" onClick={() => setModal(null)}>✕</button>
+              <div>
+                <h2 className={styles.modalTitle}>Session Participants</h2>
+                <p className={styles.modalSub}>
+                  {formatDateTime(participantsModal.session.startAt)}
+                </p>
+              </div>
+
+              <button
+                className={styles.modalClose}
+                type="button"
+                onClick={() => setParticipantsModal(null)}
+              >
+                <Icon.X />
+              </button>
             </div>
+
             <div className={styles.modalBody}>
-              <div className={styles.modalField}>
-                <label className={styles.modalLabel}>Date & Time</label>
-                <input className={styles.modalInput} type="datetime-local" value={newDate} min={new Date().toISOString().slice(0, 16)} onChange={(e) => setNewDate(e.target.value)} />
+              <div className={styles.pMetrics}>
+                <div className={styles.pMetric}>
+                  <span className={styles.pMetricVal}>
+                    {participantsModal.totalBookings}
+                  </span>
+                  <span className={styles.pMetricLabel}>Bookings</span>
+                </div>
+
+                <div className={styles.pMetric}>
+                  <span className={styles.pMetricVal}>
+                    {participantsModal.totalPeople}
+                  </span>
+                  <span className={styles.pMetricLabel}>People</span>
+                </div>
+
+                <div className={styles.pMetric}>
+                  <span className={`${styles.pMetricVal} ${styles.pMetricGreen}`}>
+                    {participantsModal.completedCount}
+                  </span>
+                  <span className={styles.pMetricLabel}>Confirmed</span>
+                </div>
+
+                <div className={styles.pMetric}>
+                  <span className={`${styles.pMetricVal} ${styles.pMetricOrange}`}>
+                    {participantsModal.pendingCount}
+                  </span>
+                  <span className={styles.pMetricLabel}>Pending</span>
+                </div>
               </div>
-              <div className={styles.modalField}>
-                <label className={styles.modalLabel}>Capacity</label>
-                <input className={styles.modalInput} type="number" min={3} max={500} value={newCapacity} onChange={(e) => setNewCapacity(Number(e.target.value))} />
-                <span className={styles.modalHint}>Minimum 3 participants</span>
+
+              <div className={styles.filterRow}>
+                {[
+                  { key: "ALL", label: "All" },
+                  { key: "COMPLETED", label: "Confirmed" },
+                  { key: "PENDING", label: "Pending" },
+                  { key: "CANCELLED", label: "Cancelled" },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    className={`${styles.filterBtn} ${
+                      participantFilter === f.key ? styles.filterBtnActive : ""
+                    }`}
+                    onClick={() => setParticipantFilter(f.key as ParticipantFilter)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
-              <div className={styles.modalNote}>💡 Sessions start as <strong>DRAFT</strong>. Publish them to accept bookings.</div>
+
+              {filteredParticipants.length === 0 ? (
+                <div className={styles.emptyParticipants}>
+                  No participants match this filter.
+                </div>
+              ) : (
+                <div className={styles.participantsList}>
+                  {filteredParticipants.map((p) => (
+                    <div key={p.bookingId} className={styles.participantRow}>
+                      <div className={styles.pAvatar}>
+                        {p.profileImageUrl ? (
+                          <img
+                            src={p.profileImageUrl}
+                            alt={p.username ?? "User"}
+                          />
+                        ) : (
+                          <span>{participantInitial(p.username, p.email)}</span>
+                        )}
+                      </div>
+
+                      <div className={styles.pInfo}>
+                        <span className={styles.pName}>
+                          {p.username ?? "Unknown user"}
+                        </span>
+                        <span className={styles.pEmail}>{p.email ?? p.userId}</span>
+                        <span className={styles.pDate}>
+                          Booked {formatDateTime(p.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className={styles.pMeta}>
+                        <span className={styles.pPeopleBadge}>
+                          {p.numberOfPeople}×
+                        </span>
+
+                        <span
+                          className={`${styles.pStatusBadge} ${participantStatusClass(
+                            p.status
+                          )}`}
+                        >
+                          {p.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
             <div className={styles.modalFooter}>
-              <button className={styles.modalBtnCancel} type="button" onClick={() => setModal(null)}>Cancel</button>
-              <button className={styles.modalBtnConfirm} type="button" disabled={!newDate || newCapacity < 3 || adding} onClick={handleAddSession}>
-                {adding ? "Adding…" : "Add Session"}
+              <button
+                className={styles.btnGhost}
+                type="button"
+                onClick={() => setParticipantsModal(null)}
+              >
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── PARTICIPANTS MODAL ── */}
-      {participantsModal && (
-        <div className={styles.modalBackdrop} onClick={() => setParticipantsModal(null)}>
-          <div className={`${styles.modal} ${styles.participantsModal}`} onClick={(e) => e.stopPropagation()}>
-
-            {/* Header */}
+      {modal && (
+        <div className={styles.modalBackdrop} onClick={closeModal}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div className={styles.participantsHeaderLeft}>
-                <span className={styles.participantsIcon}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </span>
-                <div>
-                  <h2 className={styles.modalTitle}>Participants</h2>
-                  {!loadingParticipants && (
-                    <p className={styles.participantsSubtitle}>
-                      {participants.length} {participants.length === 1 ? "booking" : "bookings"} · {totalSeats} total seats
-                    </p>
-                  )}
+              <div>
+                <h2 className={styles.modalTitle}>
+                  {modal.kind === "add" ? "Add New Session" : "Edit Session"}
+                </h2>
+                <p className={styles.modalSub}>
+                  Sessions start as draft. Publish when ready.
+                </p>
+              </div>
+
+              <button
+                className={styles.modalClose}
+                type="button"
+                onClick={closeModal}
+              >
+                <Icon.X />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {formError && <div className={styles.formErr}>⚠️ {formError}</div>}
+
+              <div className={styles.formGrid}>
+                <div className={styles.formRow}>
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>Start Date & Time</label>
+
+                    <input
+                      className={styles.formInput}
+                      type="datetime-local"
+                      value={formStartAt}
+                      min={toLocalDateTimeInputValue(new Date())}
+                      onChange={(e) => handleStartAtChange(e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>End Date & Time</label>
+
+                    <input
+                      className={styles.formInput}
+                      type="datetime-local"
+                      value={formEndAt}
+                      min={formStartAt || toLocalDateTimeInputValue(new Date())}
+                      onChange={(e) => setFormEndAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.formField}>
+                  <label className={styles.formLabel}>
+                    Capacity{" "}
+                    {modal.kind === "edit" && (
+                      <span className={styles.formLabelHint}>
+                        min {modal.session.bookedCount ?? 0} booked seats
+                      </span>
+                    )}
+                  </label>
+
+                  <input
+                    className={styles.formInput}
+                    type="number"
+                    min={
+                      modal.kind === "edit"
+                        ? Math.max(3, modal.session.bookedCount ?? 0)
+                        : 3
+                    }
+                    max={500}
+                    value={formCapacity}
+                    onChange={(e) => setFormCapacity(Number(e.target.value))}
+                  />
+
+                  <span className={styles.formHint}>
+                    Capacity cannot be lower than booked seats.
+                  </span>
+                </div>
+
+                <div className={styles.formField}>
+                  <label className={styles.formLabel}>
+                    Meeting Point{" "}
+                    <span className={styles.formLabelHint}>optional</span>
+                  </label>
+
+                  <input
+                    className={styles.formInput}
+                    type="text"
+                    maxLength={300}
+                    value={formMeetingPoint}
+                    onChange={(e) => setFormMeetingPoint(e.target.value)}
+                    placeholder="Example: Main entrance"
+                  />
+                </div>
+
+                <div className={styles.formField}>
+                  <label className={styles.formLabel}>
+                    Session Note{" "}
+                    <span className={styles.formLabelHint}>optional</span>
+                  </label>
+
+                  <textarea
+                    className={styles.formInput}
+                    rows={4}
+                    maxLength={1000}
+                    value={formSessionNote}
+                    onChange={(e) => setFormSessionNote(e.target.value)}
+                    placeholder="Example: Bring water and arrive 15 minutes early."
+                  />
                 </div>
               </div>
-              <button type="button" className={styles.modalClose} onClick={() => setParticipantsModal(null)}>✕</button>
             </div>
 
-            {/* Summary pills — shown when not loading and has data */}
-            {!loadingParticipants && participants.length > 0 && (
-              <div className={styles.participantsSummary}>
-                {confirmedBookings.length > 0 && (
-                  <span className={`${styles.summaryPill} ${styles.summaryConfirmed}`}>
-                    <span className={styles.summaryDot} />
-                    {confirmedBookings.length} confirmed
-                  </span>
-                )}
-                {pendingBookings.length > 0 && (
-                  <span className={`${styles.summaryPill} ${styles.summaryPending}`}>
-                    <span className={styles.summaryDot} />
-                    {pendingBookings.length} pending
-                  </span>
-                )}
-                {cancelledBookings.length > 0 && (
-                  <span className={`${styles.summaryPill} ${styles.summaryCancelled}`}>
-                    <span className={styles.summaryDot} />
-                    {cancelledBookings.length} cancelled
-                  </span>
-                )}
-                {expiredBookings.length > 0 && (
-                  <span className={`${styles.summaryPill} ${styles.summaryExpired}`}>
-                    <span className={styles.summaryDot} />
-                    {expiredBookings.length} expired
-                  </span>
-                )}
-                {otherBookings.length > 0 && (
-                  <span className={`${styles.summaryPill} ${styles.summaryOther}`}>
-                    <span className={styles.summaryDot} />
-                    {otherBookings.length} other
-                  </span>
-                )}
-              </div>
-            )}
+            <div className={styles.modalFooter}>
+              <button className={styles.btnGhost} type="button" onClick={closeModal}>
+                Cancel
+              </button>
 
-            {/* Body */}
-            <div className={styles.participantsBody}>
-              {loadingParticipants ? (
-                <div className={styles.participantsSkeleton}>
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className={styles.skeletonRow}>
-                      <div className={styles.skeletonAvatar} />
-                      <div className={styles.skeletonLines}>
-                        <div className={styles.skeletonLine} style={{ width: "40%" }} />
-                        <div className={styles.skeletonLine} style={{ width: "60%" }} />
-                      </div>
-                      <div className={styles.skeletonBadge} />
-                    </div>
-                  ))}
-                </div>
-              ) : participants.length === 0 ? (
-                <div className={styles.participantsEmpty}>
-                  <div className={styles.participantsEmptyIcon}>🪑</div>
-                  <p className={styles.participantsEmptyTitle}>No bookings yet</p>
-                  <p className={styles.participantsEmptyHint}>Participants will appear here once the session is booked.</p>
-                </div>
-              ) : (
-                <div className={styles.accordionList}>
-
-                  {/* CONFIRMED — open by default */}
-                  <ParticipantAccordion label="Confirmed" count={confirmedBookings.length} accentCls="accentConfirmed" defaultOpen={true}>
-                    {confirmedBookings.map((p, idx) => renderBookingRow(p, idx, false))}
-                  </ParticipantAccordion>
-
-                  {/* PENDING — open by default (action required) */}
-                  <ParticipantAccordion label="Pending" count={pendingBookings.length} accentCls="accentPending" defaultOpen={true}>
-                    {pendingBookings.map((p, idx) => renderBookingRow(p, idx, true))}
-                  </ParticipantAccordion>
-
-                  {/* CANCELLED — collapsed by default */}
-                  <ParticipantAccordion label="Cancelled" count={cancelledBookings.length} accentCls="accentCancelled" defaultOpen={false}>
-                    {cancelledBookings.map((p, idx) => renderBookingRow(p, idx, false))}
-                  </ParticipantAccordion>
-
-                  {/* EXPIRED — collapsed by default */}
-                  <ParticipantAccordion label="Expired" count={expiredBookings.length} accentCls="accentExpired" defaultOpen={false}>
-                    {expiredBookings.map((p, idx) => renderBookingRow(p, idx, false))}
-                  </ParticipantAccordion>
-
-                  {/* OTHER — collapsed by default */}
-                  <ParticipantAccordion label="Other" count={otherBookings.length} accentCls="accentOther" defaultOpen={false}>
-                    {otherBookings.map((p, idx) => renderBookingRow(p, idx, false))}
-                  </ParticipantAccordion>
-
-                </div>
-              )}
+              <button
+                className={styles.btnPrimary}
+                type="button"
+                disabled={
+                  savingForm ||
+                  !formStartAt ||
+                  !formEndAt ||
+                  formCapacity < 3 ||
+                  new Date(formEndAt) <= new Date(formStartAt)
+                }
+                onClick={() =>
+                  modal.kind === "add"
+                    ? handleAddSession()
+                    : handleEditSession(modal.session)
+                }
+              >
+                {savingForm
+                  ? "Saving..."
+                  : modal.kind === "add"
+                    ? "Add Session"
+                    : "Save Changes"}
+              </button>
             </div>
-
-            {/* Footer */}
-            <div className={styles.participantsFooter}>
-              <span className={styles.participantsFooterStat}><strong>{confirmedBookings.length}</strong> confirmed</span>
-              <span className={styles.participantsFooterDot} />
-              <span className={styles.participantsFooterStat}><strong>{pendingBookings.length}</strong> pending</span>
-              <span className={styles.participantsFooterDot} />
-              <span className={styles.participantsFooterStat}><strong>{totalSeats}</strong> total seats</span>
-            </div>
-
           </div>
         </div>
       )}
+
+      {confirmAction && (
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => setConfirmAction(null)}
+        >
+          <div
+            className={`${styles.modal} ${styles.confirmModal}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 className={styles.modalTitle}>{confirmAction.title}</h2>
+                <p className={styles.modalSub}>Please review before continuing.</p>
+              </div>
+
+              <button
+                className={styles.modalClose}
+                type="button"
+                onClick={() => setConfirmAction(null)}
+              >
+                <Icon.X />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div
+                className={
+                  confirmAction.danger
+                    ? styles.confirmBoxDanger
+                    : styles.confirmBox
+                }
+              >
+                {confirmAction.message}
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                className={styles.btnGhost}
+                type="button"
+                onClick={() => setConfirmAction(null)}
+              >
+                Keep session
+              </button>
+
+              <button
+                className={
+                  confirmAction.danger
+                    ? styles.modalBtnDanger
+                    : styles.btnPrimary
+                }
+                type="button"
+                onClick={confirmSessionAction}
+              >
+                {confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={styles.toastStack} aria-live="polite">
+        {toasts.map((t) => {
+          const toastClass =
+            {
+              success: styles.toast_success,
+              warning: styles.toast_warning,
+              error: styles.toast_error,
+            }[t.type] ?? "";
+
+          return (
+            <div key={t.id} className={`${styles.toastItem} ${toastClass}`}>
+              <span className={styles.toastIcon}>
+                {t.type === "success" ? "✓" : t.type === "warning" ? "!" : "×"}
+              </span>
+
+              <span className={styles.toastText}>{t.message}</span>
+
+              <button
+                type="button"
+                className={styles.toastClose}
+                onClick={() => closeToast(t.id)}
+              >
+                <Icon.X />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

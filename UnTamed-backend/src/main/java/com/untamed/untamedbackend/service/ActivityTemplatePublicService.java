@@ -31,7 +31,10 @@ public class ActivityTemplatePublicService {
 
     public List<PublicTemplateCardResponse> list() {
         Instant now = Instant.now();
-        return templateRepo.findAll().stream()
+
+        return templateRepo.findAll()
+                .stream()
+                .filter(t -> !t.isArchived())
                 .map(t -> toCard(t, now))
                 .filter(card -> card.nextSession() != null)
                 .toList();
@@ -39,19 +42,33 @@ public class ActivityTemplatePublicService {
 
     public PublicTemplateCardResponse get(String templateId) {
         Instant now = Instant.now();
+
         ActivityTemplate t = templateRepo.findById(templateId)
                 .orElseThrow(() -> new IllegalArgumentException("Template not found"));
+
+        if (t.isArchived()) {
+            throw new IllegalArgumentException("Template not found");
+        }
+
         return toCard(t, now);
     }
 
     public List<PublicSessionDto> listUpcomingSessions(String templateId) {
-        templateRepo.findById(templateId)
+        ActivityTemplate template = templateRepo.findById(templateId)
                 .orElseThrow(() -> new IllegalArgumentException("Template not found"));
 
+        if (template.isArchived()) {
+            throw new IllegalArgumentException("Template not found");
+        }
+
         Instant now = Instant.now();
+
         return sessionRepo
                 .findByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
-                        templateId, ActivityStatus.PUBLISHED, now)
+                        templateId,
+                        ActivityStatus.PUBLISHED,
+                        now
+                )
                 .stream()
                 .map(s -> new PublicSessionDto(
                         s.getId(),
@@ -66,6 +83,9 @@ public class ActivityTemplatePublicService {
     public List<PublicTemplateCardResponse> search(TemplateSearchCriteria c) {
         Query query = new Query();
         List<Criteria> criteriaList = new ArrayList<>();
+
+        // Hide archived templates from public search.
+        criteriaList.add(Criteria.where("archived").ne(true));
 
         boolean hasAddressId = c.addressId() != null && !c.addressId().isBlank();
         boolean hasQ = c.q() != null && !c.q().isBlank();
@@ -90,7 +110,8 @@ public class ActivityTemplatePublicService {
         }
 
         if (c.categoryIds() != null && !c.categoryIds().isEmpty()) {
-            List<String> cleanedCategoryIds = c.categoryIds().stream()
+            List<String> cleanedCategoryIds = c.categoryIds()
+                    .stream()
                     .filter(id -> id != null && !id.isBlank())
                     .toList();
 
@@ -98,6 +119,7 @@ public class ActivityTemplatePublicService {
                 criteriaList.add(Criteria.where("category_ids").in(cleanedCategoryIds));
             }
         }
+
         if (c.difficulty() != null) {
             criteriaList.add(Criteria.where("difficulty").is(c.difficulty()));
         }
@@ -108,6 +130,7 @@ public class ActivityTemplatePublicService {
             if (c.minPrice() != null) {
                 priceCriteria.gte(c.minPrice());
             }
+
             if (c.maxPrice() != null) {
                 priceCriteria.lte(c.maxPrice());
             }
@@ -115,12 +138,14 @@ public class ActivityTemplatePublicService {
             criteriaList.add(priceCriteria);
         }
 
-        // Date filtering is based on sessions, not templates
+        // Date filtering is based on sessions, not templates.
         Set<String> templateIdsMatchingDate = findTemplateIdsMatchingDateRange(c.dateFrom(), c.dateTo());
+
         if (templateIdsMatchingDate != null) {
             if (templateIdsMatchingDate.isEmpty()) {
                 return List.of();
             }
+
             criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
         }
 
@@ -130,7 +155,9 @@ public class ActivityTemplatePublicService {
 
         Instant now = Instant.now();
 
-        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class).stream()
+        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class)
+                .stream()
+                .filter(t -> !t.isArchived())
                 .map(t -> toCard(t, now))
                 .filter(card -> card.nextSession() != null)
                 .toList();
@@ -150,17 +177,34 @@ public class ActivityTemplatePublicService {
 
         if (hasDateFrom && hasDateTo) {
             sessions = sessionRepo.findByStatusAndStartAtBetween(
-                    ActivityStatus.PUBLISHED, dateFrom, dateTo);
+                    ActivityStatus.PUBLISHED,
+                    dateFrom,
+                    dateTo
+            );
         } else if (hasDateFrom) {
             sessions = sessionRepo.findByStatusAndStartAtAfter(
-                    ActivityStatus.PUBLISHED, dateFrom);
+                    ActivityStatus.PUBLISHED,
+                    dateFrom
+            );
         } else {
             sessions = sessionRepo.findByStatusAndStartAtBefore(
-                    ActivityStatus.PUBLISHED, dateTo);
+                    ActivityStatus.PUBLISHED,
+                    dateTo
+            );
         }
 
-        return sessions.stream()
+        Set<String> templateIds = sessions.stream()
                 .map(ActivitySession::getTemplateId)
+                .collect(Collectors.toSet());
+
+        if (templateIds.isEmpty()) {
+            return Set.of();
+        }
+
+        return templateRepo.findAllById(templateIds)
+                .stream()
+                .filter(t -> !t.isArchived())
+                .map(ActivityTemplate::getId)
                 .collect(Collectors.toSet());
     }
 
@@ -168,11 +212,14 @@ public class ActivityTemplatePublicService {
         RatingSummary r = t.getRating() == null
                 ? RatingSummary.builder().average(0.0).count(0).build()
                 : t.getRating();
+
         RatingSummaryDto ratingDto = new RatingSummaryDto(r.getAverage(), r.getCount());
 
         String coverUrl = null;
+
         if (t.getImages() != null && !t.getImages().isEmpty()) {
-            coverUrl = t.getImages().stream()
+            coverUrl = t.getImages()
+                    .stream()
                     .filter(ActivityImage::isCover)
                     .findFirst()
                     .map(ActivityImage::getUrl)
@@ -181,7 +228,8 @@ public class ActivityTemplatePublicService {
 
         List<ActivityImageDto> imageDtos = t.getImages() == null
                 ? List.of()
-                : t.getImages().stream()
+                : t.getImages()
+                .stream()
                 .sorted(Comparator.comparingInt(ActivityImage::getOrder))
                 .map(img -> new ActivityImageDto(
                         img.getUrl(),
@@ -194,7 +242,10 @@ public class ActivityTemplatePublicService {
 
         PublicNextSessionDto next = sessionRepo
                 .findFirstByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
-                        t.getId(), ActivityStatus.PUBLISHED, now)
+                        t.getId(),
+                        ActivityStatus.PUBLISHED,
+                        now
+                )
                 .map(s -> new PublicNextSessionDto(
                         s.getId(),
                         s.getStartAt(),
@@ -202,13 +253,16 @@ public class ActivityTemplatePublicService {
                         s.getBookedCount()
                 ))
                 .orElse(null);
+
         int totalBookedCount = sessionRepo.findByTemplateId(t.getId())
                 .stream()
                 .mapToInt(ActivitySession::getBookedCount)
                 .sum();
 
         PublicGuideDto guideDto = null;
+
         User guide = userRepo.findById(t.getGuideId()).orElse(null);
+
         if (guide != null) {
             User.GuideProfile gp = guide.getGuideProfile();
 
@@ -236,6 +290,7 @@ public class ActivityTemplatePublicService {
 
         if (t.getAddressId() != null) {
             Address addr = addressRepo.findById(t.getAddressId()).orElse(null);
+
             if (addr != null) {
                 addressDisplayName = addr.getDisplayName();
                 governorate = addr.getGovernorate();

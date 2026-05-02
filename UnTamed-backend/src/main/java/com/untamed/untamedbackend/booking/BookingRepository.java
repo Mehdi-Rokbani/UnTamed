@@ -44,4 +44,7 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
             String sessionId,
             Collection<BookingStatus> statuses
     );
+    List<Booking> findBySessionIdIn(Collection<String> sessionIds);
+
+    void deleteBySessionIdIn(Collection<String> sessionIds);
 }

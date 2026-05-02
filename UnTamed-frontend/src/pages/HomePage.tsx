@@ -14,7 +14,7 @@ import {
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
-import { SmartDiscoveryBar } from "../components/search/SmartDiscoveryBar";
+import { SmartDiscoveryBar } from "../components/search/Smartdiscoverybar";
 import { semanticSearch } from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";

@@ -1,5 +1,8 @@
 package com.untamed.untamedbackend.service;
 
+import com.untamed.untamedbackend.booking.Booking;
+import com.untamed.untamedbackend.booking.BookingRepository;
+import com.untamed.untamedbackend.booking.BookingStatus;
 import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.model.*;
 import com.untamed.untamedbackend.recommendation.n8n.N8nWebhookService;
@@ -10,14 +13,16 @@ import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -32,20 +37,25 @@ public class ActivityTemplateService {
     private final GeoService geoService;
     private final N8nWebhookService n8nWebhookService;
     private final TagService tagService;
+    private final BookingRepository bookingRepo;
 
     // -------- Reads --------
 
     public List<ActivityTemplateResponse> listMineTemplates(String authEmail) {
         User guide = getGuideByEmail(authEmail);
-        return templateRepo.findByGuideId(guide.getId()).stream()
+
+        return templateRepo.findByGuideId(guide.getId())
+                .stream()
                 .map(this::toTemplateResponse)
                 .toList();
     }
 
     public ActivityTemplateResponse getTemplate(String templateId, String authEmail) {
         User guide = getGuideByEmail(authEmail);
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Template not found"));
+
         return toTemplateResponse(t);
     }
 
@@ -73,6 +83,8 @@ public class ActivityTemplateService {
                 .addressId(address.getId())
                 .location(loc)
                 .rating(RatingSummary.builder().average(0.0).count(0).build())
+                .archived(false)
+                .archivedAt(null)
                 .build();
 
         ActivityTemplate saved = templateRepo.save(t);
@@ -82,28 +94,49 @@ public class ActivityTemplateService {
         return toTemplateResponse(saved);
     }
 
-    public ActivityTemplateResponse updateTemplate(String templateId, ActivityTemplateUpdateRequest req, String authEmail) {
+    public ActivityTemplateResponse updateTemplate(
+            String templateId,
+            ActivityTemplateUpdateRequest req,
+            String authEmail
+    ) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        if (req.title() != null && !req.title().isBlank()) t.setTitle(req.title());
-        if (req.description() != null && !req.description().isBlank()) t.setDescription(req.description());
-        if (req.difficulty() != null) t.setDifficulty(req.difficulty());
+        if (req.title() != null && !req.title().isBlank()) {
+            t.setTitle(req.title());
+        }
+
+        if (req.description() != null && !req.description().isBlank()) {
+            t.setDescription(req.description());
+        }
+
+        if (req.difficulty() != null) {
+            t.setDifficulty(req.difficulty());
+        }
 
         if (req.price() != null) {
-            if (req.price().signum() < 0) throw new IllegalArgumentException("Price must be >= 0");
+            if (req.price().signum() < 0) {
+                throw new IllegalArgumentException("Price must be >= 0");
+            }
+
             t.setPrice(req.price());
         }
 
         if (req.categoryIds() != null) {
-            if (req.categoryIds().isEmpty()) throw new IllegalArgumentException("At least one category is required");
+            if (req.categoryIds().isEmpty()) {
+                throw new IllegalArgumentException("At least one category is required");
+            }
+
             t.setCategoryIds(req.categoryIds());
         }
 
         if (req.images() != null) {
-            if (req.images().isEmpty()) throw new IllegalArgumentException("At least one image is required");
+            if (req.images().isEmpty()) {
+                throw new IllegalArgumentException("At least one image is required");
+            }
+
             t.setImages(toImageModels(req.images()));
         }
 
@@ -111,19 +144,28 @@ public class ActivityTemplateService {
             t.setTags(tagService.validateUsableTags(req.tags()));
         }
 
+        if (req.safetyNotes() != null) {
+            t.setSafetyNotes(req.safetyNotes());
+        }
+
         if (req.address() != null) {
             Address newAddress = getOrCreateAddress(req.address());
 
             if (t.getAddressId() == null || !t.getAddressId().equals(newAddress.getId())) {
-                if (t.getAddressId() != null) decrementUsesCount(t.getAddressId());
+                if (t.getAddressId() != null) {
+                    decrementUsesCount(t.getAddressId());
+                }
+
                 t.setAddressId(newAddress.getId());
                 incrementUsesCount(newAddress.getId());
             }
 
             GeoJsonPoint newLoc = newAddress.getLocation();
+
             if (newLoc == null && newAddress.getLongitude() != null && newAddress.getLatitude() != null) {
                 newLoc = new GeoJsonPoint(newAddress.getLongitude(), newAddress.getLatitude());
             }
+
             t.setLocation(newLoc);
         }
 
@@ -134,33 +176,97 @@ public class ActivityTemplateService {
         return toTemplateResponse(saved);
     }
 
-    public void deleteTemplate(String templateId, String authEmail) {
+    public ActivityTemplateDeleteResponse deleteTemplate(String templateId, String authEmail) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate template = templateRepo.findByIdAndGuideId(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        if (sessionRepo.existsByTemplateId(templateId)) {
-            throw new IllegalStateException("Cannot delete template with existing sessions");
+        List<ActivitySession> sessions = sessionRepo.findByTemplateId(templateId);
+
+        if (sessions.isEmpty()) {
+            if (template.getAddressId() != null) {
+                decrementUsesCount(template.getAddressId());
+            }
+
+            templateRepo.deleteById(template.getId());
+
+            return new ActivityTemplateDeleteResponse(
+                    template.getId(),
+                    ActivityTemplateDeleteAction.DELETED,
+                    "Activity deleted successfully."
+            );
         }
 
-        if (t.getAddressId() != null) decrementUsesCount(t.getAddressId());
+        List<String> sessionIds = sessions.stream()
+                .map(ActivitySession::getId)
+                .toList();
 
-        templateRepo.deleteById(t.getId());
+        List<Booking> bookings = bookingRepo.findBySessionIdIn(sessionIds);
+
+        boolean hasBlockingFutureBooking = hasBlockingFutureBooking(sessions, bookings);
+
+        if (hasBlockingFutureBooking) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot permanently delete this activity because it has upcoming sessions with active or confirmed bookings. Archive it instead or wait until the sessions end."
+            );
+        }
+
+        if (!bookings.isEmpty()) {
+            bookingRepo.deleteAll(bookings);
+        }
+
+        sessionRepo.deleteAll(sessions);
+
+        if (template.getAddressId() != null) {
+            decrementUsesCount(template.getAddressId());
+        }
+
+        templateRepo.deleteById(template.getId());
+
+        ActivityTemplateDeleteAction action = bookings.isEmpty()
+                ? ActivityTemplateDeleteAction.DELETED_WITH_SESSIONS
+                : ActivityTemplateDeleteAction.DELETED_WITH_HISTORY;
+
+        String message = bookings.isEmpty()
+                ? "Activity and its sessions were deleted successfully."
+                : "Activity, ended sessions, and related booking history were deleted successfully.";
+
+        return new ActivityTemplateDeleteResponse(
+                template.getId(),
+                action,
+                message
+        );
     }
 
     // -------- Images --------
 
-    public ActivityTemplateResponse addImage(String templateId, MultipartFile file, boolean cover, String alt, String authEmail) {
+    public ActivityTemplateResponse addImage(
+            String templateId,
+            MultipartFile file,
+            boolean cover,
+            String alt,
+            String authEmail
+    ) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        CloudinaryService.UploadResult up = cloudinaryService.uploadAvatar(file, "activity-templates/" + templateId);
+        CloudinaryService.UploadResult up = cloudinaryService.uploadAvatar(
+                file,
+                "activity-templates/" + templateId
+        );
 
-        List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
-        int nextOrder = imgs.stream().mapToInt(ActivityImage::getOrder).max().orElse(-1) + 1;
+        List<ActivityImage> imgs = t.getImages() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(t.getImages());
+
+        int nextOrder = imgs.stream()
+                .mapToInt(ActivityImage::getOrder)
+                .max()
+                .orElse(-1) + 1;
 
         ActivityImage newImg = ActivityImage.builder()
                 .url(up.url())
@@ -176,6 +282,7 @@ public class ActivityTemplateService {
             }
         } else {
             boolean hasCover = imgs.stream().anyMatch(ActivityImage::isCover);
+
             if (!hasCover) {
                 newImg.setCover(true);
             }
@@ -185,20 +292,24 @@ public class ActivityTemplateService {
         t.setImages(imgs);
 
         ActivityTemplate saved = templateRepo.save(t);
+
         return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse deleteImage(String templateId, String publicId, String authEmail) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
         if (publicId == null || publicId.isBlank()) {
             throw new IllegalArgumentException("publicId is required");
         }
 
-        List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
+        List<ActivityImage> imgs = t.getImages() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(t.getImages());
+
         ActivityImage target = imgs.stream()
                 .filter(i -> publicId.equals(i.getPublicId()))
                 .findFirst()
@@ -213,30 +324,37 @@ public class ActivityTemplateService {
             ActivityImage first = imgs.stream()
                     .min(Comparator.comparingInt(ActivityImage::getOrder))
                     .orElseThrow();
+
             for (ActivityImage i : imgs) {
                 i.setCover(false);
             }
+
             first.setCover(true);
         }
 
         t.setImages(imgs);
 
         ActivityTemplate saved = templateRepo.save(t);
+
         return toTemplateResponse(saved);
     }
 
     public ActivityTemplateResponse setCoverImage(String templateId, String publicId, String authEmail) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
+        List<ActivityImage> imgs = t.getImages() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(t.getImages());
+
         boolean found = false;
 
         for (ActivityImage i : imgs) {
             boolean isTarget = publicId.equals(i.getPublicId());
             i.setCover(isTarget);
+
             if (isTarget) {
                 found = true;
             }
@@ -249,16 +367,24 @@ public class ActivityTemplateService {
         t.setImages(imgs);
 
         ActivityTemplate saved = templateRepo.save(t);
+
         return toTemplateResponse(saved);
     }
 
-    public ActivityTemplateResponse reorderImages(String templateId, List<String> publicIdsInOrder, String authEmail) {
+    public ActivityTemplateResponse reorderImages(
+            String templateId,
+            List<String> publicIdsInOrder,
+            String authEmail
+    ) {
         User guide = getGuideByEmail(authEmail);
 
-        ActivityTemplate t = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+        ActivityTemplate t = templateRepo.findByIdAndGuideIdAndArchivedFalse(templateId, guide.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
 
-        List<ActivityImage> imgs = t.getImages() == null ? new ArrayList<>() : new ArrayList<>(t.getImages());
+        List<ActivityImage> imgs = t.getImages() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(t.getImages());
+
         if (imgs.isEmpty()) {
             return toTemplateResponse(t);
         }
@@ -270,7 +396,9 @@ public class ActivityTemplateService {
 
         List<String> wanted = publicIdsInOrder == null
                 ? List.of()
-                : publicIdsInOrder.stream().filter(Objects::nonNull).toList();
+                : publicIdsInOrder.stream()
+                .filter(Objects::nonNull)
+                .toList();
 
         if (existingIds.size() != wanted.size() || !existingIds.containsAll(wanted)) {
             throw new IllegalArgumentException("Invalid reorder list");
@@ -278,6 +406,7 @@ public class ActivityTemplateService {
 
         for (int idx = 0; idx < wanted.size(); idx++) {
             String id = wanted.get(idx);
+
             for (ActivityImage img : imgs) {
                 if (id.equals(img.getPublicId())) {
                     img.setOrder(idx);
@@ -289,6 +418,7 @@ public class ActivityTemplateService {
         t.setImages(imgs);
 
         ActivityTemplate saved = templateRepo.save(t);
+
         return toTemplateResponse(saved);
     }
 
@@ -297,15 +427,23 @@ public class ActivityTemplateService {
     private User getGuideByEmail(String authEmail) {
         User u = userRepo.findByEmail(authEmail)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
         if (u.getRole() != Role.GUIDE) {
             throw new IllegalArgumentException("Only GUIDE can manage activities");
         }
+
         return u;
     }
 
     private Address getOrCreateAddress(AddressPickDto dto) {
-        if (dto == null) throw new IllegalArgumentException("Address is required");
-        if (dto.provider() == null || dto.provider().isBlank()) throw new IllegalArgumentException("provider is required");
+        if (dto == null) {
+            throw new IllegalArgumentException("Address is required");
+        }
+
+        if (dto.provider() == null || dto.provider().isBlank()) {
+            throw new IllegalArgumentException("provider is required");
+        }
+
         if (dto.providerPlaceId() == null || dto.providerPlaceId().isBlank()) {
             throw new IllegalArgumentException("providerPlaceId is required");
         }
@@ -315,11 +453,13 @@ public class ActivityTemplateService {
         return addressRepo.findByProviderAndProviderPlaceId(provider, dto.providerPlaceId())
                 .orElseGet(() -> {
                     GeoJsonPoint loc = null;
+
                     if (dto.longitude() != null && dto.latitude() != null) {
                         loc = new GeoJsonPoint(dto.longitude(), dto.latitude());
                     }
 
                     String normalizedKey = null;
+
                     if (dto.latitude() != null && dto.longitude() != null) {
                         normalizedKey = normalize(dto.latitude(), dto.longitude(), 5);
                     }
@@ -341,7 +481,10 @@ public class ActivityTemplateService {
     }
 
     private void incrementUsesCount(String addressId) {
-        if (addressId == null || addressId.isBlank()) return;
+        if (addressId == null || addressId.isBlank()) {
+            return;
+        }
+
         mongo.updateFirst(
                 Query.query(Criteria.where("_id").is(addressId)),
                 new Update().inc("usesCount", 1),
@@ -350,9 +493,15 @@ public class ActivityTemplateService {
     }
 
     private void decrementUsesCount(String addressId) {
-        if (addressId == null || addressId.isBlank()) return;
+        if (addressId == null || addressId.isBlank()) {
+            return;
+        }
+
         addressRepo.findById(addressId).ifPresent(addr -> {
-            if (addr.getUsesCount() <= 0) return;
+            if (addr.getUsesCount() <= 0) {
+                return;
+            }
+
             mongo.updateFirst(
                     Query.query(Criteria.where("_id").is(addressId).and("usesCount").gt(0)),
                     new Update().inc("usesCount", -1),
@@ -365,19 +514,25 @@ public class ActivityTemplateService {
         double p = Math.pow(10, decimals);
         double rlat = Math.round(lat * p) / p;
         double rlon = Math.round(lon * p) / p;
+
         return rlat + ":" + rlon;
     }
 
     private List<ActivityImage> toImageModels(List<ActivityImageDto> dtos) {
-        if (dtos == null) return List.of();
-        return dtos.stream().map(d -> ActivityImage.builder()
-                .url(d.url())
-                .publicId(d.publicId())
-                .alt(d.alt())
-                .cover(Boolean.TRUE.equals(d.cover()))
-                .order(d.order() == null ? 0 : d.order())
-                .build()
-        ).toList();
+        if (dtos == null) {
+            return List.of();
+        }
+
+        return dtos.stream()
+                .map(d -> ActivityImage.builder()
+                        .url(d.url())
+                        .publicId(d.publicId())
+                        .alt(d.alt())
+                        .cover(Boolean.TRUE.equals(d.cover()))
+                        .order(d.order() == null ? 0 : d.order())
+                        .build()
+                )
+                .toList();
     }
 
     private ActivityTemplateResponse toTemplateResponse(ActivityTemplate t) {
@@ -396,23 +551,110 @@ public class ActivityTemplateService {
                 t.getGuideId(),
                 t.getAddressId(),
                 t.getTags() == null ? List.of() : t.getTags(),
-                t.getSafetyNotes(),
+                t.getSafetyNotes() == null ? List.of() : t.getSafetyNotes(),
                 ratingDto,
                 toImageDtos(t.getImages()),
                 t.getCategoryIds() == null ? List.of() : t.getCategoryIds(),
+                t.isArchived(),
+                t.getArchivedAt(),
                 t.getCreatedAt(),
                 t.getUpdatedAt()
         );
     }
 
     private List<ActivityImageDto> toImageDtos(List<ActivityImage> models) {
-        if (models == null) return List.of();
-        return models.stream().map(m -> new ActivityImageDto(
-                m.getUrl(),
-                m.getPublicId(),
-                m.getAlt(),
-                m.isCover(),
-                m.getOrder()
-        )).toList();
+        if (models == null) {
+            return List.of();
+        }
+
+        return models.stream()
+                .map(m -> new ActivityImageDto(
+                        m.getUrl(),
+                        m.getPublicId(),
+                        m.getAlt(),
+                        m.isCover(),
+                        m.getOrder()
+                ))
+                .toList();
+    }
+
+    public ActivityTemplateArchiveResponse archiveTemplate(String templateId, String authEmail) {
+        User guide = getGuideByEmail(authEmail);
+
+        ActivityTemplate template = templateRepo.findByIdAndGuideId(templateId, guide.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Not allowed or template not found"));
+
+        if (template.isArchived()) {
+            return new ActivityTemplateArchiveResponse(
+                    template.getId(),
+                    ActivityTemplateArchiveAction.ALREADY_ARCHIVED,
+                    "Activity is already archived."
+            );
+        }
+
+        List<ActivitySession> sessions = sessionRepo.findByTemplateId(templateId);
+
+        if (!sessions.isEmpty()) {
+            List<String> sessionIds = sessions.stream()
+                    .map(ActivitySession::getId)
+                    .toList();
+
+            List<Booking> bookings = bookingRepo.findBySessionIdIn(sessionIds);
+
+            boolean hasBlockingFutureBooking = hasBlockingFutureBooking(sessions, bookings);
+
+            if (hasBlockingFutureBooking) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Cannot archive this activity because it has upcoming sessions with active or confirmed bookings."
+                );
+            }
+
+            Instant now = Instant.now();
+
+            List<ActivitySession> futureSessionsWithoutBookings = sessions.stream()
+                    .filter(s -> s.getEndAt() != null && s.getEndAt().isAfter(now))
+                    .filter(s -> bookings.stream().noneMatch(b -> s.getId().equals(b.getSessionId())))
+                    .toList();
+
+            for (ActivitySession session : futureSessionsWithoutBookings) {
+                if (session.getStatus() == ActivityStatus.PUBLISHED || session.getStatus() == ActivityStatus.DRAFT) {
+                    session.setStatus(ActivityStatus.CANCELLED);
+                }
+            }
+
+            if (!futureSessionsWithoutBookings.isEmpty()) {
+                sessionRepo.saveAll(futureSessionsWithoutBookings);
+            }
+        }
+
+        template.setArchived(true);
+        template.setArchivedAt(Instant.now());
+
+        ActivityTemplate saved = templateRepo.save(template);
+
+        return new ActivityTemplateArchiveResponse(
+                saved.getId(),
+                ActivityTemplateArchiveAction.ARCHIVED,
+                "Activity archived successfully. Past sessions and history are preserved."
+        );
+    }
+    private boolean hasBlockingFutureBooking(List<ActivitySession> sessions, List<Booking> bookings) {
+        Instant now = Instant.now();
+
+        List<BookingStatus> blockingStatuses = List.of(
+                BookingStatus.PENDING,
+                BookingStatus.PAYING,
+                BookingStatus.COMPLETED
+        );
+
+        return sessions.stream()
+                .filter(session -> session.getEndAt() == null || session.getEndAt().isAfter(now))
+                .anyMatch(session ->
+                        bookings.stream().anyMatch(booking ->
+                                session.getId().equals(booking.getSessionId())
+                                        && blockingStatuses.contains(booking.getStatus())
+                        )
+                );
     }
 }

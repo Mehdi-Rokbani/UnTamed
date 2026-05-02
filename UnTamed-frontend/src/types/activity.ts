@@ -1,7 +1,12 @@
 import type { AddressResponse } from "./geo";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
-export type ActivityStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
+
+export type ActivityStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "CANCELLED"
+  | "COMPLETED";
 
 export type RatingSummary = {
   average: number;
@@ -28,7 +33,7 @@ export type AddressPickDto = {
 };
 
 /** ---------------------------
- *  TEMPLATE (product, rated)
+ *  TEMPLATE
  *  ---------------------------
  */
 
@@ -47,7 +52,8 @@ export type ActivityTemplateCreatePayload = {
   images?: ActivityImage[];
 };
 
-export type ActivityTemplateUpdatePayload = Partial<ActivityTemplateCreatePayload>;
+export type ActivityTemplateUpdatePayload =
+  Partial<ActivityTemplateCreatePayload>;
 
 export type ActivityTemplateResponse = {
   id: string;
@@ -66,8 +72,34 @@ export type ActivityTemplateResponse = {
   images: ActivityImage[];
   categoryIds: string[];
 
+  archived: boolean;
+  archivedAt?: string | null;
+
   createdAt?: string | null;
   updatedAt?: string | null;
+};
+
+export type ActivityTemplateDeleteAction =
+  | "DELETED"
+  | "DELETED_WITH_SESSIONS"
+  | "DELETED_WITH_HISTORY"
+  | "BLOCKED";
+
+export type ActivityTemplateArchiveAction =
+  | "ARCHIVED"
+  | "ALREADY_ARCHIVED"
+  | "BLOCKED";
+
+export type ActivityTemplateDeleteResponse = {
+  templateId: string;
+  action: ActivityTemplateDeleteAction;
+  message: string;
+};
+
+export type ActivityTemplateArchiveResponse = {
+  templateId: string;
+  action: ActivityTemplateArchiveAction;
+  message: string;
 };
 
 /** ---------------------------
@@ -76,20 +108,32 @@ export type ActivityTemplateResponse = {
  */
 
 export type ActivitySessionCreatePayload = {
-  startAt: string; // ISO
-  endAt: string; // ISO
+  startAt: string;
+  endAt: string;
   capacity: number;
-  meetingPoint?: string;
-  sessionNote?: string;
+  meetingPoint?: string | null;
+  sessionNote?: string | null;
 };
 
 export type ActivitySessionUpdatePayload = {
-  startAt?: string;
-  endAt?: string;
-  capacity?: number;
-  status?: ActivityStatus;
-  meetingPoint?: string;
-  sessionNote?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  capacity?: number | null;
+  status?: ActivityStatus | null;
+  meetingPoint?: string | null;
+  sessionNote?: string | null;
+};
+
+export type ActivitySessionDeleteAction =
+  | "DELETED"
+  | "CANCELLED"
+  | "KEPT_HISTORY"
+  | "BLOCKED";
+
+export type ActivitySessionDeleteResponse = {
+  sessionId: string;
+  action: ActivitySessionDeleteAction;
+  message: string;
 };
 
 export type ActivityTemplateMini = {
@@ -100,6 +144,7 @@ export type ActivityTemplateMini = {
   guideId: string;
   tags?: string[] | null;
   coverImageUrl?: string | null;
+  categoryIds?: string[] | null;
 };
 
 export type ActivitySessionResponse = {
@@ -120,14 +165,48 @@ export type ActivitySessionResponse = {
 };
 
 /** ---------------------------
- *  PUBLIC browse
+ *  GUIDE SESSION DETAILS
+ *  ---------------------------
+ */
+
+export type BookingStatus =
+  | "PENDING"
+  | "PAYING"
+  | "COMPLETED"
+  | "EXPIRED"
+  | "CANCELLED";
+
+export type GuideParticipantDto = {
+  bookingId: string;
+  userId: string;
+  username?: string | null;
+  email?: string | null;
+  profileImageUrl?: string | null;
+  numberOfPeople: number;
+  status: BookingStatus;
+  createdAt: string;
+};
+
+export type GuideSessionDetailsResponse = {
+  session: ActivitySessionResponse;
+  bookings: GuideParticipantDto[];
+  totalBookings: number;
+  totalPeople: number;
+  pendingCount: number;
+  payingCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  expiredCount: number;
+};
+
+/** ---------------------------
+ *  PUBLIC BROWSE
  *  ---------------------------
  */
 
 export type PublicNextSession = {
-  id: string;
-  startAt: string;
-  endAt: string;
+  sessionId: string;
+  date: string;
   capacity: number;
   bookedCount: number;
 };
@@ -139,7 +218,6 @@ export type PublicSession = {
   capacity: number;
   bookedCount: number;
 };
-
 
 export type TemplateWithAddress = ActivityTemplateResponse & {
   address?: AddressResponse | null;

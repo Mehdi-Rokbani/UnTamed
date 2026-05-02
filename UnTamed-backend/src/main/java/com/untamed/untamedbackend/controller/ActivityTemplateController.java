@@ -4,6 +4,7 @@ import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.service.ActivityTemplateService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +22,7 @@ public class ActivityTemplateController {
         this.templateService = templateService;
     }
 
-    // -------- Guide (authenticated) --------
+    // -------- Guide templates --------
 
     @GetMapping("/mine")
     public List<ActivityTemplateResponse> listMine() {
@@ -34,21 +35,22 @@ public class ActivityTemplateController {
     }
 
     @PostMapping
-    public ActivityTemplateResponse create(@Valid @RequestBody ActivityTemplateCreateRequest req) {
+    public ActivityTemplateResponse create(
+            @Valid @RequestBody ActivityTemplateCreateRequest req
+    ) {
         return templateService.createTemplate(req, requireAuthEmail());
     }
 
     @PatchMapping("/{id}")
-    public ActivityTemplateResponse update(@PathVariable String id, @Valid @RequestBody ActivityTemplateUpdateRequest req) {
+    public ActivityTemplateResponse update(
+            @PathVariable String id,
+            @Valid @RequestBody ActivityTemplateUpdateRequest req
+    ) {
         return templateService.updateTemplate(id, req, requireAuthEmail());
     }
 
-    @DeleteMapping("/{id}")
-    public void delete(@PathVariable String id) {
-        templateService.deleteTemplate(id, requireAuthEmail());
-    }
 
-    // -------- Images (template) --------
+    // -------- Template images --------
 
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ActivityTemplateResponse addImage(
@@ -88,18 +90,40 @@ public class ActivityTemplateController {
 
     private String requireAuthEmail() {
         String email = getAuthEmailOrNull();
-        if (email == null) throw new IllegalArgumentException("Unauthorized");
+
+        if (email == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+
         return email;
     }
 
     private String getAuthEmailOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) return null;
+
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+
         Object principal = auth.getPrincipal();
+
         if (principal instanceof String s) {
-            if ("anonymousUser".equalsIgnoreCase(s)) return null;
+            if ("anonymousUser".equalsIgnoreCase(s)) {
+                return null;
+            }
+
             return s;
         }
+
         return auth.getName();
+    }
+    @DeleteMapping("/{id}")
+    public ActivityTemplateDeleteResponse delete(@PathVariable String id) {
+        return templateService.deleteTemplate(id, requireAuthEmail());
+    }
+
+    @PatchMapping("/{id}/archive")
+    public ActivityTemplateArchiveResponse archive(@PathVariable String id) {
+        return templateService.archiveTemplate(id, requireAuthEmail());
     }
 }

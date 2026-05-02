@@ -115,6 +115,16 @@ public class ActivitySessionController {
         return sessionService.deleteOrCancelSession(id, requireAuthEmail());
     }
 
+    @PatchMapping("/{id}/restore")
+    public ActivitySessionResponse restore(@PathVariable String id) {
+        return sessionService.restoreCancelledSession(id, requireAuthEmail());
+    }
+
+    @DeleteMapping("/{id}/permanent")
+    public ActivitySessionDeleteResponse deletePermanently(@PathVariable String id) {
+        return sessionService.permanentlyDeleteCancelledSession(id, requireAuthEmail());
+    }
+
     // -------- Auth helpers --------
 
     private String requireAuthEmail() {

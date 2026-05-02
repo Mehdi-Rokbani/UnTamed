@@ -22,6 +22,9 @@ public record ActivityTemplateResponse(
         List<ActivityImageDto> images,
         List<String> categoryIds,
 
+        boolean archived,
+        Instant archivedAt,
+
         Instant createdAt,
         Instant updatedAt
 ) {}
