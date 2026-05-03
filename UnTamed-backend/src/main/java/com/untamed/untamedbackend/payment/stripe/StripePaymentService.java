@@ -5,16 +5,21 @@ import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingService;
+import com.untamed.untamedbackend.model.ActivitySession;
+import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.payment.PaymentAttempt;
 import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
 import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
 import com.untamed.untamedbackend.payment.PaymentProvider;
+import com.untamed.untamedbackend.repository.ActivitySessionRepository;
+import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import com.stripe.Stripe;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -25,35 +30,38 @@ public class StripePaymentService {
     private final StripeProperties stripeProps;
     private final PaymentAttemptRepository attempts;
     private final BookingService bookingService;
+    private final ActivitySessionRepository activitySessionRepository;
+    private final ActivityTemplateRepository activityTemplateRepository;
 
     public StripeCreatePaymentResponse create(String userId, String bookingId) {
-        Stripe.apiKey = stripeProps.getSecretKey();
         Booking booking = bookingService.markPaying(bookingId, userId);
 
-        int amount = computeAmount(booking);
-        String currency = "USD";
-
-        String idempotencyKey = "stripe:" + bookingId + ":" + UUID.randomUUID();
-
-        PaymentAttempt attempt = PaymentAttempt.builder()
-                .bookingId(bookingId)
-                .userId(userId)
-                .provider(PaymentProvider.STRIPE)
-                .status(PaymentAttemptStatus.CREATED)
-                .amount(amount)
-                .currency(currency)
-                .idempotencyKey(idempotencyKey)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-
-        attempt = attempts.save(attempt);
+        PaymentAttempt attempt = null;
 
         try {
+            long amount = computeAmountInCents(booking);
+            String currency = "usd";
+
+            String idempotencyKey = "stripe:" + bookingId + ":" + UUID.randomUUID();
+
+            attempt = PaymentAttempt.builder()
+                    .bookingId(bookingId)
+                    .userId(userId)
+                    .provider(PaymentProvider.STRIPE)
+                    .status(PaymentAttemptStatus.CREATED)
+                    .amount((int) amount)
+                    .currency(currency.toUpperCase())
+                    .idempotencyKey(idempotencyKey)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+
+            attempt = attempts.save(attempt);
+
             SessionCreateParams params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl(stripeProps.getSuccessUrl() + "?session_id={CHECKOUT_SESSION_ID}")
-                    .setCancelUrl(stripeProps.getCancelUrl())
+                    .setSuccessUrl(stripeProps.getSuccessUrl())
+                    .setCancelUrl(stripeProps.getCancelUrl() + "?bookingId=" + bookingId)
                     .putMetadata("bookingId", bookingId)
                     .putMetadata("userId", userId)
                     .putMetadata("attemptId", attempt.getId())
@@ -63,10 +71,10 @@ public class StripePaymentService {
                                     .setPriceData(
                                             SessionCreateParams.LineItem.PriceData.builder()
                                                     .setCurrency(currency)
-                                                    .setUnitAmount((long) amount)
+                                                    .setUnitAmount(amount)
                                                     .setProductData(
                                                             SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                    .setName("Booking payment")
+                                                                    .setName("Untamed booking")
                                                                     .setDescription("Booking payment: " + bookingId)
                                                                     .build()
                                                     )
@@ -86,12 +94,57 @@ public class StripePaymentService {
             return new StripeCreatePaymentResponse(session.getUrl(), session.getId());
 
         } catch (StripeException e) {
-            e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, e.getMessage());
+            if (attempt != null) {
+                attempt.setStatus(PaymentAttemptStatus.FAILED);
+                attempt.setUpdatedAt(Instant.now());
+                attempts.save(attempt);
+            }
+
+            bookingService.handlePaymentFailed(bookingId);
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Stripe payment creation failed"
+            );
+
+        } catch (RuntimeException e) {
+            bookingService.handlePaymentFailed(bookingId);
+            throw e;
         }
     }
 
-    private int computeAmount(Booking booking) {
-        return Math.max(1, booking.getNumberOfPeople()) * 10_000;
+    public void cancelPayment(String userId, String bookingId) {
+        bookingService.handlePaymentFailed(bookingId, userId);
+    }
+
+    private long computeAmountInCents(Booking booking) {
+        ActivitySession session = activitySessionRepository.findById(booking.getSessionId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Activity session not found"
+                ));
+
+        ActivityTemplate template = activityTemplateRepository.findById(session.getTemplateId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Activity template not found"
+                ));
+
+        BigDecimal price = template.getPrice();
+
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Activity price must be greater than 0"
+            );
+        }
+
+        int people = Math.max(1, booking.getNumberOfPeople());
+
+        return price
+                .multiply(BigDecimal.valueOf(people))
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 }

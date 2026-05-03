@@ -1,4 +1,4 @@
-package com.untamed.untamedbackend.payment;
+package com.untamed.untamedbackend.payment.Konnect_disabled;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

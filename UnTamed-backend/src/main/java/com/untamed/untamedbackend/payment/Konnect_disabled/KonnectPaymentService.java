@@ -1,8 +1,11 @@
-package com.untamed.untamedbackend.payment;
+package com.untamed.untamedbackend.payment.Konnect_disabled;
 
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingService;
-import com.untamed.untamedbackend.payment.Konnect.*;
+import com.untamed.untamedbackend.payment.PaymentAttempt;
+import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
+import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
+import com.untamed.untamedbackend.payment.PaymentProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

@@ -4,11 +4,11 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
+import com.untamed.untamedbackend.booking.BookingService;
 import com.untamed.untamedbackend.payment.PaymentAttempt;
 import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
 import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
 import com.untamed.untamedbackend.payment.PaymentProvider;
-import com.untamed.untamedbackend.booking.BookingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,39 +39,48 @@ public class StripeWebhookController {
                     sigHeader,
                     stripeProps.getWebhookSecret()
             );
-            System.out.println("Webhook secret: " + stripeProps.getWebhookSecret());
         } catch (SignatureVerificationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
         }
 
-        switch (event.getType()) {
-            case "checkout.session.completed" -> handleCheckoutSessionCompleted(event);
-            case "payment_intent.payment_failed" -> handlePaymentFailed(event);
-            default -> {
-                // ignore unneeded events
-            }
+        if ("checkout.session.completed".equals(event.getType())) {
+            handleCheckoutSessionCompleted(event);
         }
 
         return ResponseEntity.ok("received");
     }
 
     private void handleCheckoutSessionCompleted(Event event) {
-        Session session = (Session) event.getDataObjectDeserializer()
-                .getObject()
-                .orElse(null);
+        Session session;
 
-        if (session == null) return;
+        try {
+            session = (Session) event.getDataObjectDeserializer()
+                    .deserializeUnsafe();
+        } catch (Exception e) {
+            System.out.println("Could not deserialize Stripe checkout session: " + e.getMessage());
+            return;
+        }
+
+        if (session == null) {
+            System.out.println("Stripe checkout session is null");
+            return;
+        }
 
         String sessionId = session.getId();
+        System.out.println("Checkout session completed: " + sessionId);
 
         Optional<PaymentAttempt> optionalAttempt =
                 attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, sessionId);
 
-        if (optionalAttempt.isEmpty()) return;
+        if (optionalAttempt.isEmpty()) {
+            System.out.println("No payment attempt found for Stripe session: " + sessionId);
+            return;
+        }
 
         PaymentAttempt attempt = optionalAttempt.get();
 
         if (attempt.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
+            System.out.println("Payment attempt already succeeded: " + attempt.getId());
             return;
         }
 
@@ -80,11 +89,7 @@ public class StripeWebhookController {
         attempts.save(attempt);
 
         bookingService.markCompleted(attempt.getBookingId());
-    }
 
-    private void handlePaymentFailed(Event event) {
-        // optional for now
-        // checkout flow is mostly confirmed by checkout.session.completed
-        // so failure handling can be added later if needed
+        System.out.println("Payment succeeded and booking completed: " + attempt.getBookingId());
     }
 }

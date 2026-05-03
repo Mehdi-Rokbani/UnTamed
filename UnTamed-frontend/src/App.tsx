@@ -21,6 +21,8 @@ import GuideActivitiesPage from "./pages/GuideActivitiesPage";
 import EditActivityPage from "./pages/EditActivityPage";
 import TemplateSessionsPage from "./pages/Templatesessionspage";
 import MyBookingsPage from "./pages/MyBookingsPage";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentCancel from "./pages/PaymentCancel";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -46,7 +48,7 @@ export default function App() {
             </RequireAuth>
           }
         />
-        
+
         <Route
           path="/activities/:id"
           element={
@@ -57,13 +59,13 @@ export default function App() {
         />
 
         <Route
-  path="/my-bookings"
-  element={
-    <RequireAuth>
-      <MyBookingsPage />
-    </RequireAuth>
-  }
-/>
+          path="/my-bookings"
+          element={
+            <RequireAuth>
+              <MyBookingsPage />
+            </RequireAuth>
+          }
+        />
 
         {/* Profile */}
         <Route
@@ -131,8 +133,21 @@ export default function App() {
         {/* Errors */}
         <Route path="/403" element={<ForbiddenFallback />} />
 
+        {/* Stripe payment result pages */}
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/payment-cancel" element={<PaymentCancel />} />
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
+
+
+
+
+
+
+
+
+
       </Routes>
     </AuthProvider>
   );

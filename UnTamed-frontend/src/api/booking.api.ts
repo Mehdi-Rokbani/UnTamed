@@ -1,7 +1,7 @@
 // src/api/booking.api.ts
 import { http } from "./http";
 
-export type BookingStatus = "PENDING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+export type BookingStatus = "PENDING" | "PAYING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
 
 export type Booking = {
   id: string;
@@ -14,22 +14,90 @@ export type Booking = {
   expiresAt?: string | null;
 };
 
+// ── Enriched booking returned by the new /api/bookings/mine/details endpoint ──
+// If you have not yet added this backend endpoint, see the backend changes section
+// in the deliverables note below. Until then, listMyBookingsWithDetails falls back
+// to the basic /api/bookings/mine and leaves location fields null.
+export type BookingWithDetails = Booking & {
+  // Activity template info
+  activityTitle: string | null;
+  activityImageUrl: string | null;
+
+  // Price info
+  price?: number | string | null;
+  unitPrice?: number | string | null;
+  pricePerPerson?: number | string | null;
+  activityPrice?: number | string | null;
+  totalPrice?: number | string | null;
+  priceTotal?: number | string | null;
+  amountTotal?: number | string | null;
+  bookingTotal?: number | string | null;
+  currency?: string | null;
+
+  // Session info
+  sessionStartAt: string | null;
+
+  // Address / location info
+  displayName: string | null;
+  governorate: string | null;
+  locality: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 export type CreateBookingRequest = {
   sessionId: string;
   numberOfPeople: number;
 };
 
-export async function listMyBookings() {
+export async function listMyBookings(): Promise<Booking[]> {
   const { data } = await http.get<Booking[]>("/api/bookings/mine", { withCredentials: true });
   return data;
 }
 
-export async function createOrIncreaseBooking(body: CreateBookingRequest) {
+/**
+ * Fetches bookings enriched with session, template, and address details
+ * (including lat/lng for map pins).
+ *
+ * Requires the new backend endpoint: GET /api/bookings/mine/details
+ * which returns BookingWithDetails[].
+ *
+ * If the endpoint is not yet available this falls back to the basic
+ * /mine endpoint and fills location fields with null.
+ */
+export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]> {
+  try {
+    const { data } = await http.get<BookingWithDetails[]>(
+      "/api/bookings/mine/details",
+      { withCredentials: true }
+    );
+    return data;
+  } catch {
+    // Graceful fallback: basic bookings without location data
+    const basic = await listMyBookings();
+    return basic.map((b) => ({
+      ...b,
+      activityTitle:    null,
+      activityImageUrl: null,
+      pricePerPerson:   null,
+      totalPrice:       null,
+      currency:         "TND",
+      sessionStartAt:   null,
+      displayName:      null,
+      governorate:      null,
+      locality:         null,
+      latitude:         null,
+      longitude:        null,
+    }));
+  }
+}
+
+export async function createOrIncreaseBooking(body: CreateBookingRequest): Promise<Booking> {
   const { data } = await http.post<Booking>("/api/bookings", body, { withCredentials: true });
   return data;
 }
 
-export async function increaseBookingSeats(bookingId: string, delta: number) {
+export async function increaseBookingSeats(bookingId: string, delta: number): Promise<Booking> {
   const { data } = await http.post<Booking>(
     `/api/bookings/${bookingId}/increase`,
     null,
@@ -38,7 +106,7 @@ export async function increaseBookingSeats(bookingId: string, delta: number) {
   return data;
 }
 
-export async function decreaseBookingSeats(bookingId: string, delta: number) {
+export async function decreaseBookingSeats(bookingId: string, delta: number): Promise<Booking> {
   const { data } = await http.post<Booking>(
     `/api/bookings/${bookingId}/decrease`,
     null,
@@ -47,7 +115,7 @@ export async function decreaseBookingSeats(bookingId: string, delta: number) {
   return data;
 }
 
-export async function cancelBooking(bookingId: string) {
+export async function cancelBooking(bookingId: string): Promise<{ bookingId: string; status: BookingStatus }> {
   const { data } = await http.post<{ bookingId: string; status: BookingStatus }>(
     `/api/bookings/${bookingId}/cancel`,
     null,
@@ -55,11 +123,34 @@ export async function cancelBooking(bookingId: string) {
   );
   return data;
 }
-export async function confirmBooking(bookingId: string) {
+
+export async function confirmBooking(bookingId: string): Promise<Booking> {
   const { data } = await http.post<Booking>(
     `/api/bookings/${bookingId}/confirm`,
     null,
     { withCredentials: true }
   );
   return data;
+}
+
+export type StripeCreatePaymentResponse = {
+  checkoutUrl: string;
+  sessionId: string;
+};
+
+export async function createStripePayment(bookingId: string): Promise<StripeCreatePaymentResponse> {
+  const { data } = await http.post<StripeCreatePaymentResponse>(
+    `/api/payments/stripe/create/${bookingId}`,
+    null,
+    { withCredentials: true }
+  );
+  return data;
+}
+
+export async function cancelStripePayment(bookingId: string): Promise<void> {
+  await http.post(
+    `/api/payments/stripe/cancel/${bookingId}`,
+    null,
+    { withCredentials: true }
+  );
 }

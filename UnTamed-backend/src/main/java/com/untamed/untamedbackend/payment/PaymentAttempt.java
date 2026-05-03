@@ -35,7 +35,7 @@ public class PaymentAttempt {
 
     // Provider references
     @Indexed(sparse = true)
-    private String providerRef; // Konnect paymentRef
+    private String providerRef; // Stripe Checkout Session ID / provider payment reference
 
     @Indexed(unique = true)
     private String idempotencyKey;

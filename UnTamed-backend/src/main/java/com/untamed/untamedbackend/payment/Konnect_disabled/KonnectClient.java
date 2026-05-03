@@ -1,9 +1,9 @@
 package com.untamed.untamedbackend.payment.konnect;
 
-import com.untamed.untamedbackend.payment.Konnect.KonnectInitRequest;
-import com.untamed.untamedbackend.payment.Konnect.KonnectInitResponse;
-import com.untamed.untamedbackend.payment.Konnect.KonnectPaymentDetailsResponse;
-import com.untamed.untamedbackend.payment.Konnect.KonnectProperties;
+import com.untamed.untamedbackend.payment.Konnect_disabled.KonnectInitRequest;
+import com.untamed.untamedbackend.payment.Konnect_disabled.KonnectInitResponse;
+import com.untamed.untamedbackend.payment.Konnect_disabled.KonnectPaymentDetailsResponse;
+import com.untamed.untamedbackend.payment.Konnect_disabled.KonnectProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;

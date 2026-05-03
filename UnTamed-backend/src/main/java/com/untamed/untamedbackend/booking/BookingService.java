@@ -1,15 +1,8 @@
 package com.untamed.untamedbackend.booking;
 
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
-import com.untamed.untamedbackend.model.ActivitySession;
-import com.untamed.untamedbackend.model.ActivityStatus;
-import com.untamed.untamedbackend.model.ActivityTemplate;
-import com.untamed.untamedbackend.model.Review;
-import com.untamed.untamedbackend.model.User;
-import com.untamed.untamedbackend.repository.ActivitySessionRepository;
-import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
-import com.untamed.untamedbackend.repository.ReviewRepository;
-import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.model.*;
+import com.untamed.untamedbackend.repository.*;
 import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
 import com.untamed.untamedbackend.service.UserInsightService;
@@ -19,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +30,7 @@ public class BookingService {
     private final ReviewRepository reviewRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final UserInsightService userInsightService;
+    private final AddressRepository addressRepository;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -65,8 +60,15 @@ public class BookingService {
         var payingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
                 userId, sessionId, BookingStatus.PAYING
         );
+
         if (payingOpt.isPresent()) {
-            throw conflict("Payment in progress. Please verify payment status.");
+            Booking paying = payingOpt.get();
+
+            if (paying.getExpiresAt() != null && paying.getExpiresAt().isBefore(Instant.now())) {
+                expireBooking(paying.getId());
+            } else {
+                throw conflict("Payment in progress. Please verify payment status.");
+            }
         }
 
         var pendingOpt = bookingRepository.findFirstByUserIdAndSessionIdAndStatus(
@@ -190,11 +192,14 @@ public class BookingService {
                 .status(savedBooking.getStatus())
                 .build();
     }
-
     public void expireBooking(String bookingId) {
         Booking b = bookingRepository.findById(bookingId).orElse(null);
         if (b == null) return;
-        if (b.getStatus() != BookingStatus.PENDING) return;
+
+        if (b.getStatus() != BookingStatus.PENDING && b.getStatus() != BookingStatus.PAYING) {
+            return;
+        }
+
         if (b.getExpiresAt() == null) return;
         if (!b.getExpiresAt().isBefore(Instant.now())) return;
 
@@ -209,6 +214,7 @@ public class BookingService {
 
         bookingRepository.save(b);
     }
+
 
     public List<Booking> listMine(String userId) {
         return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -656,5 +662,117 @@ public class BookingService {
                 .seatsLeft(seatsLeft)
                 .participants(participants)
                 .build();
+    }
+    public Booking handlePaymentFailed(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+
+        if (b.getStatus() == BookingStatus.COMPLETED) return b;
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) return b;
+
+        Instant now = Instant.now();
+        Instant exp = b.getExpiresAt();
+
+        if (exp != null && exp.isBefore(now)) {
+            expireBooking(b.getId());
+            return bookingRepository.findById(b.getId()).orElse(null);
+        }
+
+        if (b.getStatus() == BookingStatus.PAYING) {
+            b.setStatus(BookingStatus.PENDING);
+            b.setUpdatedAt(now);
+            return bookingRepository.save(b);
+        }
+
+        return b;
+    }
+
+    public List<BookingWithDetailsDto> listMineWithDetails(String userId) {
+        List<Booking> bookings = bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        return bookings.stream().map(b -> {
+            // Defaults
+            String activityTitle    = null;
+            String activityImageUrl = null;
+            Instant sessionStartAt  = null;
+            String displayName      = null;
+            String governorate      = null;
+            String locality         = null;
+            Double latitude         = null;
+            Double longitude        = null;
+            BigDecimal pricePerPerson = null;
+            BigDecimal totalPrice     = null;
+
+            // Resolve session
+            ActivitySession session = activitySessionRepository
+                    .findById(b.getSessionId())
+                    .orElse(null);
+
+            if (session != null) {
+                sessionStartAt = session.getStartAt();
+
+                // Resolve template
+                ActivityTemplate template = activityTemplateRepository
+                        .findById(session.getTemplateId())
+                        .orElse(null);
+
+                if (template != null) {
+                    activityTitle = template.getTitle();
+
+                    pricePerPerson = template.getPrice();
+                    totalPrice = pricePerPerson != null
+                            ? pricePerPerson.multiply(BigDecimal.valueOf(b.getNumberOfPeople()))
+                            : null;
+
+                    // Cover image: first image with cover=true, else first image overall
+                    if (template.getImages() != null && !template.getImages().isEmpty()) {
+                        activityImageUrl = template.getImages().stream()
+                                .filter(img -> Boolean.TRUE.equals(img.isCover()))
+                                .findFirst()
+                                .or(() -> template.getImages().stream().findFirst())
+                                .map(img -> img.getUrl())
+                                .orElse(null);
+                    }
+
+                    // Resolve address
+                    if (template.getAddressId() != null) {
+                        Address address = addressRepository
+                                .findById(template.getAddressId())
+                                .orElse(null);
+
+                        if (address != null) {
+                            displayName = address.getDisplayName();
+                            governorate = address.getGovernorate();
+                            locality    = address.getLocality();
+                            latitude    = address.getLatitude();
+                            longitude   = address.getLongitude();
+                        }
+                    }
+                }
+            }
+
+            return new BookingWithDetailsDto(
+                    b.getId(),
+                    b.getUserId(),
+                    b.getSessionId(),
+                    b.getNumberOfPeople(),
+                    b.getStatus(),
+                    b.getCreatedAt(),
+                    b.getUpdatedAt(),
+                    b.getExpiresAt(),
+                    activityTitle,
+                    activityImageUrl,
+                    sessionStartAt,
+                    displayName,
+                    governorate,
+                    locality,
+                    latitude,
+                    longitude,
+                    pricePerPerson,
+                    totalPrice
+            );
+        }).toList();
     }
 }

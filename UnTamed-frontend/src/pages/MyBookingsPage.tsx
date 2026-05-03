@@ -1,87 +1,149 @@
 // src/pages/MyBookingsPage.tsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import L from "leaflet";
 import { Header } from "../components/Header";
 import * as BookingApi from "../api/booking.api";
-import * as ActivityApi from "../api/activity.api";
-import { useAuth } from "../auth/auth.store";
+import type { BookingWithDetails } from "../api/booking.api";
 import styles from "../style/my-bookings.module.css";
 
-type LoadState = "loading" | "done" | "error";
+import "leaflet/dist/leaflet.css";
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 
-// ── Icons ──
-const IcoCalendar = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
-const IcoUsers = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-  </svg>
-);
-const IcoExternalLink = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-    <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
-const IcoCheck = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-const IcoX = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-const IcoClock = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-const IcoMapPin = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
-  </svg>
-);
-const IcoCompass = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <circle cx="12" cy="12" r="10" />
-    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-  </svg>
-);
-const IcoAlertTriangle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
-const IcoChevronDown = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-const IcoArrowRight = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-  </svg>
-);
+// ─── Types ──────────────────────────────────────────────────────────────────────
+type LoadState   = "loading" | "done" | "error";
+type ViewMode    = "map" | "list";
+type DisplayStatus =
+  | "UPCOMING"
+  | "PENDING_PAYMENT"
+  | "PAYING"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "EXPIRED";
 
-// ── Status config ──
-type BookingStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | string;
+function getDisplayStatus(b: BookingWithDetails): DisplayStatus {
+  const sessionDate = b.sessionStartAt ? new Date(b.sessionStartAt) : null;
+  const isFuture = sessionDate ? sessionDate.getTime() > Date.now() : false;
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  PENDING:   { label: "Pending",   icon: <IcoClock />,  cls: "statusPending"   },
-  CONFIRMED: { label: "Confirmed", icon: <IcoCheck />,  cls: "statusConfirmed" },
-  COMPLETED: { label: "Completed", icon: <IcoCheck />,  cls: "statusCompleted" },
-  CANCELLED: { label: "Cancelled", icon: <IcoX />,      cls: "statusCancelled" },
+  if (b.status === "COMPLETED" && isFuture) {
+    return "UPCOMING";
+  }
+
+  if (b.status === "COMPLETED") {
+    return "COMPLETED";
+  }
+
+  if (b.status === "PENDING") {
+    return "PENDING_PAYMENT";
+  }
+
+  if (b.status === "PAYING") {
+    return "PAYING";
+  }
+
+  if (b.status === "CANCELLED") {
+    return "CANCELLED";
+  }
+
+  if (b.status === "EXPIRED") {
+    return "EXPIRED";
+  }
+
+  return "EXPIRED";
+}
+
+// ─── Status config (raw API statuses) ────────────────────────────────────────
+type FilterKey = "ALL" | "UPCOMING" | "CONFIRMED" | "HISTORY";
+
+// Display-status config (what we actually show in UI)
+const DISPLAY_STATUS_CONFIG: Record<DisplayStatus, {
+  label: string; color: string; bg: string; border: string; pin: string;
+}> = {
+  UPCOMING:        { label: "Upcoming",            color: "#ea580c", bg: "rgba(234,88,12,0.09)",   border: "rgba(234,88,12,0.22)",   pin: "#f97316" },
+  PENDING_PAYMENT: { label: "Pending payment",     color: "#d97706", bg: "rgba(217,119,6,0.09)",   border: "rgba(217,119,6,0.22)",   pin: "#f59e0b" },
+  PAYING:          { label: "Payment in progress", color: "#b45309", bg: "rgba(180,83,9,0.08)",    border: "rgba(180,83,9,0.18)",    pin: "#f59e0b" },
+  COMPLETED:       { label: "Completed",           color: "#4b7a5e", bg: "rgba(75,122,94,0.09)",   border: "rgba(75,122,94,0.20)",   pin: "#6b9e80" },
+  CANCELLED:       { label: "Cancelled",           color: "#dc2626", bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.18)",   pin: "#dc2626" },
+  EXPIRED:         { label: "Expired",             color: "#64748b", bg: "rgba(100,116,139,0.09)", border: "rgba(100,116,139,0.18)", pin: "#94a3b8" },
 };
 
-function fmtDate(iso?: string) {
+function getDisplayCfg(ds: DisplayStatus) {
+  return DISPLAY_STATUS_CONFIG[ds] ?? DISPLAY_STATUS_CONFIG.EXPIRED;
+}
+
+// ─── Sidebar section groups (ordered by priority) ────────────────────────────
+const SECTION_GROUPS: Array<{
+  id: string;
+  label: string;
+  displayStatuses: DisplayStatus[];
+  isPaying?: boolean;
+}> = [
+  { id: "paying",    label: "In progress",         displayStatuses: ["PAYING"],                          isPaying: true },
+  { id: "upcoming",  label: "Upcoming trips",       displayStatuses: ["UPCOMING", ]           },
+  { id: "pending",   label: "Awaiting payment",     displayStatuses: ["PENDING_PAYMENT"]                 },
+  { id: "completed", label: "Completed",            displayStatuses: ["COMPLETED"]                       },
+  { id: "history",   label: "Expired & cancelled",  displayStatuses: ["CANCELLED", "EXPIRED"]            },
+];
+
+// ─── Filter chips ─────────────────────────────────────────────────────────────
+const FILTER_OPTIONS: Array<{ key: FilterKey; label: string }> = [
+  { key: "ALL",       label: "All"       },
+  { key: "UPCOMING",  label: "Upcoming"  },
+  { key: "CONFIRMED", label: "Confirmed" },
+  { key: "HISTORY",   label: "History"   },
+];
+
+// ─── Map: which display statuses appear on map ────────────────────────────────
+const DEFAULT_MAP_DISPLAY_STATUSES = new Set<DisplayStatus>(["UPCOMING", "COMPLETED"]);
+
+// ─── Custom Leaflet pins ─────────────────────────────────────────────────────
+function createPin(color: string, selected = false, dimmed = false): L.DivIcon {
+  const size   = selected ? 44 : 32;
+  const h      = size * 1.25;
+  const shadow = selected
+    ? `drop-shadow(0 4px 16px ${color}bb)`
+    : "drop-shadow(0 2px 8px rgba(0,0,0,0.30))";
+  const ring = selected ? `
+    <div style="
+      position:absolute;inset:-10px;border-radius:50%;
+      border:2.5px solid ${color};opacity:.5;
+      animation:pinPulse 1.8s ease-out infinite;pointer-events:none;
+    "></div>` : "";
+  return L.divIcon({
+    className: "",
+    iconAnchor:  [size / 2, size],
+    popupAnchor: [0, -size - 4],
+    html: `
+      <div style="position:relative;width:${size}px;height:${h}px;
+                  opacity:${dimmed ? 0.25 : 1};transition:opacity .2s;">
+        ${ring}
+        <svg viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg"
+             width="${size}" height="${h}"
+             style="filter:${shadow};display:block;">
+          <path d="M16 0C9.37 0 4 5.37 4 12c0 9.6 12 28 12 28S28 21.6 28 12C28 5.37 22.63 0 16 0z"
+                fill="${color}"/>
+          <circle cx="16" cy="12" r="5.5" fill="white" fill-opacity="0.92"/>
+        </svg>
+      </div>`,
+  });
+}
+
+// ─── Map fly-to helper ───────────────────────────────────────────────────────
+function FlyTo({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  useEffect(() => { map.flyTo([lat, lng], 11, { duration: 1.2 }); }, [lat, lng, map]);
+  return null;
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+function fmtDate(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -91,65 +153,138 @@ function fmtDate(iso?: string) {
   });
 }
 
-function fmtDateShort(iso?: string) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function timeFromNow(iso?: string) {
+function timeCountdown(iso?: string | null): string | null {
   if (!iso) return null;
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) return null;
-  const days = Math.floor(diff / 86400000);
-  if (days > 0) return `in ${days}d`;
-  const hrs = Math.floor(diff / 3600000);
-  return hrs > 0 ? `in ${hrs}h` : "soon";
+  const days = Math.floor(diff / 86_400_000);
+  if (days > 0) return `${days}d away`;
+  const hrs = Math.floor(diff / 3_600_000);
+  return hrs > 0 ? `${hrs}h away` : "Soon";
 }
 
-// ── Skeleton ──
-function SkeletonActivityCard() {
+type BookingPriceShape = BookingWithDetails & {
+  price?: number | string | null;
+  unitPrice?: number | string | null;
+  pricePerPerson?: number | string | null;
+  activityPrice?: number | string | null;
+  totalPrice?: number | string | null;
+  priceTotal?: number | string | null;
+  amountTotal?: number | string | null;
+  bookingTotal?: number | string | null;
+  currency?: string | null;
+};
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function getUnitPrice(b: BookingWithDetails): number | null {
+  const priced = b as BookingPriceShape;
   return (
-    <div className={styles.activityCard}>
-      <div className={styles.activityImageWrap}>
-        <div className={styles.skeletonImg} />
-      </div>
-      <div className={styles.activityContent}>
-        <div className={styles.skeletonLine} style={{ width: "55%", height: 18 }} />
-        <div className={styles.skeletonLine} style={{ width: "35%", height: 13, marginTop: 6 }} />
-        <div className={styles.skeletonLine} style={{ width: "100%", height: 52, marginTop: 14, borderRadius: 10 }} />
-      </div>
-    </div>
+    asNumber(priced.pricePerPerson) ??
+    asNumber(priced.unitPrice) ??
+    asNumber(priced.activityPrice) ??
+    asNumber(priced.price)
   );
 }
 
-// ── Cancel Modal ──
-function CancelModal({ onConfirm, onDismiss, busy }: {
-  onConfirm: () => void; onDismiss: () => void; busy: boolean;
-}) {
+function getTotalPrice(b: BookingWithDetails): number | null {
+  const priced = b as BookingPriceShape;
+  const directTotal =
+    asNumber(priced.totalPrice) ??
+    asNumber(priced.priceTotal) ??
+    asNumber(priced.amountTotal) ??
+    asNumber(priced.bookingTotal);
+
+  if (directTotal != null) return directTotal;
+
+  const unit = getUnitPrice(b);
+  return unit == null ? null : unit * Math.max(1, b.numberOfPeople || 1);
+}
+
+function getCurrency(b: BookingWithDetails): string {
+  return (b as BookingPriceShape).currency || "TND";
+}
+
+function fmtMoney(value: number | null | undefined, currency = "TND"): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function sortableTime(iso?: string | null): number {
+  if (!iso) return Number.MAX_SAFE_INTEGER;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+}
+
+function sortBookingsBySession(a: BookingWithDetails, b: BookingWithDetails): number {
+  return sortableTime(a.sessionStartAt) - sortableTime(b.sessionStartAt);
+}
+
+function makeActivityGroupKey(b: BookingWithDetails, ds = getDisplayStatus(b)): string {
+  const title = (b.activityTitle ?? "Activity").trim().toLowerCase();
+  const location = [b.latitude, b.longitude].every((v) => v != null)
+    ? `${b.latitude}|${b.longitude}`
+    : `${b.governorate ?? ""}|${b.locality ?? ""}|${b.displayName ?? ""}`.toLowerCase();
+
+  return `${ds}|${title}|${location}`;
+}
+
+// ─── SVG Icons ───────────────────────────────────────────────────────────────
+const IcoMap      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>;
+const IcoList     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+const IcoArrow    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+const IcoCompass  = () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>;
+const IcoPin      = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>;
+const IcoCal      = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IcoUsers    = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>;
+const IcoClose    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IcoAlert    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const IcoCreditCard = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+const IcoMoney    = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>;
+const IcoPlus     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IcoMinus    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IcoCheck    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const IcoExtLink  = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
+const IcoChevron  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+const IcoStripe   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M8 12h8M12 8v8"/></svg>;
+
+// ─── Cancel Modal ─────────────────────────────────────────────────────────────
+function LegacyCancelModal({
+  onConfirm, onDismiss, busy,
+}: { onConfirm: () => void; onDismiss: () => void; busy: boolean }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   return (
     <div
       className={styles.modalOverlay}
       ref={overlayRef}
       onClick={(e) => { if (e.target === overlayRef.current) onDismiss(); }}
+      role="dialog" aria-modal aria-labelledby="cancel-title"
     >
       <div className={styles.modal}>
-        <div className={styles.modalIcon}><IcoAlertTriangle /></div>
-        <h3 className={styles.modalTitle}>Cancel this booking?</h3>
+        <div className={styles.modalIconWrap}><IcoAlert /></div>
+        <h3 className={styles.modalTitle} id="cancel-title">Cancel this booking?</h3>
         <p className={styles.modalBody}>
-          This action can't be undone. Your spot will be released and you'll receive a cancellation confirmation.
+          This action can't be undone. Your spot will be released and you'll receive a confirmation email.
         </p>
         <div className={styles.modalActions}>
           <button className={styles.modalKeep} onClick={onDismiss} type="button">Keep it</button>
           <button
-            className={`${styles.modalCancel} ${busy ? styles.modalBusy : ""}`}
-            onClick={onConfirm}
-            disabled={busy}
-            type="button"
+            className={`${styles.modalCancel} ${busy ? styles.btnBusy : ""}`}
+            onClick={onConfirm} disabled={busy} type="button"
           >
-            {busy ? <><div className={styles.btnSpinner} />Cancelling…</> : "Yes, cancel"}
+            {busy ? <><div className={styles.spinner} />Cancelling…</> : "Yes, cancel"}
           </button>
         </div>
       </div>
@@ -157,301 +292,1224 @@ function CancelModal({ onConfirm, onDismiss, busy }: {
   );
 }
 
-// ── Single booking row (inside an activity group) ──
-function BookingRow({ b, s, busy, onConfirm, onCancel, onInc, onDec }: {
-  b: BookingApi.Booking;
-  s: any;
-  busy: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-  onInc: () => void;
-  onDec: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const statusCfg = STATUS_CONFIG[b.status] ?? { label: b.status, icon: null, cls: "statusPending" };
-  const isPending = b.status === "PENDING";
-  const countdown = timeFromNow(s?.date);
+// ─── Sidebar Card ─────────────────────────────────────────────────────────────
+void LegacyCancelModal;
+
+const SidebarCard = forwardRef<HTMLButtonElement, {
+  b: BookingWithDetails;
+  selected: boolean;
+  hovered: boolean;
+  onClick: () => void;
+  onHover: () => void;
+  onLeave: () => void;
+}>(function SidebarCard({ b, selected, hovered, onClick, onHover, onLeave }, ref) {
+  const ds        = getDisplayStatus(b);
+  const cfg       = getDisplayCfg(ds);
+  const countdown = timeCountdown(b.sessionStartAt);
+  const isFuture  = ds === "UPCOMING"  || ds === "PENDING_PAYMENT";
+  const totalPrice = getTotalPrice(b);
+  const unitPrice = getUnitPrice(b);
 
   return (
-    <div className={`${styles.bookingRow} ${expanded ? styles.bookingRowExpanded : ""}`}>
-      {/* ── Collapsed row ── */}
-      <button
-        className={styles.bookingRowHeader}
-        onClick={() => setExpanded((v) => !v)}
-        type="button"
-        aria-expanded={expanded}
-      >
-        <div className={styles.bookingRowLeft}>
-          <span className={`${styles.statusDot} ${styles[statusCfg.cls + "Dot"]}`} />
-          <div className={styles.bookingRowInfo}>
-            <span className={styles.bookingRowDate}>
-              <IcoCalendar /> {fmtDate(s?.date)}
-            </span>
-            <div className={styles.bookingRowMeta}>
-              <span><IcoUsers /> {b.numberOfPeople} {b.numberOfPeople === 1 ? "guest" : "guests"}</span>
-              <span className={styles.bookingIdBadge}>#{b.id.slice(-6).toUpperCase()}</span>
-            </div>
-          </div>
+    <button
+      ref={ref}
+      className={[
+        styles.sideCard,
+        selected ? styles.sideCardSelected : "",
+        hovered  ? styles.sideCardHovered  : "",
+      ].join(" ")}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      type="button"
+    >
+      {/* Left accent bar */}
+      {selected && (
+        <div className={styles.sideCardAccent} style={{ background: cfg.color }} />
+      )}
+
+      {/* Thumbnail */}
+      <div className={styles.sideCardImage}>
+        {b.activityImageUrl
+          ? <img src={b.activityImageUrl ?? undefined} alt={b.activityTitle ?? ""} loading="lazy" />
+          : <div className={styles.sideCardImageFallback}><IcoCompass /></div>
+        }
+      </div>
+
+      {/* Body */}
+      <div className={styles.sideCardBody}>
+        <div className={styles.sideCardTop}>
+          <span className={styles.sideCardTitle}>{b.activityTitle ?? "Activity"}</span>
+          <span
+            className={styles.statusPill}
+            style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+          >
+            {cfg.label}
+          </span>
         </div>
 
-        <div className={styles.bookingRowRight}>
-          {countdown && isPending && (
-            <span className={styles.countdownChip}>{countdown}</span>
+        <div className={styles.sideCardMetas}>
+          {b.sessionStartAt && (
+            <span className={styles.sideCardMeta}>
+              <IcoCal />
+              <span className={styles.metaText}>{fmtDate(b.sessionStartAt)}</span>
+              {isFuture && countdown && (
+                <span className={styles.countdown}>{countdown}</span>
+              )}
+            </span>
           )}
-          <span className={`${styles.statusPill} ${styles[statusCfg.cls]}`}>
-            {statusCfg.icon}{statusCfg.label}
+          {(b.governorate || b.displayName) && (
+            <span className={styles.sideCardMeta}>
+              <IcoPin />
+              <span className={styles.metaText}>{b.governorate ?? b.displayName}</span>
+            </span>
+          )}
+          <span className={styles.sideCardMeta}>
+            <IcoUsers />
+            <span className={styles.metaText}>
+              {b.numberOfPeople} guest{b.numberOfPeople !== 1 ? "s" : ""}
+            </span>
           </span>
-          <span className={`${styles.expandIcon} ${expanded ? styles.expandIconOpen : ""}`}>
-            <IcoChevronDown />
-          </span>
+          {totalPrice != null && (
+            <span className={styles.sideCardMeta}>
+              <IcoMoney />
+              <span className={styles.metaText}>
+                {fmtMoney(totalPrice, getCurrency(b))}
+                {unitPrice != null && b.numberOfPeople > 1 ? ` · ${fmtMoney(unitPrice, getCurrency(b))}/guest` : ""}
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+});
+
+void SidebarCard;
+
+type SidebarBookingGroup = {
+  id: string;
+  title: string;
+  displayStatus: DisplayStatus;
+  bookings: BookingWithDetails[];
+};
+
+function getLocationText(b: BookingWithDetails): string {
+  return [b.governorate, b.locality].filter(Boolean).join(", ") || b.displayName || "Location to be announced";
+}
+
+function getPreviewStatusText(ds: DisplayStatus): string {
+  if (ds === "PENDING_PAYMENT") return "Payment needed";
+  if (ds === "PAYING") return "Payment in progress";
+  return getDisplayCfg(ds).label;
+}
+
+function getExpandedStatusText(ds: DisplayStatus): string {
+  if (ds === "PENDING_PAYMENT") return "Awaiting payment";
+  if (ds === "PAYING") return "Checkout in progress";
+  if (ds === "COMPLETED") return "Trip completed";
+  if (ds === "CANCELLED") return "Booking cancelled";
+  if (ds === "EXPIRED") return "Booking expired";
+  return "Trip confirmed";
+}
+
+function PreviewBookingCard({
+  b,
+  selected,
+  onSelect,
+  onPay,
+  onCancel,
+  onAdjustGuests,
+}: {
+  b: BookingWithDetails;
+  selected: boolean;
+  onSelect: (b: BookingWithDetails) => void;
+  onPay: (b: BookingWithDetails) => void;
+  onCancel: (b: BookingWithDetails) => void;
+  onAdjustGuests: (b: BookingWithDetails) => void;
+}) {
+  const ds = getDisplayStatus(b);
+  const cfg = getDisplayCfg(ds);
+  const date = b.sessionStartAt ? new Date(b.sessionStartAt) : null;
+  const dateOk = date && !Number.isNaN(date.getTime());
+  const month = dateOk ? date.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : "TBD";
+  const day = dateOk ? date.toLocaleDateString("en-US", { day: "2-digit" }) : "--";
+  const unitPrice = getUnitPrice(b);
+  const totalPrice = getTotalPrice(b);
+  const canPay = ds === "PENDING_PAYMENT";
+  const canCancel = ds === "PENDING_PAYMENT" || ds === "UPCOMING";
+  const canAdjust = ds === "PENDING_PAYMENT";
+  const canReview = ds === "COMPLETED";
+  const coverStyle = b.activityImageUrl ? ({ backgroundImage: `url(${b.activityImageUrl})` } as CSSProperties) : undefined;
+  const tone =
+    ds === "PENDING_PAYMENT" || ds === "PAYING" ? styles.previewCardPayment :
+    ds === "CANCELLED" || ds === "EXPIRED" ? styles.previewCardMuted :
+    ds === "COMPLETED" ? styles.previewCardCompleted :
+    styles.previewCardUpcoming;
+
+  return (
+    <article className={styles.previewCardWrap}>
+      <button
+        className={`${styles.previewCard} ${tone} ${selected ? styles.previewCardSelected : ""}`}
+        onClick={() => onSelect(b)}
+        type="button"
+        aria-expanded={selected}
+      >
+        <div className={styles.previewCardBg} style={coverStyle} />
+        <div className={styles.previewCardOverlay} />
+        <span className={styles.previewStatusPill} style={{ "--status-color": cfg.color } as CSSProperties}>
+          {getPreviewStatusText(ds)}
+        </span>
+        <div className={styles.previewDateBadge}>
+          <span>{month}</span>
+          <strong>{day}</strong>
+        </div>
+        <div className={styles.previewCardText}>
+          <h3 className={styles.previewCardTitle}>{b.activityTitle ?? "Adventure"}</h3>
+          <p className={styles.previewCardLocation}>{getLocationText(b)}</p>
+        </div>
+        <div className={styles.previewSummary}>
+          <span>{b.numberOfPeople} guest{b.numberOfPeople !== 1 ? "s" : ""}</span>
+          <strong>{totalPrice != null ? fmtMoney(totalPrice, getCurrency(b)) : "TND 0"}</strong>
         </div>
       </button>
 
-      {/* ── Expanded actions ── */}
-      {expanded && (
-        <div className={styles.bookingRowActions}>
+      {selected && (
+        <div className={styles.expandedPreview}>
+          <div className={styles.expandedPreviewHero} style={coverStyle} />
+          <div className={styles.expandedPreviewContent}>
+            <h3 className={styles.expandedPreviewTitle}>{b.activityTitle ?? "Adventure"}</h3>
+            <p className={styles.expandedPreviewLocation}><IcoPin /> {getLocationText(b)}</p>
+            <div className={styles.expandedPreviewFacts}>
+              <div className={styles.expandedPreviewFact}>
+                <span>Date</span>
+                <strong>{fmtDate(b.sessionStartAt)}</strong>
+              </div>
+              <div className={styles.expandedPreviewFact}>
+                <span>Guests</span>
+                <strong>{b.numberOfPeople}</strong>
+              </div>
+              <div className={styles.expandedPreviewFact}>
+                <span>Total</span>
+                <strong>{totalPrice != null ? fmtMoney(totalPrice, getCurrency(b)) : "TND 0"}</strong>
+              </div>
+              <div className={`${styles.expandedPreviewFact} ${styles.expandedPreviewFactWide}`}>
+                <span>Price per guest</span>
+                <strong>{unitPrice != null ? fmtMoney(unitPrice, getCurrency(b)) : "Price unavailable"}</strong>
+              </div>
+            </div>
+          </div>
+          <div className={styles.expandedPreviewFooter}>
+            <span className={styles.expandedStatusText}>{getExpandedStatusText(ds)}</span>
+            <div className={styles.expandedActions}>
+              {canAdjust && <button type="button" onClick={() => onAdjustGuests(b)}>Adjust guests</button>}
+              {canPay && <button type="button" className={styles.modalPrimary} onClick={() => onPay(b)}>Pay now</button>}
+              {canCancel && <button type="button" className={styles.modalDanger} onClick={() => onCancel(b)}>Cancel</button>}
+              {b.sessionId && <Link to={`/activities/${b.sessionId}`}>View activity <IcoExtLink /></Link>}
+              {canReview && <button type="button">Review</button>}
+            </div>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PayNowModal({
+  b,
+  busy,
+  onDismiss,
+  onConfirm,
+}: {
+  b: BookingWithDetails;
+  busy: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+}) {
+  const unit = getUnitPrice(b);
+  const total = getTotalPrice(b);
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="pay-title">
+      <div className={styles.bookingModal}>
+        <h3 id="pay-title" className={styles.modalTitle}>Pay now</h3>
+        <div className={styles.modalSummary}>
+          <strong>{b.activityTitle ?? "Adventure"}</strong>
+          <span>{fmtDate(b.sessionStartAt)}</span>
+          <span>{b.numberOfPeople} guest{b.numberOfPeople !== 1 ? "s" : ""}</span>
+        </div>
+        <div className={styles.modalPriceRows}>
+          <span>Per guest</span><strong>{unit != null ? fmtMoney(unit, getCurrency(b)) : "Price unavailable"}</strong>
+          <span>Guests</span><strong>x {b.numberOfPeople}</strong>
+          <div className={styles.modalDivider} />
+          <span>Total due</span><strong className={styles.modalTotal}>{total != null ? fmtMoney(total, getCurrency(b)) : "TND 0"}</strong>
+        </div>
+        <div className={styles.modalActions}>
+          <button className={styles.modalSecondary} onClick={onDismiss} disabled={busy} type="button">Cancel</button>
+          <button className={styles.modalPrimary} onClick={onConfirm} disabled={busy} type="button">
+            {busy ? "Starting..." : `Pay ${total != null ? fmtMoney(total, getCurrency(b)) : "TND 0"}`}
+          </button>
+        </div>
+        <p className={styles.modalSecure}>Lock - Secured by Stripe</p>
+      </div>
+    </div>
+  );
+}
+
+function CancelBookingModal({
+  busy,
+  onDismiss,
+  onConfirm,
+}: {
+  busy: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="cancel-booking-title">
+      <div className={styles.bookingModal}>
+        <div className={styles.modalDangerIcon}><IcoAlert /></div>
+        <h3 id="cancel-booking-title" className={styles.modalTitle}>Cancel this booking?</h3>
+        <p className={styles.modalBody}>Your spot will be released. Refunds depend on the activity's cancellation policy.</p>
+        <div className={styles.warningBox}>
+          Refunds are not guaranteed - check the activity page for the cancellation terms before proceeding.
+        </div>
+        <div className={styles.modalActions}>
+          <button className={styles.modalSecondary} onClick={onDismiss} disabled={busy} type="button">Keep it</button>
+          <button className={styles.modalDanger} onClick={onConfirm} disabled={busy} type="button">
+            {busy ? "Cancelling..." : "Yes, cancel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdjustGuestsModal({
+  b,
+  busy,
+  onDismiss,
+  onConfirm,
+}: {
+  b: BookingWithDetails;
+  busy: boolean;
+  onDismiss: () => void;
+  onConfirm: (nextCount: number) => void;
+}) {
+  const [count, setCount] = useState(b.numberOfPeople);
+  const unit = getUnitPrice(b);
+  const nextTotal = unit == null ? null : unit * count;
+  const unchanged = count === b.numberOfPeople;
+
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="guests-title">
+      <div className={styles.bookingModal}>
+        <div className={styles.modalUsersIcon}><IcoUsers /></div>
+        <h3 id="guests-title" className={styles.modalTitle}>Adjust guests</h3>
+        <div className={styles.guestStepper}>
+          <div>
+            <strong>Guests</strong>
+            <span>{unit != null ? `${fmtMoney(unit, getCurrency(b))} per person` : "Price unavailable"}</span>
+          </div>
+          <button className={styles.stepperButton} onClick={() => setCount((v) => Math.max(1, v - 1))} disabled={count <= 1 || busy} type="button"><IcoMinus /></button>
+          <strong>{count}</strong>
+          <button className={styles.stepperButton} onClick={() => setCount((v) => v + 1)} disabled={busy} type="button"><IcoPlus /></button>
+        </div>
+        <div className={styles.modalPriceRows}>
+          <span>{unit != null ? `${fmtMoney(unit, getCurrency(b))} x ${count} guest${count !== 1 ? "s" : ""}` : "Price unavailable"}</span>
+          <strong>{nextTotal != null ? fmtMoney(nextTotal, getCurrency(b)) : "TND 0"}</strong>
+          <div className={styles.modalDivider} />
+          <span>New total</span>
+          <strong className={styles.modalTotal}>{nextTotal != null ? fmtMoney(nextTotal, getCurrency(b)) : "TND 0"}</strong>
+        </div>
+        <div className={styles.modalActions}>
+          <button className={styles.modalSecondary} onClick={onDismiss} disabled={busy} type="button">Cancel</button>
+          <button className={styles.modalPrimary} onClick={() => onConfirm(count)} disabled={busy || unchanged} type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Grouped Sidebar Card ─────────────────────────────────────────────────────
+const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
+  group: SidebarBookingGroup;
+  selectedId: string | null;
+  hoveredId: string | null;
+  setRefForBookings: (bookings: BookingWithDetails[], el: HTMLButtonElement | null) => void;
+  onSelect: (b: BookingWithDetails) => void;
+  onHover: (id: string | null) => void;
+  onPay: (id: string) => void;
+  onCancel: (id: string) => void;
+  onInc: (id: string) => void;
+  onDec: (id: string, current: number) => void;
+  busyId: string | null;
+  isListMode: boolean;
+  isFeatured: boolean;
+}>(function GroupedSidebarCard(
+  { group, selectedId, hoveredId, setRefForBookings, onSelect, onHover, onPay, onCancel, onInc, onDec, busyId, isListMode, isFeatured },
+  ref
+) {
+  const sortedBookings = [...group.bookings].sort(sortBookingsBySession);
+  const main = sortedBookings[0];
+  const selectedBooking = group.bookings.find((b) => b.id === selectedId) ?? null;
+  const displayBooking = selectedBooking ?? main;
+  const ds = group.displayStatus;
+  const cfg = getDisplayCfg(ds);
+  const selected = group.bookings.some((b) => b.id === selectedId);
+  const hovered = group.bookings.some((b) => b.id === hoveredId);
+  const countdown = timeCountdown(main.sessionStartAt);
+  const isFuture = ds === "UPCOMING" || ds === "PENDING_PAYMENT";
+  const totalGuests = group.bookings.reduce((sum, b) => sum + (b.numberOfPeople || 0), 0);
+  const totalGroupPrice = group.bookings.reduce((sum, b) => sum + (getTotalPrice(b) ?? 0), 0);
+  const hasAnyPrice = group.bookings.some((b) => getTotalPrice(b) != null);
+  const hasMultipleSessions = group.bookings.length > 1;
+  const date = displayBooking.sessionStartAt ? new Date(displayBooking.sessionStartAt) : null;
+  const dateDay = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-US", { day: "2-digit" }) : "--";
+  const dateMonth = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : "TBD";
+  const dateTime = date && !Number.isNaN(date.getTime()) ? date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const totalPrice = getTotalPrice(displayBooking);
+  const isCompleted = ds === "COMPLETED";
+  const locationText = [displayBooking.governorate, displayBooking.locality].filter(Boolean).join(", ") || displayBooking.displayName;
+  const isPendingPayment = ds === "PENDING_PAYMENT";
+  const isPaying = ds === "PAYING";
+  const isMutedStatus = ds === "CANCELLED" || ds === "EXPIRED";
+  const statusLabel =
+    ds === "UPCOMING" ? "UPCOMING" :
+    ds === "COMPLETED" ? "CONFIRMED" :
+    ds === "PENDING_PAYMENT" ? "PAYMENT NEEDED" :
+    ds === "PAYING" ? "PAYING" :
+    ds;
+  const statusClass =
+    ds === "COMPLETED" ? styles.statusPillCompleted :
+    ds === "PENDING_PAYMENT" || ds === "PAYING" ? styles.statusPillPayment :
+    isMutedStatus ? styles.statusPillMuted :
+    styles.statusPillUpcoming;
+  const heroMessage =
+    isPendingPayment ? "Payment needed to hold your spot" :
+    isPaying ? "Checkout in progress" :
+    ds === "COMPLETED" ? "Adventure completed" :
+    isMutedStatus ? `Booking ${ds.toLowerCase()}` :
+    "Trip confirmed";
+  const coverStyle = displayBooking.activityImageUrl
+    ? ({ backgroundImage: `url(${displayBooking.activityImageUrl})` } as CSSProperties)
+    : undefined;
+
+  if (isListMode) {
+    return (
+      <article
+        className={[
+          styles.heroBookingCard,
+          isFeatured ? styles.heroBookingFeatured : styles.heroBookingSecondary,
+          isCompleted || isMutedStatus ? styles.heroBookingCompleted : "",
+          isPendingPayment || isPaying ? styles.heroBookingAttention : "",
+        ].join(" ")}
+        style={coverStyle}
+      >
+        <div className={styles.heroOverlay}>
+          <div className={styles.heroTop}>
+            <span className={`${styles.statusPill} ${statusClass}`}>
+              {statusLabel}
+            </span>
+            {totalPrice != null && (
+              <span className={styles.heroPrice}>{fmtMoney(totalPrice, getCurrency(displayBooking))}</span>
+            )}
+            <span className={styles.heroDateChip}>{dateMonth} {dateDay}</span>
+          </div>
+
+          <div className={styles.heroBottom}>
+            <div className={styles.heroText}>
+              <h3 className={styles.heroTitle}>{group.title}</h3>
+              <span className={styles.heroLocation}>{locationText || "Location to be announced"}</span>
+              {isFeatured && (
+                <div className={styles.heroMetaLine}>
+                  {dateTime && <span>{dateTime}</span>}
+                  <span>{displayBooking.numberOfPeople} guest{displayBooking.numberOfPeople !== 1 ? "s" : ""}</span>
+                  <span className={styles.heroConfirm}><IcoCheck /> {heroMessage}</span>
+                </div>
+              )}
+            </div>
+
+            {isFeatured && (
+              <div className={styles.heroActions}>
+                {isPendingPayment && (
+                  <>
+                    <button
+                      className={styles.heroPayBtn}
+                      onClick={() => onPay(displayBooking.id)}
+                      disabled={busyId === displayBooking.id}
+                      type="button"
+                    >
+                      {busyId === displayBooking.id ? "Processing..." : "Pay now"}
+                    </button>
+                    <button
+                      className={styles.heroCancelBtn}
+                      onClick={() => onCancel(displayBooking.id)}
+                      disabled={busyId === displayBooking.id}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {displayBooking.sessionId && (
+                  <Link to={`/activities/${displayBooking.sessionId}`} className={styles.heroViewBtn}>
+                    View activity <IcoExtLink />
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {!isFeatured && (
+              <div className={styles.heroSecondaryMeta}>
+                <span>{displayBooking.numberOfPeople} guest{displayBooking.numberOfPeople !== 1 ? "s" : ""}</span>
+                {totalPrice != null && <span>{fmtMoney(totalPrice, getCurrency(displayBooking))}</span>}
+                {isPendingPayment && (
+                  <button
+                    className={styles.heroMiniAction}
+                    onClick={() => onPay(displayBooking.id)}
+                    disabled={busyId === displayBooking.id}
+                    type="button"
+                  >
+                    Pay
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className={styles.passportWrap}>
+      <button
+        ref={(el) => {
+          if (typeof ref === "function") ref(el);
+          else if (ref) ref.current = el;
+          setRefForBookings(group.bookings, el);
+        }}
+        className={[
+          styles.sideCard,
+          selected ? styles.sideCardSelected : "",
+          hovered ? styles.sideCardHovered : "",
+        ].join(" ")}
+        onClick={() => onSelect(displayBooking)}
+        onMouseEnter={() => onHover(displayBooking.id)}
+        onMouseLeave={() => onHover(null)}
+        type="button"
+        aria-expanded={selected}
+      >
+        <div className={`${styles.passportDate} ${isCompleted ? styles.passportDateCompleted : styles.passportDateUpcoming}`}>
+          <span className={styles.passportDay}>{dateDay}</span>
+          <span className={styles.passportMonth}>{dateMonth}</span>
+          <span className={styles.passportTime}>{dateTime}</span>
+        </div>
+
+        <div className={styles.passportMain}>
+          <div className={styles.passportTop}>
+            <span className={styles.sideCardTitle}>{group.title}</span>
+            {totalPrice != null && (
+              <span className={styles.passportPrice}>{fmtMoney(totalPrice, getCurrency(displayBooking))}</span>
+            )}
+          </div>
+
+          <div className={styles.passportLocation}>
+            {locationText || "Location to be announced"}
+          </div>
+
+          <div className={styles.passportBottom}>
+            <span className={styles.passportGuests}>
+              {displayBooking.numberOfPeople} guest{displayBooking.numberOfPeople !== 1 ? "s" : ""}
+              {hasMultipleSessions ? ` · ${group.bookings.length} sessions` : ""}
+            </span>
+            <span className={`${styles.statusPill} ${isCompleted ? styles.statusPillCompleted : styles.statusPillUpcoming}`}>
+              {isCompleted ? "Completed" : "Upcoming"}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {selectedBooking && (
+        <DetailDrawer
+          b={selectedBooking}
+          onClose={() => undefined}
+          onPay={onPay}
+          onCancel={onCancel}
+          onInc={onInc}
+          onDec={onDec}
+          busyId={busyId}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <button
+      ref={(el) => {
+        if (typeof ref === "function") ref(el);
+        else if (ref) ref.current = el;
+        setRefForBookings(group.bookings, el);
+      }}
+      className={[
+        styles.sideCard,
+        selected ? styles.sideCardSelected : "",
+        hovered  ? styles.sideCardHovered  : "",
+      ].join(" ")}
+      onClick={() => onSelect(main)}
+      onMouseEnter={() => onHover(main.id)}
+      onMouseLeave={() => onHover(null)}
+      type="button"
+    >
+      {selected && (
+        <div className={styles.sideCardAccent} style={{ background: cfg.color }} />
+      )}
+
+      <div className={styles.sideCardImage}>
+        {main.activityImageUrl
+          ? <img src={main.activityImageUrl ?? undefined} alt={main.activityTitle ?? ""} loading="lazy" />
+          : <div className={styles.sideCardImageFallback}><IcoCompass /></div>
+        }
+      </div>
+
+      <div className={styles.sideCardBody}>
+        <div className={styles.sideCardTop}>
+          <span className={styles.sideCardTitle}>{group.title}</span>
+          <span
+            className={styles.statusPill}
+            style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+          >
+            {cfg.label}
+          </span>
+        </div>
+
+        <div className={styles.sideCardMetas}>
+          {main.sessionStartAt && (
+            <span className={styles.sideCardMeta}>
+              <IcoCal />
+              <span className={styles.metaText}>
+                {hasMultipleSessions
+                  ? `Next: ${fmtDate(main.sessionStartAt)}`
+                  : fmtDate(main.sessionStartAt)
+                }
+              </span>
+              {isFuture && countdown && (
+                <span className={styles.countdown}>{countdown}</span>
+              )}
+            </span>
+          )}
+
+          {(main.governorate || main.displayName) && (
+            <span className={styles.sideCardMeta}>
+              <IcoPin />
+              <span className={styles.metaText}>{main.governorate ?? main.displayName}</span>
+            </span>
+          )}
+
+          <span className={styles.sideCardMeta}>
+            <IcoUsers />
+            <span className={styles.metaText}>
+              {hasMultipleSessions
+                ? `${group.bookings.length} sessions · ${totalGuests} guest${totalGuests !== 1 ? "s" : ""}`
+                : `${main.numberOfPeople} guest${main.numberOfPeople !== 1 ? "s" : ""}`
+              }
+            </span>
+          </span>
+
+          {hasAnyPrice && (
+            <span className={styles.sideCardMeta}>
+              <IcoMoney />
+              <span className={styles.metaText}>
+                {hasMultipleSessions
+                  ? `${fmtMoney(totalGroupPrice, getCurrency(main))} total`
+                  : fmtMoney(getTotalPrice(main), getCurrency(main))}
+              </span>
+            </span>
+          )}
+
+          {hasMultipleSessions && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                marginTop: 3,
+                paddingTop: 5,
+                borderTop: "1px solid rgba(0,0,0,0.06)",
+              }}
+            >
+              {sortedBookings.map((b) => {
+                const childSelected = b.id === selectedId;
+                const childCountdown = timeCountdown(b.sessionStartAt);
+
+                return (
+                  <span
+                    key={b.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(b);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSelect(b);
+                      }
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 6,
+                      padding: "4px 6px",
+                      borderRadius: 8,
+                      background: childSelected ? cfg.bg : "rgba(0,0,0,0.025)",
+                      border: childSelected ? `1px solid ${cfg.border}` : "1px solid transparent",
+                      color: childSelected ? cfg.color : "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {fmtDate(b.sessionStartAt)}
+                      {getTotalPrice(b) != null ? ` · ${fmtMoney(getTotalPrice(b), getCurrency(b))}` : ""}
+                    </span>
+                    {childCountdown && (
+                      <span className={styles.countdown} style={{ marginLeft: 0 }}>
+                        {childCountdown}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+});
+
+// ─── Detail Drawer ────────────────────────────────────────────────────────────
+function DetailDrawer({
+  b, onClose, onPay, onCancel, onInc, onDec, busyId,
+}: {
+  b: BookingWithDetails;
+  onClose: () => void;
+  onPay: (id: string) => void;
+  onCancel: (id: string) => void;
+  onInc: (id: string) => void;
+  onDec: (id: string, current: number) => void;
+  busyId: string | null;
+}) {
+  const ds          = getDisplayStatus(b);
+  const cfg         = getDisplayCfg(ds);
+  const isPending   = b.status === "PENDING";
+  const isPaying    = b.status === "PAYING";
+  const isCompleted = b.status === "COMPLETED";
+  const isMuted     = b.status === "CANCELLED" || b.status === "EXPIRED";
+  const isUpcoming  = ds === "UPCOMING" ;
+  const busy        = busyId === b.id;
+  const unitPrice   = getUnitPrice(b);
+  const totalPrice  = getTotalPrice(b);
+  const locationText = [b.governorate, b.locality].filter(Boolean).join(", ") || b.displayName;
+
+  const statusText = isCompleted && !isUpcoming
+    ? "Adventure completed"
+    : isMuted
+    ? `Booking ${b.status.toLowerCase()}`
+    : isPaying
+    ? "Checkout in progress"
+    : "Trip confirmed";
+
+  const statusClass = isMuted
+    ? styles.expandedStatusMuted
+    : isPaying
+    ? styles.expandedStatusAmber
+    : styles.expandedStatus;
+
+  return (
+    <div className={styles.inlineDetail}>
+
+      {/* ── Hero image — full width at top ── */}
+      <div className={styles.expandedHero}>
+        {b.activityImageUrl
+          ? <img className={styles.expandedHeroImg} src={b.activityImageUrl ?? undefined} alt="" loading="lazy" />
+          : <div className={styles.expandedHeroFallback}><IcoCompass /></div>
+        }
+      </div>
+
+      {/* ── Content below image ── */}
+      <div className={styles.expandedContent}>
+
+        <div>
+          <h3 className={styles.expandedTitle}>{b.activityTitle ?? "Adventure"}</h3>
+          {locationText && (
+            <div className={styles.expandedLocation}>
+              <IcoPin />
+              {locationText}
+            </div>
+          )}
+        </div>
+
+        {/* Facts grid: Date + Guests, then Total full-width */}
+        <div className={styles.expandedFacts}>
+          <div className={styles.expandedFact}>
+            <span className={styles.expandedFactLabel}>Date</span>
+            <span className={styles.expandedFactValue}>{fmtDate(b.sessionStartAt)}</span>
+          </div>
+
+          <div className={styles.expandedFact}>
+            <span className={styles.expandedFactLabel}>Guests</span>
+            <span className={styles.expandedFactValue}>{b.numberOfPeople}</span>
+          </div>
+
+          <div className={`${styles.expandedFact} ${styles.expandedFactWide}`}>
+            <span className={styles.expandedFactLabel}>Total</span>
+            <span className={styles.expandedFactValue}>
+              {totalPrice != null ? fmtMoney(totalPrice, getCurrency(b)) : "—"}
+            </span>
+            {unitPrice != null && b.numberOfPeople > 1 && (
+              <span className={styles.expandedFactSub}>
+                {fmtMoney(unitPrice, getCurrency(b))} per guest
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Guest adjuster (pending only) */}
+        {isPending && (
+          <div className={styles.expandedGuestRow}>
+            <span className={styles.guestLabel}>Adjust guests</span>
+            <div className={styles.guestControls}>
+              <button
+                className={styles.guestBtn}
+                onClick={() => onDec(b.id, b.numberOfPeople)}
+                disabled={b.numberOfPeople <= 1 || busy}
+                type="button" aria-label="Decrease"
+              >
+                <IcoMinus />
+              </button>
+              <span className={styles.guestCount}>{b.numberOfPeople}</span>
+              <button
+                className={styles.guestBtn}
+                onClick={() => onInc(b.id)}
+                disabled={busy}
+                type="button" aria-label="Increase"
+              >
+                <IcoPlus />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer ── */}
+      <div className={styles.expandedFooter}>
+        <span className={statusClass}>
+          <IcoCheck />
+          {statusText}
+        </span>
+
+        <div className={styles.inlineFooterActions}>
           {isPending && (
-            <div className={styles.seatRow}>
-              <span className={styles.seatLabel}>Adjust guests</span>
-              <div className={styles.seatStepper}>
-                <button
-                  className={styles.stepBtn}
-                  onClick={onDec}
-                  disabled={busy || b.numberOfPeople <= 1}
-                  type="button"
-                >−</button>
-                <span className={styles.stepVal}>{b.numberOfPeople}</span>
-                <button className={styles.stepBtn} onClick={onInc} disabled={busy} type="button">+</button>
+            <>
+              <button
+                className={`${styles.actionPay} ${busy ? styles.btnBusy : ""}`}
+                onClick={() => onPay(b.id)} disabled={busy} type="button"
+              >
+                {busy ? <><div className={styles.spinner} />Processing...</> : <><IcoCreditCard /> Pay now</>}
+              </button>
+              <button
+                className={styles.actionCancel}
+                onClick={() => onCancel(b.id)}
+                disabled={busy} type="button"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {b.sessionId && (
+            <Link to={`/activities/${b.sessionId}`} className={styles.expandedAction}>
+              View activity <IcoExtLink />
+            </Link>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+
+  return (
+    <div className={styles.drawer}>
+      <div className={styles.drawerPanel}>
+        <button
+          className={styles.drawerClose}
+          onClick={onClose} type="button" aria-label="Close"
+        >
+          <IcoClose />
+        </button>
+
+        <div className={styles.drawerHeader}>
+          <div className={styles.drawerThumb}>
+            {b.activityImageUrl
+              ? <img src={b.activityImageUrl ?? undefined} alt="" className={styles.drawerThumbImg} />
+              : <div className={styles.drawerThumbPlaceholder}><IcoCompass /></div>
+            }
+          </div>
+
+          <div className={styles.drawerHeading}>
+            <span
+              className={styles.statusPill}
+              style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+            >
+              {cfg.label}
+            </span>
+            <h2 className={styles.drawerTitle}>{b.activityTitle ?? "Adventure"}</h2>
+            {locationText && (
+              <div className={styles.drawerLocation}>
+                <IcoPin />
+                {locationText}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.drawerBody}>
+        <div className={styles.drawerInfoGrid}>
+          <div className={styles.drawerInfoItem}>
+            <span className={styles.drawerInfoLabel}><IcoCal /> Date</span>
+            <span className={styles.drawerInfoValue}>{fmtDate(b.sessionStartAt)}</span>
+          </div>
+          <div className={styles.drawerInfoItem}>
+            <span className={styles.drawerInfoLabel}><IcoUsers /> Guests</span>
+            <span className={styles.drawerInfoValue}>{b.numberOfPeople}</span>
+          </div>
+          <div className={styles.drawerInfoItem}>
+            <span className={styles.drawerInfoLabel}><IcoMoney /> Total</span>
+            <span className={styles.drawerInfoValue}>
+              {totalPrice != null ? fmtMoney(totalPrice, getCurrency(b)) : "Not available"}
+            </span>
+            {unitPrice != null && b.numberOfPeople > 1 && (
+              <span className={styles.drawerInfoSubValue}>
+                {fmtMoney(unitPrice, getCurrency(b))} per guest
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Guest adjuster */}
+        {isPending && (
+          <div className={styles.guestRow}>
+            <span className={styles.guestLabel}>Adjust guests</span>
+            <div className={styles.guestControls}>
+              <button
+                className={styles.guestBtn}
+                onClick={() => onDec(b.id, b.numberOfPeople)}
+                disabled={b.numberOfPeople <= 1 || busy}
+                type="button" aria-label="Decrease"
+              >
+                <IcoMinus />
+              </button>
+              <span className={styles.guestCount}>{b.numberOfPeople}</span>
+              <button
+                className={styles.guestBtn}
+                onClick={() => onInc(b.id)}
+                disabled={busy}
+                type="button" aria-label="Increase"
+              >
+                <IcoPlus />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className={styles.drawerActions}>
+          {isPending && (
+            <>
+              <button
+                className={`${styles.actionPay} ${busy ? styles.btnBusy : ""}`}
+                onClick={() => onPay(b.id)} disabled={busy} type="button"
+              >
+                {busy
+                  ? <><div className={styles.spinner} />Processing…</>
+                  : <><IcoCreditCard /> Pay now</>
+                }
+              </button>
+              <button
+                className={styles.actionCancel}
+                onClick={() => onCancel(b.id)}
+                disabled={busy} type="button"
+              >
+                Cancel booking
+              </button>
+            </>
+          )}
+
+          {isPaying && (
+            <div className={styles.payingBanner}>
+              <div className={styles.payingDots}><span /><span /><span /></div>
+              <div>
+                <div className={styles.payingBannerTitle}>Checkout in progress</div>
+                <div className={styles.payingBannerSub}>
+                  Return to Stripe or wait for confirmation. Check your email shortly.
+                </div>
               </div>
             </div>
           )}
 
-          <div className={styles.actionBtns}>
-            {isPending && (
-              <>
-                <button
-                  className={styles.confirmBtn}
-                  onClick={onConfirm}
-                  disabled={busy}
-                  type="button"
-                >
-                  {busy ? <><div className={styles.btnSpinnerSm} />Confirming…</> : <><IcoCheck />Confirm</>}
-                </button>
-                <button
-                  className={styles.cancelRowBtn}
-                  onClick={onCancel}
-                  disabled={busy}
-                  type="button"
-                >
-                  <IcoX />Cancel
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Activity group card ──
-function ActivityGroupCard({ title, location, cover, tplId, bookings, sessionsById, busyId, onConfirm, onCancel, onInc, onDec, dimmed }: {
-  title: string;
-  location?: string;
-  cover?: string | null;
-  tplId: string | null;
-  bookings: BookingApi.Booking[];
-  sessionsById: Record<string, any>;
-  busyId: string | null;
-  onConfirm: (id: string) => void;
-  onCancel: (id: string) => void;
-  onInc: (id: string) => void;
-  onDec: (id: string, current: number) => void;
-  dimmed?: boolean;
-}) {
-  const hasPending = bookings.some((b) => b.status === "PENDING");
-  const canRebook = !hasPending && tplId;
-
-  return (
-    <div className={`${styles.activityCard} ${dimmed ? styles.cardDimmed : ""}`}>
-      {/* Image strip */}
-      <div className={styles.activityImageWrap}>
-        {cover
-          ? <img src={cover} alt={title} className={styles.activityImage} />
-          : (
-            <div className={styles.activityImagePlaceholder}>
-              <IcoCompass />
+          {isUpcoming && (
+            <div className={styles.confirmedBanner}>
+              <IcoCheck /> Trip confirmed — you're all set!
             </div>
           )}
-        <div className={styles.activityImageOverlay} />
 
-        {/* Title overlaid on image */}
-        <div className={styles.activityImageMeta}>
-          <div className={styles.activityImageTitle}>{title}</div>
-          {location && (
-            <div className={styles.activityImageLoc}>
-              <IcoMapPin />{location}
+          {isCompleted && !isUpcoming && (
+            <div className={styles.completedBanner}><IcoCheck /> Adventure completed!</div>
+          )}
+
+          {isMuted && (
+            <div className={styles.mutedBanner}>
+              This booking is {b.status.toLowerCase()}.
             </div>
           )}
         </div>
 
-        {/* Open link */}
-        {tplId && (
-          <Link
-            to={`/activities/${tplId}`}
-            className={styles.activityOpenLink}
-            title="View activity"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <IcoExternalLink />
+        {/* Activity link */}
+        {b.sessionId && (
+          <Link to={`/activities/${b.sessionId}`} className={styles.viewActivityLink}>
+            View activity <IcoExtLink />
           </Link>
         )}
-
-        {/* Booking count badge */}
-        <div className={styles.bookingCountBadge}>
-          {bookings.length} booking{bookings.length !== 1 ? "s" : ""}
         </div>
-      </div>
-
-      {/* Booking rows */}
-      <div className={styles.bookingRowsList}>
-        {bookings.map((b) => (
-          <BookingRow
-            key={b.id}
-            b={b}
-            s={sessionsById[b.sessionId] ?? null}
-            busy={busyId === b.id}
-            onConfirm={() => onConfirm(b.id)}
-            onCancel={() => onCancel(b.id)}
-            onInc={() => onInc(b.id)}
-            onDec={() => onDec(b.id, b.numberOfPeople)}
-          />
-        ))}
-
-        {/* Rebook footer */}
-        {canRebook && (
-          <div className={styles.rebookFooter}>
-            <Link to={`/activities/${tplId}`} className={styles.rebookLink}>
-              Book again <IcoArrowRight />
-            </Link>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// ── Main page ──
+// ─── Paying in-progress notice (sidebar top) ──────────────────────────────────
+function PayingNotice({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <div className={styles.payingNotice}>
+      <div className={styles.payingNoticeDots}><span /><span /><span /></div>
+      <div>
+        <span className={styles.payingNoticeTitle}>
+          {count} checkout{count > 1 ? "s" : ""} in progress
+        </span>
+        <span className={styles.payingNoticeBody}>
+          Checkout in progress. Return to Stripe or wait for confirmation.
+        </span>
+      </div>
+      <IcoStripe />
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MyBookingsPage() {
-  const [state, setState] = useState<LoadState>("loading");
-  const [err, setErr] = useState<string | null>(null);
-  const [bookings, setBookings] = useState<BookingApi.Booking[]>([]);
-  const [sessionsById, setSessionsById] = useState<Record<string, any>>({});
-  const [templatesById, setTemplatesById] = useState<Record<string, any>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [bookings,     setBookings]     = useState<BookingWithDetails[]>([]);
+  const [state,        setState]        = useState<LoadState>("loading");
+  const [err,          setErr]          = useState<string>("");
+  const [viewMode,     setViewMode]     = useState<ViewMode>("map");
+  const [selectedId,   setSelectedId]   = useState<string | null>(null);
+  const [busyId,       setBusyId]       = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
-  const { refreshMe } = useAuth();
+  const [payTarget,    setPayTarget]    = useState<BookingWithDetails | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<BookingWithDetails | null>(null);
+  const [flyTarget,    setFlyTarget]    = useState<{ lat: number; lng: number } | null>(null);
+  const [hoveredId,    setHoveredId]    = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL");
+  const [collapsed,    setCollapsed]    = useState<Set<string>>(new Set());
 
-  const loadAll = async () => {
-    setState("loading");
-    setErr(null);
+  const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  // ── Derived ──────────────────────────────────────────────────────────────
+  const totalCount     = bookings.length;
+  const upcomingCount  = bookings.filter((b) => getDisplayStatus(b) === "UPCOMING").length;
+  const confirmedCount = bookings.filter((b) => b.status === "COMPLETED").length;
+  const completedCount = bookings.filter((b) => getDisplayStatus(b) === "COMPLETED").length;
+  const historyCount   = bookings.filter((b) => b.status === "EXPIRED" || b.status === "CANCELLED").length;
+  const payingCount    = bookings.filter((b) => b.status === "PAYING").length;
+
+  const displayBookings =
+    activeFilter === "UPCOMING"
+      ? bookings.filter((b) => getDisplayStatus(b) === "UPCOMING")
+      : activeFilter === "CONFIRMED"
+      ? bookings.filter((b) => b.status === "COMPLETED")
+      : activeFilter === "HISTORY"
+      ? bookings.filter((b) => b.status === "EXPIRED" || b.status === "CANCELLED")
+      : bookings;
+
+  const sidebarGroupsBySection = SECTION_GROUPS.reduce<Record<string, SidebarBookingGroup[]>>((acc, section) => {
+    const matchingBookings = displayBookings.filter((b) =>
+      (section.displayStatuses as string[]).includes(getDisplayStatus(b))
+    );
+
+    const grouped = matchingBookings.reduce<Map<string, SidebarBookingGroup>>((map, b) => {
+      const ds = getDisplayStatus(b);
+      const key = makeActivityGroupKey(b, ds);
+      const existing = map.get(key);
+
+      if (existing) {
+        existing.bookings.push(b);
+      } else {
+        map.set(key, {
+          id: key,
+          title: b.activityTitle ?? "Activity",
+          displayStatus: ds,
+          bookings: [b],
+        });
+      }
+
+      return map;
+    }, new Map<string, SidebarBookingGroup>());
+
+    const groupedValues: SidebarBookingGroup[] = Array.from(grouped.values());
+
+    acc[section.id] = groupedValues
+      .map((group: SidebarBookingGroup) => ({
+        ...group,
+        bookings: [...group.bookings].sort(sortBookingsBySession),
+      }))
+      .sort((a, b) => sortBookingsBySession(a.bookings[0], b.bookings[0]));
+
+    return acc;
+  }, {});
+
+  const listBookingsBySection = SECTION_GROUPS.reduce<Record<string, BookingWithDetails[]>>((acc, section) => {
+    acc[section.id] = displayBookings
+      .filter((b) => {
+        const ds = getDisplayStatus(b);
+        if (section.id === "pending") return ds === "PENDING_PAYMENT" || ds === "PAYING";
+        return (section.displayStatuses as string[]).includes(ds);
+      })
+      .sort(sortBookingsBySession);
+    return acc;
+  }, {});
+
+  const cancelBooking = cancelTarget ? bookings.find((b) => b.id === cancelTarget) ?? null : null;
+
+  type MapBookingGroup = {
+    id: string;
+    lat: number;
+    lng: number;
+    title: string;
+    displayStatus: DisplayStatus;
+    bookings: BookingWithDetails[];
+  };
+
+  const mapGroups: MapBookingGroup[] = Array.from(
+    bookings
+      .filter((b) => {
+        if (b.latitude == null || b.longitude == null) return false;
+
+        const ds = getDisplayStatus(b);
+        const isHistory = ds === "CANCELLED" || ds === "EXPIRED";
+        const isFocused = b.id === hoveredId || b.id === selectedId;
+
+        if (activeFilter === "UPCOMING") return ds === "UPCOMING";
+        if (activeFilter === "CONFIRMED") return b.status === "COMPLETED";
+        if (activeFilter === "HISTORY") return isHistory;
+
+        // In the default map view we keep the map clean by showing only
+        // upcoming/completed trips, but temporarily reveal history pins when
+        // the user hovers/selects a cancelled or expired booking in the list.
+        return DEFAULT_MAP_DISPLAY_STATUSES.has(ds) || (isHistory && isFocused);
+      })
+      .reduce((map, b) => {
+        const ds = getDisplayStatus(b);
+        const lat = b.latitude!;
+        const lng = b.longitude!;
+        const title = b.activityTitle ?? "Activity";
+        const key = makeActivityGroupKey(b, ds);
+
+        const existing = map.get(key);
+        if (existing) {
+          existing.bookings.push(b);
+        } else {
+          map.set(key, {
+            id: key,
+            lat,
+            lng,
+            title,
+            displayStatus: ds,
+            bookings: [b],
+          });
+        }
+
+        return map;
+      }, new Map<string, MapBookingGroup>())
+      .values()
+  );
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    setState("loading"); setErr("");
     try {
-      const bs = await BookingApi.listMyBookings();
-      setBookings(bs ?? []);
-      const uniqueSessionIds = Array.from(new Set((bs ?? []).map((b) => b.sessionId)));
-      const sessionPairs = await Promise.all(
-        uniqueSessionIds.map(async (sid) => {
-          try { return [sid, await ActivityApi.getSessionById(sid)] as const; }
-          catch { return [sid, null] as const; }
-        })
-      );
-      const sMap: Record<string, any> = {};
-      for (const [sid, s] of sessionPairs) if (s) sMap[sid] = s;
-      setSessionsById(sMap);
-
-      const uniqueTemplateIds = Array.from(
-        new Set(Object.values(sMap).map((s: any) => s.templateId).filter(Boolean))
-      );
-      const tplPairs = await Promise.all(
-        uniqueTemplateIds.map(async (tid) => {
-          try { return [tid, await ActivityApi.getPublicTemplateById(tid)] as const; }
-          catch { return [tid, null] as const; }
-        })
-      );
-      const tMap: Record<string, any> = {};
-      for (const [tid, t] of tplPairs) if (t) tMap[tid] = t;
-      setTemplatesById(tMap);
+      const data = await BookingApi.listMyBookingsWithDetails();
+      setBookings(data);
       setState("done");
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to load bookings");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load bookings");
       setState("error");
     }
-  };
+  }, []);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  // Build rows
-  const rows = useMemo(() => bookings.map((b) => {
-    const s = sessionsById[b.sessionId] ?? null;
-    const tplId = s?.templateId ?? null;
-    const t = tplId ? templatesById[tplId] : null;
-    return { b, s, t, tplId };
-  }), [bookings, sessionsById, templatesById]);
-
-  // Group by templateId, then split upcoming vs past
-  const { upcomingGroups, pastGroups } = useMemo(() => {
-    const now = Date.now();
-    const upcomingRows: typeof rows = [];
-    const pastRows: typeof rows = [];
-
-    for (const row of rows) {
-      const ts = row.s?.date ? new Date(row.s.date).getTime() : null;
-      const cancelled = row.b.status === "CANCELLED";
-      if (!cancelled && ts !== null && ts > now) upcomingRows.push(row);
-      else pastRows.push(row);
+  // ── Selection ─────────────────────────────────────────────────────────────
+  function selectBooking(b: BookingWithDetails) {
+    if (selectedId === b.id) {
+      deselectBooking();
+      return;
     }
 
-    const groupBy = (rowList: typeof rows) => {
-      const map = new Map<string, typeof rows>();
-      for (const row of rowList) {
-        const key = row.tplId ?? `no-template-${row.b.sessionId}`;
-        if (!map.has(key)) map.set(key, []);
-        map.get(key)!.push(row);
-      }
-      return Array.from(map.entries()).map(([key, rows]) => ({
-        key,
-        tplId: rows[0].tplId,
-        t: rows[0].t,
-        rows,
-      }));
-    };
+    setSelectedId(b.id);
+    if (b.latitude != null && b.longitude != null) {
+      setFlyTarget({ lat: b.latitude, lng: b.longitude });
+    }
+    const el = cardRefs.current.get(b.id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 
-    return {
-      upcomingGroups: groupBy(upcomingRows),
-      pastGroups: groupBy(pastRows),
-    };
-  }, [rows]);
+  function deselectBooking() { setSelectedId(null); setFlyTarget(null); }
 
-  const coverOf = (t: any) => {
-    const imgs = t?.images;
-    if (imgs?.length) return imgs[0].url;
-    return t?.coverImageUrl ?? null;
-  };
+  function toggleSection(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function setRefForBookings(groupBookings: BookingWithDetails[], el: HTMLButtonElement | null) {
+    groupBookings.forEach((b) => {
+      if (el) cardRefs.current.set(b.id, el);
+      else cardRefs.current.delete(b.id);
+    });
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  async function onPay(id: string) {
+    setBusyId(id);
+    try {
+      const res = await BookingApi.createStripePayment(id);
+      if (!res.checkoutUrl) throw new Error("Missing checkout URL");
+      window.location.href = res.checkoutUrl;
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Could not start payment");
+      setBusyId(null);
+    }
+  }
 
   async function onInc(id: string) {
     setBusyId(id);
     try {
       const updated = await BookingApi.increaseBookingSeats(id, 1);
-      setBookings((prev) => prev.map((x) => (x.id === id ? updated : x)));
-    } finally { setBusyId(null); }
-  }
-
-  async function onConfirm(id: string) {
-    setBusyId(id);
-    try {
-      const updated = await BookingApi.confirmBooking(id);
-      setBookings((prev) => prev.map((x) => (x.id === id ? updated : x)));
-      await refreshMe();
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...updated } : b)));
     } finally { setBusyId(null); }
   }
 
@@ -460,7 +1518,7 @@ export default function MyBookingsPage() {
     setBusyId(id);
     try {
       const updated = await BookingApi.decreaseBookingSeats(id, 1);
-      setBookings((prev) => prev.map((x) => (x.id === id ? updated : x)));
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...updated } : b)));
     } finally { setBusyId(null); }
   }
 
@@ -469,137 +1527,446 @@ export default function MyBookingsPage() {
     setBusyId(cancelTarget);
     try {
       await BookingApi.cancelBooking(cancelTarget);
-      await loadAll();
+      await load();
+      if (selectedId === cancelTarget) deselectBooking();
     } finally {
       setBusyId(null);
       setCancelTarget(null);
     }
   }
 
-  const totalCount = rows.length;
+  async function confirmAdjustGuests(nextCount: number) {
+    if (!adjustTarget || nextCount === adjustTarget.numberOfPeople) return;
+    const delta = Math.abs(nextCount - adjustTarget.numberOfPeople);
+    setBusyId(adjustTarget.id);
+    try {
+      if (nextCount > adjustTarget.numberOfPeople) {
+        await BookingApi.increaseBookingSeats(adjustTarget.id, delta);
+      } else {
+        await BookingApi.decreaseBookingSeats(adjustTarget.id, delta);
+      }
+      await load();
+      setAdjustTarget(null);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // ── Map legend display statuses ───────────────────────────────────────────
+  const hoveredOrSelectedBooking = bookings.find((b) => b.id === hoveredId || b.id === selectedId) ?? null;
+  const hoveredOrSelectedStatus = hoveredOrSelectedBooking ? getDisplayStatus(hoveredOrSelectedBooking) : null;
+  const shouldShowHistoryLegend =
+    activeFilter === "HISTORY" ||
+    hoveredOrSelectedStatus === "CANCELLED" ||
+    hoveredOrSelectedStatus === "EXPIRED";
+
+  const legendStatuses: DisplayStatus[] = activeFilter === "HISTORY"
+    ? ["CANCELLED", "EXPIRED"]
+    : shouldShowHistoryLegend
+    ? ["UPCOMING", "COMPLETED", "CANCELLED", "EXPIRED"]
+    : ["UPCOMING", "COMPLETED"];
 
   return (
     <>
       <Header />
-      {cancelTarget && (
-        <CancelModal
+
+      {cancelBooking && (
+        <CancelBookingModal
           onConfirm={confirmCancel}
           onDismiss={() => setCancelTarget(null)}
           busy={busyId === cancelTarget}
         />
       )}
 
-      <main className={styles.root}>
-        {/* Page header */}
-        <div className={styles.pageHeader}>
-          <div>
-            <h1 className={styles.pageTitle}>My Bookings</h1>
+      {payTarget && (
+        <PayNowModal
+          b={payTarget}
+          onConfirm={() => onPay(payTarget.id)}
+          onDismiss={() => setPayTarget(null)}
+          busy={busyId === payTarget.id}
+        />
+      )}
+
+      {adjustTarget && (
+        <AdjustGuestsModal
+          b={adjustTarget}
+          onConfirm={confirmAdjustGuests}
+          onDismiss={() => setAdjustTarget(null)}
+          busy={busyId === adjustTarget.id}
+        />
+      )}
+
+      <div className={styles.shell}>
+
+        {/* ── COMPACT HERO BAR ──────────────────────────────────────────── */}
+        <header className={styles.pageHeader}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.headerTitle}>Where I've been</h1>
             {state === "done" && totalCount > 0 && (
-              <p className={styles.pageSubtitle}>
-                {totalCount} booking{totalCount !== 1 ? "s" : ""} across{" "}
-                {upcomingGroups.length + pastGroups.length} activit
-                {upcomingGroups.length + pastGroups.length !== 1 ? "ies" : "y"}
-              </p>
+              <div className={styles.statsInline}>
+                <span className={styles.statBadge}>
+                  {totalCount} trip{totalCount !== 1 ? "s" : ""}
+                </span>
+                <span className={`${styles.statBadge} ${styles.statBadgeGreen}`}>
+                  {completedCount} completed
+                </span>
+                {upcomingCount > 0 && (
+                  <span className={`${styles.statBadge} ${styles.statBadgeAmber}`}>
+                    {upcomingCount} upcoming
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          <Link to="/home" className={styles.exploreLink}>Explore adventures</Link>
-        </div>
 
-        {/* Loading */}
-        {state === "loading" && (
-          <div className={styles.sections}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionLabel}>Upcoming</span>
+          <div className={styles.headerRight}>
+            <div className={styles.viewToggle} role="group" aria-label="View mode">
+              <button
+                className={`${styles.toggleBtn} ${viewMode === "map" ? styles.toggleActive : ""}`}
+                onClick={() => setViewMode("map")} type="button"
+              >
+                <IcoMap /> Map
+              </button>
+              <button
+                className={`${styles.toggleBtn} ${viewMode === "list" ? styles.toggleActive : ""}`}
+                onClick={() => setViewMode("list")} type="button"
+              >
+                <IcoList /> List
+              </button>
             </div>
-            <div className={styles.grid}>
-              <SkeletonActivityCard />
-              <SkeletonActivityCard />
+            <Link to="/home" className={styles.exploreBtn}>
+              Explore <IcoArrow />
+            </Link>
+          </div>
+        </header>
+
+        {/* ── LOADING ───────────────────────────────────────────────────── */}
+        {state === "loading" && (
+          <div className={styles.loadingShell}>
+            <div className={styles.mapSkeleton} />
+            <div className={styles.sidebarSkeleton}>
+              {[1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}
             </div>
           </div>
         )}
 
-        {/* Error */}
+        {/* ── ERROR ─────────────────────────────────────────────────────── */}
         {state === "error" && (
           <div className={styles.emptyState}>
-            <div className={styles.emptyIcon} style={{ color: "#c4360c" }}><IcoAlertTriangle /></div>
+            <div className={`${styles.emptyIcon} ${styles.emptyIconErr}`}><IcoAlert /></div>
             <h3 className={styles.emptyTitle}>Couldn't load bookings</h3>
             <p className={styles.emptyBody}>{err}</p>
-            <button className={styles.emptyBtn} onClick={loadAll} type="button">Try again</button>
+            <button className={styles.retryBtn} onClick={load} type="button">Try again</button>
           </div>
         )}
 
-        {/* Empty */}
+        {/* ── EMPTY ─────────────────────────────────────────────────────── */}
         {state === "done" && totalCount === 0 && (
           <div className={styles.emptyState}>
             <div className={styles.emptyIcon}><IcoCompass /></div>
             <h3 className={styles.emptyTitle}>No adventures yet</h3>
             <p className={styles.emptyBody}>
-              Your upcoming and past bookings will appear here once you make your first booking.
+              Your bookings will appear here once you make your first reservation.
             </p>
-            <Link to="/home" className={styles.emptyBtn}>Find an adventure</Link>
+            <Link to="/home" className={styles.retryBtn}>Find an adventure</Link>
           </div>
         )}
 
-        {/* Content */}
-        {state === "done" && totalCount > 0 && (
-          <div className={styles.sections}>
-            {upcomingGroups.length > 0 && (
-              <section>
-                <div className={styles.sectionHeader}>
-                  <span className={styles.sectionLabel}>Upcoming</span>
-                  <span className={styles.sectionCount}>{upcomingGroups.length}</span>
-                </div>
-                <div className={styles.grid}>
-                  {upcomingGroups.map(({ key, tplId, t, rows }) => (
-                    <ActivityGroupCard
-                      key={key}
-                      title={t?.title ?? "Activity"}
-                      location={t?.governorate}
-                      cover={coverOf(t)}
-                      tplId={tplId}
-                      bookings={rows.map((r) => r.b)}
-                      sessionsById={sessionsById}
-                      busyId={busyId}
-                      onConfirm={onConfirm}
-                      onCancel={(id) => setCancelTarget(id)}
-                      onInc={onInc}
-                      onDec={onDec}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
+        {/* ── MAIN SPLIT LAYOUT ─────────────────────────────────────────── */}
+        {state === "done" && totalCount > 0 && viewMode === "list" && (
+          <main className={styles.listPreview}>
+            <div className={styles.listContent}>
+              <div className={styles.listFilterRow} role="group" aria-label="Filter bookings">
+                {FILTER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    className={`${styles.filterChip} ${activeFilter === opt.key ? styles.filterChipActive : ""}`}
+                    onClick={() => setActiveFilter(opt.key)}
+                    type="button"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
 
-            {pastGroups.length > 0 && (
-              <section style={{ marginTop: upcomingGroups.length ? 48 : 0 }}>
-                <div className={styles.sectionHeader}>
-                  <span className={styles.sectionLabel}>Past & Cancelled</span>
-                  <span className={styles.sectionCount}>{pastGroups.length}</span>
-                </div>
-                <div className={styles.grid}>
-                  {pastGroups.map(({ key, tplId, t, rows }) => (
-                    <ActivityGroupCard
-                      key={key}
-                      title={t?.title ?? "Activity"}
-                      location={t?.governorate}
-                      cover={coverOf(t)}
-                      tplId={tplId}
-                      bookings={rows.map((r) => r.b)}
-                      sessionsById={sessionsById}
-                      busyId={busyId}
-                      onConfirm={onConfirm}
-                      onCancel={(id) => setCancelTarget(id)}
-                      onInc={onInc}
-                      onDec={onDec}
-                      dimmed
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
+              {SECTION_GROUPS.filter((section) => section.id !== "paying").map((section) => {
+                const sectionBookings = listBookingsBySection[section.id] ?? [];
+                if (!sectionBookings.length) return null;
+                return (
+                  <section className={styles.bookingSection} key={section.id}>
+                    <div className={styles.bookingSectionHeader}>
+                      <span className={styles.sectionDot} style={{ background: getDisplayCfg(section.displayStatuses[0]).pin }} />
+                      <h2>{section.label}</h2>
+                      <span>{sectionBookings.length}</span>
+                    </div>
+                    <div className={styles.bookingGrid}>
+                      {sectionBookings.map((booking) => (
+                        <PreviewBookingCard
+                          key={booking.id}
+                          b={booking}
+                          selected={selectedId === booking.id}
+                          onSelect={selectBooking}
+                          onPay={setPayTarget}
+                          onCancel={(target) => setCancelTarget(target.id)}
+                          onAdjustGuests={setAdjustTarget}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </main>
+        )}
+
+        {state === "done" && totalCount > 0 && viewMode === "map" && (
+          <div className={styles.splitPane}>
+
+            {/* ── MAP PANE ──────────────────────────────────────────────── */}
+            <div className={styles.mapPane}>
+              <MapContainer
+                center={[34.0, 9.0]} zoom={6}
+                className={styles.leafletMap}
+                zoomControl={false} attributionControl={false}
+              >
+                {/* CARTO Voyager — clean, readable, subtle terrain hints, readable labels */}
+                <TileLayer
+                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  subdomains="abcd"
+                  maxZoom={19}
+                />
+
+                {flyTarget && <FlyTo lat={flyTarget.lat} lng={flyTarget.lng} />}
+
+                {mapGroups.map((group) => {
+                  const main       = group.bookings[0];
+                  const ds         = group.displayStatus;
+                  const cfg        = getDisplayCfg(ds);
+                  const isSelected = group.bookings.some((b) => b.id === selectedId);
+                  const isHovered  = group.bookings.some((b) => b.id === hoveredId);
+                  const isDimmed   = hoveredId !== null && !isHovered && !isSelected;
+
+                  const sortedGroupBookings = [...group.bookings].sort(sortBookingsBySession);
+
+                  return (
+                    <Marker
+                      key={group.id}
+                      position={[group.lat, group.lng]}
+                      icon={createPin(cfg.pin, isSelected || isHovered, isDimmed)}
+                      eventHandlers={{
+                        click:     () => selectBooking(main),
+                        mouseover: () => setHoveredId(main.id),
+                        mouseout:  () => setHoveredId(null),
+                      }}
+                      zIndexOffset={isSelected ? 1000 : isHovered ? 500 : 0}
+                    >
+                      <Popup className={styles.leafletPopup}>
+                        <strong>{group.title}</strong>
+                        <br />
+                        <span style={{ color: cfg.color, fontSize: "11px", fontWeight: 600 }}>
+                          {cfg.label}
+                          {group.bookings.length > 1 ? ` · ${group.bookings.length} sessions` : ""}
+                        </span>
+
+                        {sortedGroupBookings.map((b) => (
+                          <div key={b.id} style={{ marginTop: 6 }}>
+                            <small>{fmtDate(b.sessionStartAt)}</small>
+                            <br />
+                            <button
+                              type="button"
+                              onClick={() => selectBooking(b)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                padding: 0,
+                                color: cfg.color,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                fontSize: 11,
+                              }}
+                            >
+                              View this session
+                            </button>
+                          </div>
+                        ))}
+
+                        {main.governorate && <><br /><small>{main.governorate}</small></>}
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
+
+              {/* Attribution */}
+              <div className={styles.mapAttrib}>
+                © <a href="https://carto.com" target="_blank" rel="noreferrer">CARTO</a> ·{" "}
+                © <a href="https://openstreetmap.org" target="_blank" rel="noreferrer">OSM</a>
+              </div>
+
+              {/* Map legend — only meaningful statuses */}
+              <div className={styles.mapLegend}>
+                {legendStatuses.map((ds) => {
+                  const cfg = getDisplayCfg(ds);
+                  return (
+                    <button
+                      key={ds}
+                      className={`${styles.legendItem} ${
+                        (activeFilter === "UPCOMING" && ds === "UPCOMING") ||
+                        (activeFilter === "CONFIRMED" && ds === "COMPLETED") ||
+                        (activeFilter === "HISTORY" && (ds === "CANCELLED" || ds === "EXPIRED"))
+                          ? styles.legendItemActive
+                          : ""
+                      }`}
+                      onClick={() => {
+                        if (ds === "UPCOMING") {
+                          setActiveFilter((p) => (p === "UPCOMING" ? "ALL" : "UPCOMING"));
+                        } else if (ds === "COMPLETED") {
+                          setActiveFilter((p) => (p === "CONFIRMED" ? "ALL" : "CONFIRMED"));
+                        } else if (ds === "CANCELLED" || ds === "EXPIRED") {
+                          setActiveFilter((p) => (p === "HISTORY" ? "ALL" : "HISTORY"));
+                        }
+                      }}
+                      type="button"
+                    >
+                      <span className={styles.legendDot} style={{ background: cfg.pin }} />
+                      <span>{cfg.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── SIDEBAR ───────────────────────────────────────────────── */}
+            <aside className={styles.sidebar}>
+
+              {/* Paying notice — ephemeral top banner */}
+              <PayingNotice count={payingCount} />
+
+              {/* Filter chips */}
+              <div className={styles.filterRow} role="group" aria-label="Filter bookings">
+                {FILTER_OPTIONS.map((opt) => {
+                  const count =
+                    opt.key === "UPCOMING"
+                      ? upcomingCount
+                      : opt.key === "CONFIRMED"
+                      ? confirmedCount
+                      : opt.key === "HISTORY"
+                      ? historyCount
+                      : totalCount;
+
+                  const chipColor =
+                    opt.key === "UPCOMING"
+                      ? DISPLAY_STATUS_CONFIG.UPCOMING.color
+                      : opt.key === "CONFIRMED"
+                      ? DISPLAY_STATUS_CONFIG.COMPLETED.color
+                      : opt.key === "HISTORY"
+                      ? DISPLAY_STATUS_CONFIG.EXPIRED.color
+                      : "#40916c";
+
+                  const chipBg =
+                    opt.key === "UPCOMING"
+                      ? DISPLAY_STATUS_CONFIG.UPCOMING.bg
+                      : opt.key === "CONFIRMED"
+                      ? DISPLAY_STATUS_CONFIG.COMPLETED.bg
+                      : opt.key === "HISTORY"
+                      ? DISPLAY_STATUS_CONFIG.EXPIRED.bg
+                      : "rgba(64,145,108,0.10)";
+
+                  return (
+                    <button
+                      key={opt.key}
+                      className={`${styles.filterChip} ${activeFilter === opt.key ? styles.filterChipActive : ""}`}
+                      onClick={() => setActiveFilter(opt.key)}
+                      style={{ "--chip-color": chipColor, "--chip-bg": chipBg } as CSSProperties}
+                      type="button"
+                    >
+                      {opt.label}
+                      <span className={styles.filterChipCount}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Grouped sections */}
+              <div className={styles.sidebarList}>
+                {SECTION_GROUPS.map((section) => {
+                  const groups = sidebarGroupsBySection[section.id] ?? [];
+                  if (!groups.length) return null;
+
+                  const sessionCount = groups.reduce((sum, g) => sum + g.bookings.length, 0);
+                  const isCollapsed = collapsed.has(section.id);
+                  const dotColor    = getDisplayCfg(section.displayStatuses[0]).pin;
+
+                  return (
+                    <div
+                      key={section.id}
+                      className={`${styles.sectionGroup} ${section.isPaying ? styles.sectionGroupPaying : ""}`}
+                    >
+                      <button
+                        className={styles.sectionHeader}
+                        onClick={() => toggleSection(section.id)}
+                        type="button"
+                        aria-expanded={!isCollapsed}
+                      >
+                        <span className={styles.sectionDot} style={{ background: dotColor }} />
+                        <span className={styles.sectionLabel}>{section.label}</span>
+                        <span
+                          className={styles.sectionCount}
+                          title={`${sessionCount} booked session${sessionCount !== 1 ? "s" : ""}`}
+                        >
+                          {groups.length}
+                        </span>
+                        <span className={`${styles.sectionChevron} ${isCollapsed ? styles.sectionChevronClosed : ""}`}>
+                          <IcoChevron />
+                        </span>
+                      </button>
+
+                      {!isCollapsed && (
+                        <div className={styles.sectionItems}>
+                          {groups.map((bookingGroup) => (
+                            <GroupedSidebarCard
+                              key={bookingGroup.id}
+                              group={bookingGroup}
+                              selectedId={selectedId}
+                              hoveredId={hoveredId}
+                              setRefForBookings={setRefForBookings}
+                              onSelect={selectBooking}
+                              onHover={setHoveredId}
+                              onPay={onPay}
+                              onCancel={(id) => setCancelTarget(id)}
+                              onInc={onInc}
+                              onDec={onDec}
+                              busyId={busyId}
+                              isListMode={false}
+                              isFeatured={false}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Filter empty state */}
+                {displayBookings.length === 0 && (
+                  <div className={styles.filterEmpty}>
+                    <p>No matching bookings</p>
+                    <button
+                      className={styles.clearFilter}
+                      onClick={() => setActiveFilter("ALL")}
+                      type="button"
+                    >
+                      Show all bookings
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* ── DETAIL DRAWER — scoped inside sidebar column ────── */}
+            </aside>
           </div>
         )}
-      </main>
+      </div>
     </>
   );
 }

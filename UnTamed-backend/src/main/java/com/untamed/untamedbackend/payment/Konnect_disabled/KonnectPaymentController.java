@@ -1,4 +1,4 @@
-package com.untamed.untamedbackend.payment;
+package com.untamed.untamedbackend.payment.Konnect_disabled;
 
 import com.untamed.untamedbackend.booking.BookingService;
 import jakarta.servlet.http.HttpServletResponse;

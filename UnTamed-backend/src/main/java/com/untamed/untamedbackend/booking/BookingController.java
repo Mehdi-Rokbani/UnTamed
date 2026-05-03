@@ -77,5 +77,11 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.confirmBooking(id, userId));
     }
 
+    @GetMapping("/mine/details")
+    public ResponseEntity<List<BookingWithDetailsDto>> mineWithDetails(Authentication auth) {
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(bookingService.listMineWithDetails(userId));
+    }
+
 
 }

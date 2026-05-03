@@ -1,4 +1,4 @@
-package com.untamed.untamedbackend.payment.Konnect;
+package com.untamed.untamedbackend.payment.Konnect_disabled;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

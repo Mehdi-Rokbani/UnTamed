@@ -1,0 +1,350 @@
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap");
+
+.page {
+  min-height: 100vh;
+  color: #1C1410;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  background: var(--body-bg);
+}
+
+.hero {
+  position: relative;
+  min-height: 46vh;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--header-h, 86px) + 48px) 20px 64px;
+  color: #fff;
+  overflow: hidden;
+  background: var(--hero-bg);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 18px);
+  pointer-events: none;
+}
+
+.crosshatch::before {
+  opacity: 0.12;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.2) 0 1px, transparent 1px 16px),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.14) 0 1px, transparent 1px 22px);
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 760px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--badge-color);
+}
+
+.iconRing {
+  width: 104px;
+  height: 104px;
+  margin: 22px 0 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+}
+
+.title {
+  margin: 0;
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: clamp(56px, 9vw, 94px);
+  line-height: 0.9;
+  letter-spacing: 0.03em;
+}
+
+.tagline {
+  margin: 14px 0 0;
+  font-family: "Lora", Georgia, serif;
+  font-style: italic;
+  font-size: clamp(17px, 2.2vw, 23px);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.body {
+  min-height: 54vh;
+  padding: 36px 20px 52px;
+  background: var(--body-bg);
+}
+
+.content {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.summaryCard,
+.reassuranceCard,
+.feedbackCard {
+  background: #fff;
+  border: 1px solid rgba(28, 20, 16, 0.08);
+  border-radius: 8px;
+}
+
+.summaryCard {
+  padding: 26px;
+}
+
+.summaryHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(28, 20, 16, 0.52);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: "Bebas Neue", Impact, sans-serif;
+  font-size: 34px;
+  letter-spacing: 0.03em;
+  color: #1C1410;
+}
+
+.sessionId {
+  max-width: 240px;
+  text-align: right;
+  font-size: 11px;
+  color: rgba(28, 20, 16, 0.48);
+  overflow-wrap: anywhere;
+}
+
+.divider {
+  border: 0;
+  border-top: 1px dashed rgba(28, 20, 16, 0.24);
+  margin: 22px 0;
+}
+
+.lineItems {
+  display: grid;
+  gap: 15px;
+}
+
+.lineItem,
+.totalRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+
+.lineLabel {
+  font-weight: 700;
+  color: rgba(28, 20, 16, 0.76);
+}
+
+.lineValue {
+  font-weight: 800;
+}
+
+.totalRow {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(28, 20, 16, 0.24);
+}
+
+.totalRow .lineLabel,
+.totalRow .lineValue {
+  color: #2D5A1B;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.button {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 18px;
+  border-radius: 8px;
+  font-weight: 900;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.buttonGreen {
+  background: #2D5A1B;
+  color: #fff;
+}
+
+.buttonOutlineGreen {
+  background: transparent;
+  color: #2D5A1B;
+  border-color: rgba(45, 90, 27, 0.46);
+}
+
+.buttonOrange {
+  background: #C1440E;
+  color: #fff;
+}
+
+.metaHints {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  color: rgba(28, 20, 16, 0.62);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metaDot {
+  color: rgba(28, 20, 16, 0.32);
+}
+
+.reassuranceCard {
+  display: flex;
+  gap: 14px;
+  padding: 22px;
+  margin-bottom: 18px;
+}
+
+.infoIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #C1440E;
+  background: rgba(193, 68, 14, 0.10);
+}
+
+.reassuranceTitle,
+.feedbackTitle {
+  margin: 0 0 7px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.reassuranceText,
+.helpLine {
+  margin: 0;
+  color: rgba(28, 20, 16, 0.68);
+  line-height: 1.65;
+}
+
+.feedbackCard {
+  padding: 22px;
+}
+
+.reasons {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(28, 20, 16, 0.16);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.reason input {
+  accent-color: #C1440E;
+}
+
+.reason:has(input:checked) {
+  color: #C1440E;
+  border-color: rgba(193, 68, 14, 0.58);
+  background: rgba(193, 68, 14, 0.08);
+}
+
+.helpLine {
+  margin-top: 18px;
+  font-family: "Lora", Georgia, serif;
+  font-style: italic;
+  text-align: center;
+}
+
+.helpLine a {
+  color: #C1440E;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    min-height: 42vh;
+    padding: 58px 16px 50px;
+  }
+
+  .summaryCard {
+    padding: 20px;
+  }
+
+  .summaryHeader,
+  .lineItem,
+  .totalRow,
+  .reassuranceCard {
+    align-items: flex-start;
+  }
+
+  .sessionId {
+    display: none;
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .metaDot {
+    display: none;
+  }
+}

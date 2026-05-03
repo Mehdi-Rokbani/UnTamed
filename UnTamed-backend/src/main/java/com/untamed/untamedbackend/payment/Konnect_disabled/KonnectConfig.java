@@ -1,4 +1,4 @@
-package com.untamed.untamedbackend.payment.Konnect;
+package com.untamed.untamedbackend.payment.Konnect_disabled;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
