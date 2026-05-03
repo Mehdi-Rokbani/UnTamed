@@ -3,10 +3,14 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { QRCodeCanvas } from "qrcode.react";
 import L from "leaflet";
 import { Header } from "../components/Header";
+import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
 import type { BookingWithDetails } from "../api/booking.api";
+import * as GuestPassApi from "../api/guestPass.api";
+import type { GuestPass } from "../api/guestPass.api";
 import styles from "../style/my-bookings.module.css";
 
 import "leaflet/dist/leaflet.css";
@@ -398,6 +402,23 @@ function getLocationText(b: BookingWithDetails): string {
   return [b.governorate, b.locality].filter(Boolean).join(", ") || b.displayName || "Location to be announced";
 }
 
+function resizeGuestNames(names: string[] | undefined, count: number, mainGuestName: string): string[] {
+  return Array.from({ length: Math.max(1, count) }, (_, index) => {
+    if (index === 0) return names?.[0] ?? mainGuestName;
+    return names?.[index] ?? "";
+  });
+}
+
+function getEditableGuestNames(b: BookingWithDetails, mainGuestName: string): string[] {
+  const stored = Array.isArray(b.guestNames) ? b.guestNames : [];
+  const names =
+    stored.length === b.numberOfPeople
+      ? stored
+      : [mainGuestName, ...stored];
+
+  return resizeGuestNames(names, b.numberOfPeople, mainGuestName);
+}
+
 function getPreviewStatusText(ds: DisplayStatus): string {
   if (ds === "PENDING_PAYMENT") return "Payment needed";
   if (ds === "PAYING") return "Payment in progress";
@@ -413,6 +434,133 @@ function getExpandedStatusText(ds: DisplayStatus): string {
   return "Trip confirmed";
 }
 
+function shortId(id?: string | null): string {
+  if (!id) return "N/A";
+  return id.length <= 10 ? id : `${id.slice(0, 6)}...${id.slice(-4)}`;
+}
+
+function buildGuestPassUrl(token: string): string {
+  if (typeof window === "undefined") return `/guide/check-in/${token}`;
+  return `${window.location.origin}/guide/check-in/${token}`;
+}
+
+function buildFriendPassUrl(token: string): string {
+  if (typeof window === "undefined") return `/passes/${token}`;
+  return `${window.location.origin}/passes/${token}`;
+}
+
+function getAttendanceLabel(pass: GuestPass): string {
+  if (pass.status === "CANCELLED") return "CANCELLED";
+  if (pass.attendanceStatus === "PRESENT") return "PRESENT";
+  if (pass.attendanceStatus === "ABSENT") return "ABSENT";
+  return "ACTIVE";
+}
+
+function GuestPassCards({
+  booking,
+  passes,
+  loading,
+  error,
+}: {
+  booking: BookingWithDetails;
+  passes: GuestPass[] | undefined;
+  loading: boolean;
+  error: string | undefined;
+}) {
+  const [message, setMessage] = useState("");
+
+  async function copyPassLink(pass: GuestPass) {
+    const passUrl = buildFriendPassUrl(pass.token);
+    try {
+      await navigator.clipboard.writeText(passUrl);
+      setMessage(`Copied pass link for ${pass.guestName || "guest"}.`);
+    } catch {
+      setMessage("Could not copy link. Open the pass and copy it from the browser.");
+    }
+  }
+
+  async function sharePass(pass: GuestPass) {
+    const passUrl = buildFriendPassUrl(pass.token);
+    const guestName = pass.guestName || "your guest";
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "UnTamed guest pass",
+          text: `Here is your UnTamed guest pass for ${guestName}`,
+          url: passUrl,
+        });
+        setMessage(`Shared pass for ${guestName}.`);
+      } else {
+        await navigator.clipboard.writeText(passUrl);
+        setMessage(`Sharing is not available here, so I copied ${guestName}'s pass link.`);
+      }
+    } catch {
+      setMessage("Share cancelled or unavailable.");
+    }
+  }
+
+  if (loading) {
+    return <div className={styles.passState}>Loading guest passes...</div>;
+  }
+
+  if (error) {
+    return <div className={`${styles.passState} ${styles.passStateError}`}>{error}</div>;
+  }
+
+  if (!passes) return null;
+
+  if (passes.length === 0) {
+    return <div className={styles.passState}>No guest passes were created for this booking yet.</div>;
+  }
+
+  return (
+    <div className={styles.guestPassPanel}>
+      <div className={styles.guestPassHeader}>
+        <div>
+          <span>Guest passes</span>
+          <strong>{passes.length} pass{passes.length !== 1 ? "es" : ""}</strong>
+        </div>
+        <small>Scan at trail check-in</small>
+      </div>
+      {message && <div className={styles.passToast}>{message}</div>}
+      <div className={styles.guestPassGrid}>
+        {passes.map((pass) => (
+          <article className={styles.guestPassCard} key={pass.id}>
+            <div className={styles.guestPassTop}>
+              <div>
+                <span>Guest Pass {pass.passNumber} / {pass.totalPasses}</span>
+                <strong>{pass.guestName || "Guest"}</strong>
+                <small>{pass.mainBooker ? "Main booker" : "Guest"} - {booking.activityTitle ?? "Adventure"}</small>
+              </div>
+              <span className={`${styles.passBadge} ${styles[`passBadge${getAttendanceLabel(pass)}`] ?? ""}`}>
+                {getAttendanceLabel(pass).replace("_", " ")}
+              </span>
+            </div>
+            <div className={styles.qrWrap}>
+              <QRCodeCanvas
+                value={buildGuestPassUrl(pass.token)}
+                size={190}
+                includeMargin
+                level="M"
+              />
+            </div>
+            <div className={styles.passMeta}>
+              <span>Booking #{shortId(pass.bookingId)}</span>
+              <code>{shortId(pass.token)}</code>
+            </div>
+            <div className={styles.passActions}>
+              <a href={buildFriendPassUrl(pass.token)} target="_blank" rel="noreferrer">Open pass</a>
+              <button type="button" onClick={() => void sharePass(pass)}>Share</button>
+              <button type="button" onClick={() => void copyPassLink(pass)}>Copy link</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PreviewBookingCard({
   b,
   selected,
@@ -420,6 +568,13 @@ function PreviewBookingCard({
   onPay,
   onCancel,
   onAdjustGuests,
+  onViewPasses,
+  guestNames,
+  guestNameError,
+  onGuestNameChange,
+  passes,
+  passesLoading,
+  passesError,
 }: {
   b: BookingWithDetails;
   selected: boolean;
@@ -427,6 +582,13 @@ function PreviewBookingCard({
   onPay: (b: BookingWithDetails) => void;
   onCancel: (b: BookingWithDetails) => void;
   onAdjustGuests: (b: BookingWithDetails) => void;
+  onViewPasses: (b: BookingWithDetails) => void;
+  guestNames: string[];
+  guestNameError?: string;
+  onGuestNameChange: (bookingId: string, index: number, value: string) => void;
+  passes?: GuestPass[];
+  passesLoading: boolean;
+  passesError?: string;
 }) {
   const ds = getDisplayStatus(b);
   const cfg = getDisplayCfg(ds);
@@ -439,7 +601,9 @@ function PreviewBookingCard({
   const canPay = ds === "PENDING_PAYMENT";
   const canCancel = ds === "PENDING_PAYMENT" || ds === "UPCOMING";
   const canAdjust = ds === "PENDING_PAYMENT";
+  const showGuestEditor = canPay || ds === "PAYING";
   const canReview = ds === "COMPLETED";
+  const canViewPasses = b.status === "COMPLETED";
   const coverStyle = b.activityImageUrl ? ({ backgroundImage: `url(${b.activityImageUrl})` } as CSSProperties) : undefined;
   const tone =
     ds === "PENDING_PAYMENT" || ds === "PAYING" ? styles.previewCardPayment :
@@ -498,6 +662,29 @@ function PreviewBookingCard({
                 <strong>{unitPrice != null ? fmtMoney(unitPrice, getCurrency(b)) : "Price unavailable"}</strong>
               </div>
             </div>
+            {showGuestEditor && (
+              <section className={styles.guestNamesSection} aria-labelledby={`guest-names-${b.id}`}>
+                <div className={styles.guestNamesHeader}>
+                  <h4 id={`guest-names-${b.id}`}>Guest names</h4>
+                  <p>Names will appear on the trip passes.</p>
+                </div>
+                <div className={styles.guestNamesGrid}>
+                  {guestNames.map((name, index) => (
+                    <label className={styles.guestNameField} key={`${b.id}-guest-${index}`}>
+                      <span>Guest {index + 1}</span>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(event) => onGuestNameChange(b.id, index, event.target.value)}
+                        placeholder={index === 0 ? "Your name" : "Friend name"}
+                        autoComplete="name"
+                      />
+                    </label>
+                  ))}
+                </div>
+                {guestNameError && <p className={styles.guestNameError}>{guestNameError}</p>}
+              </section>
+            )}
           </div>
           <div className={styles.expandedPreviewFooter}>
             <span className={styles.expandedStatusText}>{getExpandedStatusText(ds)}</span>
@@ -506,9 +693,18 @@ function PreviewBookingCard({
               {canPay && <button type="button" className={styles.modalPrimary} onClick={() => onPay(b)}>Pay now</button>}
               {canCancel && <button type="button" className={styles.modalDanger} onClick={() => onCancel(b)}>Cancel</button>}
               {b.sessionId && <Link to={`/activities/${b.sessionId}`}>View activity <IcoExtLink /></Link>}
+              {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
               {canReview && <button type="button">Review</button>}
             </div>
           </div>
+          {canViewPasses && (
+            <GuestPassCards
+              booking={b}
+              passes={passes}
+              loading={passesLoading}
+              error={passesError}
+            />
+          )}
         </div>
       )}
     </article>
@@ -1310,6 +1506,7 @@ function PayingNotice({ count }: { count: number }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MyBookingsPage() {
+  const { user } = useAuth();
   const [bookings,     setBookings]     = useState<BookingWithDetails[]>([]);
   const [state,        setState]        = useState<LoadState>("loading");
   const [err,          setErr]          = useState<string>("");
@@ -1323,8 +1520,14 @@ export default function MyBookingsPage() {
   const [hoveredId,    setHoveredId]    = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey>("ALL");
   const [collapsed,    setCollapsed]    = useState<Set<string>>(new Set());
+  const [passesByBooking, setPassesByBooking] = useState<Record<string, GuestPass[]>>({});
+  const [passLoadingId, setPassLoadingId] = useState<string | null>(null);
+  const [passErrors, setPassErrors] = useState<Record<string, string>>({});
+  const [guestNamesByBooking, setGuestNamesByBooking] = useState<Record<string, string[]>>({});
+  const [guestNameErrors, setGuestNameErrors] = useState<Record<string, string>>({});
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const mainGuestName = user?.username?.trim() || user?.email || "";
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const totalCount     = bookings.length;
@@ -1460,6 +1663,18 @@ export default function MyBookingsPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    setGuestNamesByBooking((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const b of bookings) {
+        next[b.id] = prev[b.id]
+          ? resizeGuestNames(prev[b.id], b.numberOfPeople, mainGuestName)
+          : getEditableGuestNames(b, mainGuestName);
+      }
+      return next;
+    });
+  }, [bookings, mainGuestName]);
+
   // ── Selection ─────────────────────────────────────────────────────────────
   function selectBooking(b: BookingWithDetails) {
     if (selectedId === b.id) {
@@ -1493,9 +1708,64 @@ export default function MyBookingsPage() {
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
+  function setGuestNameForBooking(bookingId: string, index: number, value: string) {
+    setGuestNamesByBooking((prev) => {
+      const booking = bookings.find((b) => b.id === bookingId);
+      const count = booking?.numberOfPeople ?? prev[bookingId]?.length ?? 1;
+      const current = resizeGuestNames(prev[bookingId], count, mainGuestName);
+      current[index] = value;
+      return { ...prev, [bookingId]: current };
+    });
+    setGuestNameErrors((prev) => {
+      if (!prev[bookingId]) return prev;
+      const next = { ...prev };
+      delete next[bookingId];
+      return next;
+    });
+  }
+
+  async function saveGuestNamesForPayment(b: BookingWithDetails): Promise<boolean> {
+    const names = resizeGuestNames(
+      guestNamesByBooking[b.id] ?? getEditableGuestNames(b, mainGuestName),
+      b.numberOfPeople,
+      mainGuestName
+    ).map((name) => name.trim());
+
+    if (names.some((name) => !name)) {
+      const message = "Please fill every guest name before payment.";
+      setGuestNameErrors((prev) => ({ ...prev, [b.id]: message }));
+      alert(message);
+      return false;
+    }
+
+    try {
+      const updated = await BookingApi.updateBookingGuestNames(b.id, names);
+      setGuestNamesByBooking((prev) => ({ ...prev, [b.id]: names }));
+      setBookings((prev) => prev.map((booking) => (
+        booking.id === b.id
+          ? { ...booking, ...updated, guestNames: names.slice(1) }
+          : booking
+      )));
+      return true;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Could not save guest names";
+      setGuestNameErrors((prev) => ({ ...prev, [b.id]: message }));
+      alert(message);
+      return false;
+    }
+  }
+
   async function onPay(id: string) {
     setBusyId(id);
     try {
+      const booking = bookings.find((b) => b.id === id);
+      if (booking && (booking.status === "PENDING" || booking.status === "PAYING")) {
+        const saved = await saveGuestNamesForPayment(booking);
+        if (!saved) {
+          setBusyId(null);
+          return;
+        }
+      }
       const res = await BookingApi.createStripePayment(id);
       if (!res.checkoutUrl) throw new Error("Missing checkout URL");
       window.location.href = res.checkoutUrl;
@@ -1549,6 +1819,29 @@ export default function MyBookingsPage() {
       setAdjustTarget(null);
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function viewGuestPasses(b: BookingWithDetails) {
+    if (passesByBooking[b.id]) return;
+
+    setPassLoadingId(b.id);
+    setPassErrors((prev) => {
+      const next = { ...prev };
+      delete next[b.id];
+      return next;
+    });
+
+    try {
+      const passes = await GuestPassApi.getGuestPassesForBooking(b.id);
+      setPassesByBooking((prev) => ({ ...prev, [b.id]: passes }));
+    } catch (e: unknown) {
+      setPassErrors((prev) => ({
+        ...prev,
+        [b.id]: e instanceof Error ? e.message : "Could not load guest passes",
+      }));
+    } finally {
+      setPassLoadingId(null);
     }
   }
 
@@ -1709,6 +2002,13 @@ export default function MyBookingsPage() {
                           onPay={setPayTarget}
                           onCancel={(target) => setCancelTarget(target.id)}
                           onAdjustGuests={setAdjustTarget}
+                          onViewPasses={viewGuestPasses}
+                          guestNames={guestNamesByBooking[booking.id] ?? getEditableGuestNames(booking, mainGuestName)}
+                          guestNameError={guestNameErrors[booking.id]}
+                          onGuestNameChange={setGuestNameForBooking}
+                          passes={passesByBooking[booking.id]}
+                          passesLoading={passLoadingId === booking.id}
+                          passesError={passErrors[booking.id]}
                         />
                       ))}
                     </div>

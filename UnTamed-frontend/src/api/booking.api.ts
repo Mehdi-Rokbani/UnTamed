@@ -36,6 +36,7 @@ export type BookingWithDetails = Booking & {
 
   // Session info
   sessionStartAt: string | null;
+  guestNames?: string[];
 
   // Address / location info
   displayName: string | null;
@@ -48,6 +49,7 @@ export type BookingWithDetails = Booking & {
 export type CreateBookingRequest = {
   sessionId: string;
   numberOfPeople: number;
+  guestNames?: string[];
 };
 
 export async function listMyBookings(): Promise<Booking[]> {
@@ -83,6 +85,7 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
       totalPrice:       null,
       currency:         "TND",
       sessionStartAt:   null,
+      guestNames:       [],
       displayName:      null,
       governorate:      null,
       locality:         null,
@@ -153,4 +156,13 @@ export async function cancelStripePayment(bookingId: string): Promise<void> {
     null,
     { withCredentials: true }
   );
+}
+
+export async function updateBookingGuestNames(bookingId: string, guestNames: string[]): Promise<Booking> {
+  const { data } = await http.put<Booking>(
+    `/api/bookings/${bookingId}/guests`,
+    { guestNames },
+    { withCredentials: true }
+  );
+  return data;
 }

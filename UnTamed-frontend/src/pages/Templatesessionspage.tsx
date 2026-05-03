@@ -4,7 +4,9 @@ import type {
   ActivitySessionResponse,
   ActivityStatus,
   ActivityTemplateResponse,
+  AttendanceStatus,
   BookingStatus,
+  GuideParticipantDto,
   GuideSessionDetailsResponse,
 } from "../types/activity";
 import {
@@ -118,6 +120,7 @@ type ModalState =
   | { kind: "edit"; session: ActivitySessionResponse };
 
 type ParticipantFilter = "ALL" | BookingStatus;
+type AttendanceFilter = "ALL" | AttendanceStatus;
 
 type ToastType = "success" | "error" | "warning";
 
@@ -244,6 +247,22 @@ function participantStatusClass(status: BookingStatus) {
   return styles.pStatusPending;
 }
 
+function attendanceLabel(status: AttendanceStatus) {
+  if (status === "NOT_MARKED") return "NOT_CHECKED_IN";
+  return status;
+}
+
+function attendanceStatusClass(status: AttendanceStatus) {
+  if (status === "PRESENT") return styles.attendancePresent;
+  if (status === "ABSENT") return styles.attendanceAbsent;
+  return styles.attendanceNotChecked;
+}
+
+function bookingHasAttendance(p: GuideParticipantDto, filter: AttendanceFilter) {
+  if (filter === "ALL") return true;
+  return (p.passes ?? []).some((pass) => pass.attendanceStatus === filter);
+}
+
 function isPastSession(session: ActivitySessionResponse) {
   return new Date(session.endAt).getTime() < Date.now();
 }
@@ -278,6 +297,10 @@ export default function TemplateSessionsPage() {
     useState<GuideSessionDetailsResponse | null>(null);
   const [participantFilter, setParticipantFilter] =
     useState<ParticipantFilter>("ALL");
+  const [attendanceFilter, setAttendanceFilter] =
+    useState<AttendanceFilter>("ALL");
+  const [expandedBookings, setExpandedBookings] =
+    useState<Set<string>>(new Set());
   const [loadingParticipantsId, setLoadingParticipantsId] =
     useState<string | null>(null);
 
@@ -366,14 +389,33 @@ export default function TemplateSessionsPage() {
   const filteredParticipants = useMemo(() => {
     if (!participantsModal) return [];
 
-    if (participantFilter === "ALL") {
-      return participantsModal.bookings;
+    return participantsModal.bookings.filter((p) => {
+      const matchesBooking =
+        participantFilter === "ALL" || p.status === participantFilter;
+      const matchesAttendance = bookingHasAttendance(p, attendanceFilter);
+      return matchesBooking && matchesAttendance;
+    });
+  }, [participantsModal, participantFilter, attendanceFilter]);
+
+  const attendanceSummary = useMemo(() => {
+    if (!participantsModal) {
+      return { totalPasses: 0, present: 0, absent: 0, notCheckedIn: 0 };
     }
 
-    return participantsModal.bookings.filter(
-      (p) => p.status === participantFilter
-    );
-  }, [participantsModal, participantFilter]);
+    if (participantsModal.attendanceSummary) {
+      return participantsModal.attendanceSummary;
+    }
+
+    const passes = participantsModal.bookings
+      .flatMap((booking) => booking.passes ?? [])
+      .filter((pass) => pass.status === "ACTIVE");
+    return {
+      totalPasses: passes.length,
+      present: passes.filter((pass) => pass.attendanceStatus === "PRESENT").length,
+      absent: passes.filter((pass) => pass.attendanceStatus === "ABSENT").length,
+      notCheckedIn: passes.filter((pass) => pass.attendanceStatus === "NOT_MARKED").length,
+    };
+  }, [participantsModal]);
 
   function resetForm() {
     setFormStartAt("");
@@ -682,12 +724,23 @@ export default function TemplateSessionsPage() {
     try {
       const details = await getGuideSessionDetails(sessionId);
       setParticipantFilter("ALL");
+      setAttendanceFilter("ALL");
+      setExpandedBookings(new Set());
       setParticipantsModal(details);
     } catch (e) {
       showToast("error", getApiErrorMessage(e));
     } finally {
       setLoadingParticipantsId(null);
     }
+  }
+
+  function toggleExpandedBooking(bookingId: string) {
+    setExpandedBookings((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookingId)) next.delete(bookingId);
+      else next.add(bookingId);
+      return next;
+    });
   }
 
   return (
@@ -1047,7 +1100,7 @@ export default function TemplateSessionsPage() {
           className={styles.modalBackdrop}
           onClick={() => setParticipantsModal(null)}
         >
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div className={`${styles.modal} ${styles.participantsModal}`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>
                 <h2 className={styles.modalTitle}>Session Participants</h2>
@@ -1096,6 +1149,25 @@ export default function TemplateSessionsPage() {
                 </div>
               </div>
 
+              <div className={styles.attendanceMetrics}>
+                <div className={styles.attendanceMetric}>
+                  <span className={styles.pMetricVal}>{attendanceSummary.totalPasses}</span>
+                  <span className={styles.pMetricLabel}>Total passes</span>
+                </div>
+                <div className={styles.attendanceMetric}>
+                  <span className={`${styles.pMetricVal} ${styles.pMetricGreen}`}>{attendanceSummary.present}</span>
+                  <span className={styles.pMetricLabel}>Present</span>
+                </div>
+                <div className={styles.attendanceMetric}>
+                  <span className={`${styles.pMetricVal} ${styles.pMetricRed}`}>{attendanceSummary.absent}</span>
+                  <span className={styles.pMetricLabel}>Absent</span>
+                </div>
+                <div className={styles.attendanceMetric}>
+                  <span className={styles.pMetricVal}>{attendanceSummary.notCheckedIn}</span>
+                  <span className={styles.pMetricLabel}>Not checked in</span>
+                </div>
+              </div>
+
               <div className={styles.filterRow}>
                 {[
                   { key: "ALL", label: "All" },
@@ -1116,14 +1188,44 @@ export default function TemplateSessionsPage() {
                 ))}
               </div>
 
+              <div className={styles.filterRow}>
+                {[
+                  { key: "ALL", label: "All attendance" },
+                  { key: "PRESENT", label: "Present" },
+                  { key: "ABSENT", label: "Absent" },
+                  { key: "NOT_MARKED", label: "Not checked in" },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    className={`${styles.filterBtn} ${
+                      attendanceFilter === f.key ? styles.filterBtnActive : ""
+                    }`}
+                    onClick={() => setAttendanceFilter(f.key as AttendanceFilter)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
               {filteredParticipants.length === 0 ? (
                 <div className={styles.emptyParticipants}>
                   No participants match this filter.
                 </div>
               ) : (
                 <div className={styles.participantsList}>
-                  {filteredParticipants.map((p) => (
-                    <div key={p.bookingId} className={styles.participantRow}>
+                  {filteredParticipants.map((p) => {
+                    const passes = p.passes ?? [];
+                    const isExpanded = expandedBookings.has(p.bookingId);
+
+                    return (
+                      <article key={p.bookingId} className={styles.participantCard}>
+                        <button
+                          type="button"
+                          className={styles.participantRow}
+                          onClick={() => toggleExpandedBooking(p.bookingId)}
+                          aria-expanded={isExpanded}
+                        >
                       <div className={styles.pAvatar}>
                         {p.profileImageUrl ? (
                           <img
@@ -1157,9 +1259,49 @@ export default function TemplateSessionsPage() {
                         >
                           {p.status}
                         </span>
+                        <span className={styles.expandHint}>
+                          {isExpanded ? "Hide guests" : `${passes.length || p.numberOfPeople} guests`}
+                        </span>
                       </div>
-                    </div>
-                  ))}
+                    </button>
+
+                    {isExpanded && (
+                      <div className={styles.passDetails}>
+                        {passes.length === 0 ? (
+                          <div className={styles.noPasses}>
+                            No guest passes were created for this booking yet.
+                          </div>
+                        ) : (
+                          passes.map((pass) => (
+                            <div key={pass.passId} className={styles.passDetailRow}>
+                              <div className={styles.passDetailMain}>
+                                <strong>{pass.guestName || "Guest"}</strong>
+                                <span>
+                                  Pass {pass.passNumber} of {pass.totalPasses}
+                                  {pass.mainBooker && <em>Main booker</em>}
+                                </span>
+                              </div>
+                              <div className={styles.passDetailMeta}>
+                                <span
+                                  className={`${styles.attendanceBadge} ${attendanceStatusClass(
+                                    pass.attendanceStatus
+                                  )}`}
+                                >
+                                  {attendanceLabel(pass.attendanceStatus)}
+                                </span>
+                                <small>
+                                  {pass.markedAt ? `Marked ${formatDateTime(pass.markedAt)}` : "Not marked"}
+                                  {pass.markedByGuideId ? ` by ${pass.markedByGuideId}` : ""}
+                                </small>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
                 </div>
               )}
             </div>

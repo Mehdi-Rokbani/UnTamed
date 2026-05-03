@@ -717,6 +717,7 @@ export default function ActivityDetailsPage() {
   const [participantsPreview, setParticipantsPreview] = useState<ParticipantsPreviewResponse | null>(null);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [people, setPeople] = useState(1);
+  const [guestNames, setGuestNames] = useState<string[]>([]);
   const [bookingStep, setBookingStep] = useState<BookingStep>("idle");
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccessId, setBookingSuccessId] = useState<string | null>(null);
@@ -863,6 +864,14 @@ export default function ActivityDetailsPage() {
   }, [spotsLeft, selectedSessionId, people]);
 
   useEffect(() => {
+    setGuestNames((prev) => {
+      const nextLength = Math.max(0, people - 1);
+      if (prev.length === nextLength) return prev;
+      return Array.from({ length: nextLength }, (_, i) => prev[i] ?? "");
+    });
+  }, [people]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadWeather() {
@@ -977,9 +986,22 @@ export default function ActivityDetailsPage() {
   async function onBook() {
     if (!canBook || !selectedSessionId || !id) return;
     setBookingError(null);
+
+    const trimmedGuestNames = guestNames.map((name) => name.trim());
+    if (people > 1) {
+      if (trimmedGuestNames.length !== people - 1 || trimmedGuestNames.some((name) => !name)) {
+        setBookingError("Please enter a name for every guest.");
+        return;
+      }
+    }
+
     setBookingStep("confirming");
     try {
-      const res = await BookingApi.createOrIncreaseBooking({ sessionId: selectedSessionId, numberOfPeople: people });
+      const res = await BookingApi.createOrIncreaseBooking({
+        sessionId: selectedSessionId,
+        numberOfPeople: people,
+        guestNames: people > 1 ? trimmedGuestNames : [],
+      });
       setBookingSuccessId(res.id);
       setBookingStep("success");
       await refreshMe();
@@ -1548,6 +1570,30 @@ export default function ActivityDetailsPage() {
                         </div>
                       </div>
                     </div>
+
+                    {people > 1 && (
+                      <div className={styles.guestNameFields}>
+                        <div className={styles.guestNameIntro}>
+                          <strong>Friend names</strong>
+                          <span>The main booker is pass 1. Add names for the other passes.</span>
+                        </div>
+                        {guestNames.map((name, index) => (
+                          <label className={styles.guestNameField} key={index}>
+                            <span>Guest {index + 2} name</span>
+                            <input
+                              type="text"
+                              value={name}
+                              maxLength={80}
+                              placeholder="Friend name"
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setGuestNames((prev) => prev.map((item, i) => (i === index ? value : item)));
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
 
                     {!selectedSession ? (
                       <div className={styles.weatherSection} style={{ marginTop: 14 }}>

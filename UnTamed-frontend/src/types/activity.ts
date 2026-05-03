@@ -176,6 +176,22 @@ export type BookingStatus =
   | "EXPIRED"
   | "CANCELLED";
 
+export type GuestPassStatus = "ACTIVE" | "CANCELLED";
+export type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT";
+
+export type GuidePassAttendanceDto = {
+  passId: string;
+  bookingId: string;
+  guestName: string | null;
+  passNumber: number;
+  totalPasses: number;
+  mainBooker: boolean;
+  status: GuestPassStatus;
+  attendanceStatus: AttendanceStatus;
+  markedAt?: string | null;
+  markedByGuideId?: string | null;
+};
+
 export type GuideParticipantDto = {
   bookingId: string;
   userId: string;
@@ -185,6 +201,14 @@ export type GuideParticipantDto = {
   numberOfPeople: number;
   status: BookingStatus;
   createdAt: string;
+  passes?: GuidePassAttendanceDto[];
+};
+
+export type GuideAttendanceSummaryDto = {
+  totalPasses: number;
+  present: number;
+  absent: number;
+  notCheckedIn: number;
 };
 
 export type GuideSessionDetailsResponse = {
@@ -197,6 +221,7 @@ export type GuideSessionDetailsResponse = {
   completedCount: number;
   cancelledCount: number;
   expiredCount: number;
+  attendanceSummary?: GuideAttendanceSummaryDto;
 };
 
 /** ---------------------------

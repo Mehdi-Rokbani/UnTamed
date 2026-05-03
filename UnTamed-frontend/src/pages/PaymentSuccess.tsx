@@ -17,6 +17,7 @@ function MountainIcon() {
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
+  const bookingId = searchParams.get("bookingId");
 
   return (
     <>
@@ -87,6 +88,12 @@ export default function PaymentSuccess() {
               Download PDF
             </button>
           </div>
+
+          {bookingId && (
+            <Link to="/my-bookings" className={styles.passLink}>
+              View my booking passes
+            </Link>
+          )}
 
           <div className={styles.metaHints} aria-label="Booking metadata">
             <span>Email confirmation sent</span>

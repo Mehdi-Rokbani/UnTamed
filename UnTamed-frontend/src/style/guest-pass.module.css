@@ -1,0 +1,548 @@
+/* guest-pass.module.css
+   Redesigned GuestPassPage — split layout, premium travel aesthetic
+   Tokens mirror my-bookings.module.css (forest greens, Sora / Plus Jakarta Sans)
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ─────────────────────────────────────────────────────
+   TOKENS (kept in sync with my-bookings.module.css)
+───────────────────────────────────────────────────── */
+.page {
+  --forest:       #1c5e3a;
+  --forest-mid:   #2d7a52;
+  --forest-faint: #e8f4ec;
+  --text:         #111827;
+  --text-muted:   #6b7280;
+  --text-faint:   #9ca3af;
+  --border:       rgba(0, 0, 0, 0.08);
+  --radius:       16px;
+  --ease:         0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:  0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─────────────────────────────────────────────────────
+   PAGE WRAPPER
+───────────────────────────────────────────────────── */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  /* Clean dot-grid background — calm, not distracting */
+  background-color: #f4f1ea;
+  background-image: radial-gradient(circle, rgba(28, 94, 58, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  color: var(--text);
+}
+
+/* ─────────────────────────────────────────────────────
+   PASS CARD  (the main container)
+───────────────────────────────────────────────────── */
+.card {
+  width: min(100%, 900px);
+  display: grid;
+  /* Desktop: info left | dashed divider | QR right */
+  grid-template-columns: 1fr 0px 320px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  /* Fade-in on load */
+  animation: cardReveal 0.42s var(--ease-spring) both;
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─────────────────────────────────────────────────────
+   LEFT PANEL  — info, brand, actions
+───────────────────────────────────────────────────── */
+.info {
+  display: flex;
+  flex-direction: column;
+  padding: 36px 40px;
+  background: var(--forest);
+  color: #fff;
+  min-width: 0;
+  position: relative;
+}
+
+/* brand */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-decoration: none;
+  margin-bottom: 36px;
+}
+
+.brandAccent { color: #ff8c42; }
+
+/* topline label + status */
+.topline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.passTypeLabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.status {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.statusACTIVE    { background: rgba(255,255,255,0.15); color: #a8f0c6; }
+.statusPRESENT   { background: rgba(29, 158, 117, 0.25); color: #6ee7b7; }
+.statusABSENT    { background: rgba(217,119,6,0.25); color: #fcd34d; }
+.statusCANCELLED { background: rgba(220,38,38,0.22); color: #fca5a5; }
+
+/* activity title */
+.activityTitle {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #fff;
+  margin: 0 0 24px;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+/* date / time row */
+.whenRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.whenDate {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.whenSep {
+  width: 5px;
+  height: 5px;
+  background: rgba(255,255,255,0.28);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.whenTime {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* guest name block */
+.guestBlock {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.guestBlockLabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 5px;
+}
+
+.guestBlockName {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
+}
+
+/* pass number badge */
+.passBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 140, 66, 0.18);
+  border: 1px solid rgba(255, 140, 66, 0.32);
+  color: #ffb87a;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin-bottom: 32px;
+  align-self: flex-start;
+}
+
+/* spacer pushes actions to the bottom */
+.infoSpacer { flex: 1; }
+
+/* CTA actions */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 24px;
+}
+
+.btnPrimary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff;
+  color: var(--forest);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--ease);
+  letter-spacing: 0.01em;
+}
+
+.btnPrimary:hover {
+  background: #f0faf4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+}
+
+.btnRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.btnSecondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.btnSecondary:hover {
+  background: rgba(255, 255, 255, 0.17);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* refs row */
+.refs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.2);
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.38);
+  font-weight: 700;
+}
+
+.refCode {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.09);
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ─────────────────────────────────────────────────────
+   DASHED DIVIDER  (desktop only)
+───────────────────────────────────────────────────── */
+.divider {
+  width: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(28, 94, 58, 0.2) 0,
+    rgba(28, 94, 58, 0.2) 6px,
+    transparent 6px,
+    transparent 13px
+  );
+  flex-shrink: 0;
+}
+
+/* ─────────────────────────────────────────────────────
+   RIGHT PANEL  — QR hero
+───────────────────────────────────────────────────── */
+.qrPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 28px;
+  background: #fff;
+  gap: 20px;
+}
+
+/* pulsing "valid" chip */
+.validChip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0f6e56;
+  background: #e1f5ee;
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.validDot {
+  width: 7px;
+  height: 7px;
+  background: #1d9e75;
+  border-radius: 50%;
+  animation: pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.8); }
+}
+
+.scanLabel {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* QR frame with corner brackets */
+.qrFrame {
+  position: relative;
+  padding: 10px;
+}
+
+.qrCorner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--forest);
+  border-style: solid;
+  border-width: 0;
+}
+
+.qrCornerTL { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-radius: 4px 0 0 0; }
+.qrCornerTR { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-radius: 0 4px 0 0; }
+.qrCornerBL { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 4px; }
+.qrCornerBR { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 4px 0; }
+
+.qrCanvas {
+  display: block;
+  border-radius: 8px;
+}
+
+/* override QRCodeCanvas sizing */
+.qrFrame canvas {
+  width: 230px !important;
+  height: 230px !important;
+}
+
+.scanHint {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.55;
+  max-width: 180px;
+  margin: 0;
+}
+
+.passNotes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.55;
+}
+
+/* ─────────────────────────────────────────────────────
+   LOADING & ERROR STATES
+───────────────────────────────────────────────────── */
+.stateCard {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 40px;
+  background: #fff;
+  text-align: center;
+}
+
+.stateTitle {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.stateMessage {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 340px;
+  line-height: 1.6;
+  margin: 0;
+  font-weight: 600;
+}
+
+.loadingSpinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(28, 94, 58, 0.15);
+  border-top-color: var(--forest);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--forest);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 24px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.retryBtn:hover {
+  background: #2d7a52;
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────────────────
+   RESPONSIVE — MOBILE  (≤700px)
+   Collapses to single stacked column
+───────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .page {
+    padding: 14px;
+    align-items: flex-start;
+  }
+
+  .card {
+    grid-template-columns: 1fr;
+    border-radius: 20px;
+    width: 100%;
+  }
+
+  .info {
+    padding: 28px 22px 24px;
+  }
+
+  .brand {
+    margin-bottom: 26px;
+  }
+
+  .activityTitle {
+    font-size: 26px;
+  }
+
+  .infoSpacer { display: none; }
+
+  .passBadge {
+    margin-bottom: 24px;
+  }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: repeating-linear-gradient(
+      to right,
+      rgba(28, 94, 58, 0.2) 0,
+      rgba(28, 94, 58, 0.2) 6px,
+      transparent 6px,
+      transparent 13px
+    );
+  }
+
+  .qrPanel {
+    padding: 28px 22px 32px;
+  }
+
+  .qrFrame canvas {
+    width: 200px !important;
+    height: 200px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .whenRow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .refs {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}

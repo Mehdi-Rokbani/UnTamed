@@ -30,6 +30,16 @@ function IconCreate() {
   );
 }
 
+function IconAttendance() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l2 2 4-5"/>
+      <path d="M21 12a9 9 0 1 1-3-6.7"/>
+      <path d="M21 3v6h-6"/>
+    </svg>
+  );
+}
+
 function IconGuideProfile() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -141,6 +151,7 @@ export default function GuideSidebar() {
           <span className={styles.sectionLabel}>Activities</span>
           <Item to="/guide/activities" label="My Activities" icon={<IconActivities />} end />
           <Item to="/activities/create" label="New Activity" icon={<IconCreate />} end />
+          <Item to="/guide/attendance-history" label="Attendance History" icon={<IconAttendance />} end />
         </div>
 
         <div className={styles.navSection}>

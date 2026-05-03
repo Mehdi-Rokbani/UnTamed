@@ -11,5 +11,6 @@ public record GuideSessionDetailsResponse(
         int payingCount,
         int completedCount,
         int cancelledCount,
-        int expiredCount
+        int expiredCount,
+        GuideAttendanceSummaryDto attendanceSummary
 ) {}

@@ -5,6 +5,7 @@ import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import com.untamed.untamedbackend.booking.BookingService;
+import com.untamed.untamedbackend.guestpass.GuestPassService;
 import com.untamed.untamedbackend.payment.PaymentAttempt;
 import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
 import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
@@ -25,6 +26,7 @@ public class StripeWebhookController {
     private final StripeProperties stripeProps;
     private final PaymentAttemptRepository attempts;
     private final BookingService bookingService;
+    private final GuestPassService guestPassService;
 
     @PostMapping("/webhook")
     public ResponseEntity<String> webhook(
@@ -81,6 +83,11 @@ public class StripeWebhookController {
 
         if (attempt.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
             System.out.println("Payment attempt already succeeded: " + attempt.getId());
+
+            // Important: if Stripe retries the webhook but passes were not created before,
+            // this safely creates them because GuestPassService checks if they already exist.
+            guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+
             return;
         }
 
@@ -90,6 +97,8 @@ public class StripeWebhookController {
 
         bookingService.markCompleted(attempt.getBookingId());
 
-        System.out.println("Payment succeeded and booking completed: " + attempt.getBookingId());
+        guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+
+        System.out.println("Payment succeeded, booking completed, and guest passes generated: " + attempt.getBookingId());
     }
 }

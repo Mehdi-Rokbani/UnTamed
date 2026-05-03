@@ -1,6 +1,9 @@
 package com.untamed.untamedbackend.booking;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,10 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateBookingRequest {
-    private String sessionId;
-    private int numberOfPeople;
-
+public class UpdateBookingGuestNamesRequest {
     @Builder.Default
     private List<String> guestNames = new ArrayList<>();
 }

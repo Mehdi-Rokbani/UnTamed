@@ -1,0 +1,445 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
+.page {
+  --forest: #1c5e3a;
+  --forest-mid: #2d7a52;
+  --forest-faint: #e8f4ec;
+  --amber: #b45309;
+  --amber-bg: #fff7ed;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --text: #111827;
+  --muted: #6b7280;
+  --faint: #9ca3af;
+  --border: rgba(17, 24, 39, 0.09);
+  --shadow: 0 24px 70px rgba(13, 45, 32, 0.18), 0 6px 18px rgba(13, 45, 32, 0.08);
+
+  min-height: 100dvh;
+  padding: 30px 20px 44px;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(159, 225, 203, 0.42), transparent 32%),
+    linear-gradient(135deg, #edf7ef 0%, #f7f4ea 55%, #e8f4ec 100%);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+.shell {
+  width: min(100%, 960px);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.topBar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  color: var(--forest);
+  font-family: "Sora", system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+
+.brand span {
+  color: #ff8c42;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.kicker {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  grid-template-areas:
+    "status status"
+    "details actions";
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.cardStatus {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(248, 250, 247, 0.88);
+}
+
+.cardStatus p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.statusBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.statusBanner::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusNeutral {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.statusPending {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.statusPresent {
+  background: var(--forest-faint);
+  color: var(--forest);
+}
+
+.statusDanger {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.details {
+  grid-area: details;
+  padding: 30px;
+}
+
+.guestHero {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.guestHero span {
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.guestHero h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: "Sora", system-ui, sans-serif;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.guestHero p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.factGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.factGrid div {
+  display: grid;
+  gap: 5px;
+  min-height: 82px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fbfcfa;
+}
+
+.factGrid span {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.factGrid strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+
+.actionPanel {
+  grid-area: actions;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 26px;
+  border-left: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(232, 244, 236, 0.7), rgba(249, 250, 251, 0.95));
+}
+
+.actionState {
+  display: grid;
+  gap: 12px;
+}
+
+.actionNotice {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(180, 83, 9, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 247, 237, 0.78);
+}
+
+.actionState h2,
+.actionNotice h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: "Sora", system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.actionState p,
+.actionState small,
+.actionNotice p,
+.actionNotice small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.primaryButton,
+.secondaryButton,
+.loginButton,
+.actionState button,
+.stateActions button,
+.stateActions a {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton,
+.stateActions button {
+  border: 0;
+  background: var(--forest);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(28, 94, 58, 0.25);
+}
+
+.primaryButton:hover:not(:disabled),
+.stateActions button:hover {
+  background: var(--forest-mid);
+}
+
+.secondaryButton,
+.loginButton,
+.stateActions a {
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  background: #fff;
+  color: var(--amber);
+}
+
+.loginButton {
+  min-height: 46px;
+  width: fit-content;
+  padding: 0 18px;
+}
+
+.actionState button:disabled {
+  border: 1px solid var(--border);
+  background: #eef1ed;
+  color: var(--faint);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.successIcon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--forest);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(28, 94, 58, 0.26);
+}
+
+.inlineError {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 14px;
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.stateCard {
+  min-height: 330px;
+  display: grid;
+  place-items: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 34px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.stateCard h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: "Sora", system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.stateCard p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.stateActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.stateActions button,
+.stateActions a {
+  min-width: 150px;
+  padding: 0 18px;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(28, 94, 58, 0.14);
+  border-top-color: var(--forest);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 18px 14px 34px;
+  }
+
+  .topBar,
+  .cardStatus {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cardStatus p {
+    text-align: left;
+  }
+
+  .card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "status"
+      "details"
+      "actions";
+  }
+
+  .details,
+  .actionPanel {
+    padding: 22px;
+  }
+
+  .actionPanel {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .factGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stateCard {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand {
+    font-size: 22px;
+  }
+
+  .guestHero h1 {
+    font-size: 34px;
+  }
+
+  .stateActions {
+    width: 100%;
+    flex-direction: column;
+  }
+}

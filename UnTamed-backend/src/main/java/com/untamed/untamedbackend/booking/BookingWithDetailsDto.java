@@ -2,12 +2,14 @@ package com.untamed.untamedbackend.booking;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record BookingWithDetailsDto(
         String id,
         String userId,
         String sessionId,
         int numberOfPeople,
+        List<String> guestNames,
         BookingStatus status,
         Instant createdAt,
         Instant updatedAt,

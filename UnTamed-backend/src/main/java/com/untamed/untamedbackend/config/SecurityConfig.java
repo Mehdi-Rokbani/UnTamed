@@ -49,9 +49,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/search/semantic").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
 
+                        // Public guest pass display page for friends/customers.
+                        // This endpoint only verifies/displays a pass; it does not allow marking attendance.
+                        .requestMatchers(HttpMethod.GET, "/api/guest-passes/public/**").permitAll()
+
                         // Stripe webhook must be public
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
-
 
                         // Stripe payment creation must be authenticated
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create/**").authenticated()
@@ -65,6 +68,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/sessions/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.PATCH, "/api/sessions/**").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.DELETE, "/api/sessions/**").hasRole("GUIDE")
+
+                        // Guest pass guide scan/check-in/history endpoints require auth.
+                        // The service still verifies that the authenticated user is the guide who owns the activity.
+                        .requestMatchers(HttpMethod.GET, "/api/guest-passes/guide/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/guest-passes/present/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/guest-passes/absent/**").authenticated()
 
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/guides/**").hasRole("GUIDE")

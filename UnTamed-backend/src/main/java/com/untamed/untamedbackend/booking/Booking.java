@@ -7,6 +7,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -26,6 +28,9 @@ public class Booking {
 
     private int numberOfPeople;
 
+    @Builder.Default
+    private List<String> guestNames = new ArrayList<>();
+
     @Indexed
     private BookingStatus status;
 
@@ -41,6 +46,7 @@ public class Booking {
 
     @Builder.Default
     private boolean refundRequested = false;
+
     @Builder.Default
     @Field("attendance_marked_absent")
     private boolean attendanceMarkedAbsent = false;

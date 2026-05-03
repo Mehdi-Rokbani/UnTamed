@@ -23,6 +23,10 @@ import TemplateSessionsPage from "./pages/Templatesessionspage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancel";
+import GuideCheckInPage from "./pages/GuideCheckInPage";
+import GuestPassPage from "./pages/GuestPassPage";
+import GuideSessionAttendancePage from "./pages/GuideSessionAttendancePage";
+import GuideAttendanceHistoryPage from "./pages/GuideAttendanceHistoryPage";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -38,6 +42,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/passes/:token" element={<GuestPassPage />} />
+        <Route path="/guide/check-in/:token" element={<GuideCheckInPage />} />
 
         {/* Authenticated */}
         <Route
@@ -128,6 +134,8 @@ export default function App() {
 
           {/* Manage sessions (add / publish / unpublish / cancel) for a template */}
           <Route path="templates/:id/sessions" element={<TemplateSessionsPage />} />
+          <Route path="sessions/:sessionId/attendance" element={<GuideSessionAttendancePage />} />
+          <Route path="attendance-history" element={<GuideAttendanceHistoryPage />} />
         </Route>
 
         {/* Errors */}

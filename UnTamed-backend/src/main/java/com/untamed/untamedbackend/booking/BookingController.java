@@ -27,7 +27,8 @@ public class BookingController {
         Booking booking = bookingService.createOrIncreaseBooking(
                 userId,
                 request.getSessionId(),
-                request.getNumberOfPeople()
+                request.getNumberOfPeople(),
+                request.getGuestNames()
         );
 
         return ResponseEntity.ok(booking);
@@ -60,6 +61,16 @@ public class BookingController {
     ) {
         String userId = bookingService.requireAuthenticatedDbUserId(auth);
         return ResponseEntity.ok(bookingService.cancelBooking(id, userId));
+    }
+
+    @PutMapping("/{id}/guests")
+    public ResponseEntity<Booking> updateGuestNames(
+            @PathVariable String id,
+            @RequestBody UpdateBookingGuestNamesRequest request,
+            Authentication auth
+    ) {
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(bookingService.updateGuestNames(id, userId, request.getGuestNames()));
     }
 
     @GetMapping("/mine")

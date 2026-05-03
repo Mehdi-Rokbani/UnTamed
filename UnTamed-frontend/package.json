@@ -14,6 +14,7 @@
     "axios": "^1.13.4",
     "leaflet": "^1.9.4",
     "navigate": "^0.3.6",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.71.1",

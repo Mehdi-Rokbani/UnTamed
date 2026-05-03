@@ -10,9 +10,15 @@ import com.untamed.untamedbackend.dto.ActivitySessionDeleteResponse;
 import com.untamed.untamedbackend.dto.ActivitySessionResponse;
 import com.untamed.untamedbackend.dto.ActivitySessionUpdateRequest;
 import com.untamed.untamedbackend.dto.ActivityTemplateMiniDto;
+import com.untamed.untamedbackend.dto.GuideAttendanceSummaryDto;
+import com.untamed.untamedbackend.dto.GuidePassAttendanceDto;
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.dto.GuideSessionDetailsResponse;
 import com.untamed.untamedbackend.dto.RatingSummaryDto;
+import com.untamed.untamedbackend.guestpass.AttendanceStatus;
+import com.untamed.untamedbackend.guestpass.GuestPass;
+import com.untamed.untamedbackend.guestpass.GuestPassRepository;
+import com.untamed.untamedbackend.guestpass.GuestPassStatus;
 import com.untamed.untamedbackend.model.ActivityImage;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
@@ -31,6 +37,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +49,7 @@ public class ActivitySessionService {
     private final UserRepository userRepo;
     private final BookingRepository bookingRepo;
     private final SessionSeatOps sessionSeatOps;
+    private final GuestPassRepository guestPassRepo;
 
     // -------- Guide dashboard lists --------
 
@@ -141,6 +150,12 @@ public class ActivitySessionService {
                 ));
 
         List<Booking> bookings = bookingRepo.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<GuestPass> passes = guestPassRepo.findBySessionIdOrderByPassNumberAsc(sessionId);
+        Map<String, List<GuidePassAttendanceDto>> passesByBooking = passes.stream()
+                .collect(Collectors.groupingBy(
+                        GuestPass::getBookingId,
+                        Collectors.mapping(this::toGuidePassAttendanceDto, Collectors.toList())
+                ));
 
         List<GuideParticipantDto> bookingDtos = bookings.stream()
                 .map(booking -> {
@@ -154,7 +169,8 @@ public class ActivitySessionService {
                             user != null ? user.getProfileImageUrl() : null,
                             booking.getNumberOfPeople(),
                             booking.getStatus(),
-                            booking.getCreatedAt()
+                            booking.getCreatedAt(),
+                            passesByBooking.getOrDefault(booking.getId(), List.of())
                     );
                 })
                 .toList();
@@ -172,7 +188,45 @@ public class ActivitySessionService {
                 countStatus(bookings, BookingStatus.PAYING),
                 countStatus(bookings, BookingStatus.COMPLETED),
                 countStatus(bookings, BookingStatus.CANCELLED),
-                countStatus(bookings, BookingStatus.EXPIRED)
+                countStatus(bookings, BookingStatus.EXPIRED),
+                buildAttendanceSummary(passes)
+        );
+    }
+
+    private GuidePassAttendanceDto toGuidePassAttendanceDto(GuestPass pass) {
+        return new GuidePassAttendanceDto(
+                pass.getId(),
+                pass.getBookingId(),
+                pass.getGuestName(),
+                pass.getPassNumber(),
+                pass.getTotalPasses(),
+                pass.isMainBooker(),
+                pass.getStatus(),
+                pass.getAttendanceStatus(),
+                pass.getMarkedAt(),
+                pass.getMarkedByGuideId()
+        );
+    }
+
+    private GuideAttendanceSummaryDto buildAttendanceSummary(List<GuestPass> passes) {
+        List<GuestPass> activePasses = passes.stream()
+                .filter(pass -> pass.getStatus() == GuestPassStatus.ACTIVE)
+                .toList();
+        int present = (int) activePasses.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.PRESENT)
+                .count();
+        int absent = (int) activePasses.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.ABSENT)
+                .count();
+        int notCheckedIn = (int) activePasses.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.NOT_MARKED)
+                .count();
+
+        return new GuideAttendanceSummaryDto(
+                activePasses.size(),
+                present,
+                absent,
+                notCheckedIn
         );
     }
 

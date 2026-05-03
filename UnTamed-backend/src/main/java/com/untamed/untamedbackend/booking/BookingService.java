@@ -49,10 +49,12 @@ public class BookingService {
         return auth.getName();
     }
 
-    public Booking createOrIncreaseBooking(String userId, String sessionId, int people) {
+    public Booking createOrIncreaseBooking(String userId, String sessionId, int people, List<String> guestNamesInput) {
         if (people < 1) {
             throw bad(BookingErrors.INVALID_PEOPLE);
         }
+
+        List<String> guestNames = sanitizeAndValidateGuestNames(people, guestNamesInput);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(sessionId);
         validateSessionBookable(session, userId);
@@ -76,7 +78,7 @@ public class BookingService {
         );
 
         if (pendingOpt.isPresent()) {
-            return increaseSeats(pendingOpt.get().getId(), userId, people);
+            throw conflict("You already have a pending booking for this session. Please cancel it or continue payment.");
         }
 
         boolean reserved = sessionSeatOps.tryReserveSeats(sessionId, people);
@@ -89,6 +91,7 @@ public class BookingService {
                 .userId(userId)
                 .sessionId(sessionId)
                 .numberOfPeople(people)
+                .guestNames(guestNames)
                 .status(BookingStatus.PENDING)
                 .createdAt(now)
                 .updatedAt(now)
@@ -99,6 +102,67 @@ public class BookingService {
         userInsightService.onBookingCreated(savedBooking);
 
         return savedBooking;
+    }
+
+    private List<String> sanitizeAndValidateGuestNames(int numberOfPeople, List<String> guestNamesInput) {
+        List<String> guestNames = guestNamesInput == null
+                ? List.of()
+                : guestNamesInput.stream()
+                .map(name -> name == null ? "" : name.trim())
+                .filter(name -> !name.isBlank())
+                .toList();
+
+        int expectedFriendNames = Math.max(0, numberOfPeople - 1);
+
+        if (guestNames.size() != expectedFriendNames) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You must provide exactly " + expectedFriendNames + " guest name(s)."
+            );
+        }
+
+        return guestNames;
+    }
+
+    private List<String> sanitizeAndValidateFullGuestNames(int numberOfPeople, List<String> guestNamesInput) {
+        List<String> guestNames = guestNamesInput == null
+                ? List.of()
+                : guestNamesInput.stream()
+                .map(name -> name == null ? "" : name.trim())
+                .toList();
+
+        if (guestNames.size() != numberOfPeople) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You must provide exactly " + numberOfPeople + " guest name(s)."
+            );
+        }
+
+        if (guestNames.stream().anyMatch(String::isBlank)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Guest names cannot be blank.");
+        }
+
+        return guestNames;
+    }
+
+    public Booking updateGuestNames(String bookingId, String userId, List<String> fullGuestNamesInput) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+        if (b.getStatus() != BookingStatus.PENDING && b.getStatus() != BookingStatus.PAYING) {
+            throw conflict("Guest names can only be updated before payment is completed.");
+        }
+
+        List<String> fullGuestNames = sanitizeAndValidateFullGuestNames(
+                b.getNumberOfPeople(),
+                fullGuestNamesInput
+        );
+
+        b.setGuestNames(fullGuestNames.stream().skip(1).toList());
+        b.setUpdatedAt(Instant.now());
+
+        return bookingRepository.save(b);
     }
 
     public Booking increaseSeats(String bookingId, String userId, int delta) {
@@ -444,7 +508,8 @@ public class BookingService {
                     user != null ? user.getProfileImageUrl() : null,
                     booking.getNumberOfPeople(),
                     booking.getStatus(),
-                    booking.getCreatedAt()
+                    booking.getCreatedAt(),
+                    List.of()
             );
         }).toList();
     }
@@ -472,7 +537,8 @@ public class BookingService {
                     user != null ? user.getProfileImageUrl() : null,
                     booking.getNumberOfPeople(),
                     booking.getStatus(),
-                    booking.getCreatedAt()
+                    booking.getCreatedAt(),
+                    List.of()
             );
         }).toList();
     }
@@ -758,6 +824,7 @@ public class BookingService {
                     b.getUserId(),
                     b.getSessionId(),
                     b.getNumberOfPeople(),
+                    b.getGuestNames() == null ? List.of() : b.getGuestNames(),
                     b.getStatus(),
                     b.getCreatedAt(),
                     b.getUpdatedAt(),

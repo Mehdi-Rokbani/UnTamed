@@ -1579,6 +1579,84 @@
   grid-column: 1 / -1;
 }
 
+.guestNamesSection {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(29, 158, 117, 0.18);
+  border-radius: var(--radius-sm);
+  background: #fffaf0;
+}
+
+.guestNamesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.guestNamesHeader h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.guestNamesHeader p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.guestNamesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guestNameField {
+  display: grid;
+  gap: 6px;
+}
+
+.guestNameField span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.guestNameField input {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.guestNameField input:focus {
+  border-color: var(--forest-light);
+  box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.13);
+}
+
+.guestNameError {
+  margin: 10px 0 0;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .expandedPreviewFooter {
   display: flex;
   align-items: center;
@@ -2690,6 +2768,18 @@
     grid-template-columns: 1fr;
   }
 
+  .guestNamesGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .guestNamesHeader {
+    display: grid;
+  }
+
+  .guestNamesHeader p {
+    text-align: left;
+  }
+
   .expandedPreviewFooter {
     align-items: flex-start;
     flex-direction: column;
@@ -2697,5 +2787,680 @@
 
   .expandedActions {
     justify-content: flex-start;
+  }
+}
+
+.guestPassPanel {
+  border-top: 1px solid var(--border);
+  padding: 18px;
+  background: #f8faf7;
+}
+
+.guestPassHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.guestPassHeader div {
+  display: grid;
+  gap: 2px;
+}
+
+.guestPassHeader span,
+.guestPassHeader small,
+.passMeta span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.guestPassHeader strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.guestPassGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.guestPassCard {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.guestPassTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guestPassTop div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.guestPassTop span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.guestPassTop strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.guestPassTop small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.passBadge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: var(--forest-faint);
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.passBadgeACTIVE {
+  background: var(--forest-faint);
+  color: var(--forest);
+}
+
+.passBadgePRESENT {
+  background: rgba(29, 158, 117, 0.14);
+  color: #13745a;
+}
+
+.passBadgeABSENT {
+  background: rgba(217, 119, 6, 0.13);
+  color: #b45309;
+}
+
+.passBadgeCANCELLED {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.qrWrap {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px dashed var(--border);
+}
+
+.qrWrap canvas {
+  width: min(190px, 100%) !important;
+  height: auto !important;
+}
+
+.passMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.passMeta code {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: var(--bg-section);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.passActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.passActions a,
+.passActions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(28, 94, 58, 0.16);
+  border-radius: 999px;
+  background: var(--forest-faint);
+  color: var(--forest);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.passActions button:last-child {
+  background: #fff;
+}
+
+.passToast {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(29, 158, 117, 0.18);
+  border-radius: 12px;
+  background: rgba(29, 158, 117, 0.09);
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.passState {
+  margin: 16px 18px 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.passStateError {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.checkInPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--header-h, 86px) + 34px) 18px 42px;
+  background:
+    linear-gradient(rgba(8, 80, 65, 0.82), rgba(8, 80, 65, 0.82)),
+    radial-gradient(circle at top left, rgba(159, 225, 203, 0.28), transparent 34%),
+    #085041;
+}
+
+.checkInCard {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+}
+
+.checkInTop {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.checkInTop h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.checkInTop p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.checkInStatus {
+  justify-self: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: var(--forest-faint);
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.checkInStatusBad {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.checkInStatusDone {
+  background: rgba(29, 158, 117, 0.14);
+  color: #13745a;
+}
+
+.checkInStatusAbsent {
+  background: rgba(217, 119, 6, 0.13);
+  color: #b45309;
+}
+
+.checkInGuestName {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--forest-faint);
+  text-align: center;
+}
+
+.checkInGuestName span {
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.checkInGuestName strong {
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.checkInLoading,
+.checkInError,
+.checkInInlineError {
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--bg-section);
+  color: var(--text-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+.checkInError {
+  display: grid;
+  gap: 8px;
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.checkInError button {
+  justify-self: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.checkInInlineError {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.checkInFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkInFacts div {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafcf9;
+}
+
+.checkInFacts span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.checkInFacts strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.checkInPrimary {
+  min-height: 50px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--forest);
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.checkInPrimary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.checkInActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkInSecondary {
+  min-height: 50px;
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  border-radius: 12px;
+  background: rgba(217, 119, 6, 0.09);
+  color: #b45309;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.checkInSecondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.checkInHome {
+  justify-self: center;
+  color: var(--forest);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.checkInHome:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .guestPassPanel {
+    padding: 14px;
+  }
+
+  .guestPassHeader,
+  .guestPassTop,
+  .passMeta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .checkInCard {
+    padding: 18px;
+  }
+
+  .checkInFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .passActions,
+  .checkInActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.friendPassPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(159, 225, 203, 0.22), transparent 32%),
+    linear-gradient(180deg, #071c17, #0b1210 58%, #050807);
+  color: #fff;
+}
+
+.friendPassShell {
+  width: min(100%, 430px);
+  display: grid;
+  gap: 18px;
+}
+
+.friendPassHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.friendPassBrand {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.friendPassBrand span {
+  color: #ff8c42;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.friendPassHeader p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.friendPassCard {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 28px;
+  background: #f8fbf7;
+  color: var(--text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+}
+
+.friendPassTopline,
+.friendPassRefs,
+.friendPassFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.friendPassTopline > span:first-child {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.friendPassStatus {
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--forest-faint);
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.friendPassStatusPRESENT {
+  background: rgba(29, 158, 117, 0.14);
+  color: #13745a;
+}
+
+.friendPassStatusABSENT {
+  background: rgba(217, 119, 6, 0.13);
+  color: #b45309;
+}
+
+.friendPassStatusCANCELLED {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.friendPassCard h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.friendPassWhen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.friendPassWhen span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.friendPassWhen strong {
+  color: var(--forest);
+  font-size: 15px;
+}
+
+.friendPassBadge {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #0b2c25;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.friendPassGuest {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--forest-faint);
+  text-align: center;
+}
+
+.friendPassGuest span {
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.friendPassGuest strong {
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.friendPassQr {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: min(100%, 250px);
+  padding: 14px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.friendPassQr canvas {
+  width: min(210px, 100%) !important;
+  height: auto !important;
+}
+
+.friendPassHelp {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.friendPassRefs {
+  padding: 12px 0 0;
+  border-top: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.friendPassRefs code {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: #fff;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.friendPassFooter {
+  align-items: flex-start;
+  flex-direction: column;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.friendPassLoading {
+  padding: 30px 12px;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.friendPassRetry {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--forest);
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media (max-width: 420px) {
+  .friendPassPage {
+    padding: 14px;
+  }
+
+  .friendPassCard {
+    border-radius: 22px;
+    padding: 18px;
+  }
+
+  .friendPassTopline,
+  .friendPassWhen,
+  .friendPassRefs {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

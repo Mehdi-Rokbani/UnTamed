@@ -1192,6 +1192,63 @@
   text-align: center;
 }
 
+.guestNameFields {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid rgba(45, 95, 62, 0.12);
+  border-radius: 12px;
+  background: rgba(45, 95, 62, 0.04);
+  animation: fadeSlideIn 0.22s ease;
+}
+
+.guestNameIntro {
+  display: grid;
+  gap: 3px;
+}
+
+.guestNameIntro strong {
+  color: #1a1a1a;
+  font-size: 13px;
+}
+
+.guestNameIntro span {
+  color: #6b7a70;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.guestNameField {
+  display: grid;
+  gap: 5px;
+}
+
+.guestNameField span {
+  color: #425147;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.guestNameField input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(45, 95, 62, 0.16);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: #fff;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.guestNameField input:focus {
+  border-color: #2d5f3e;
+  box-shadow: 0 0 0 3px rgba(45, 95, 62, 0.11);
+}
+
 .priceSummary {
   margin: 10px 0 0;
   padding: 12px 14px;

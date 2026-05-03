@@ -868,6 +868,10 @@ button:disabled {
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
 }
 
+.participantsModal {
+  width: min(920px, 100%);
+}
+
 .modalHeader {
   padding: 16px 18px 14px;
   border-bottom: 1px solid var(--border-lt);
@@ -969,6 +973,27 @@ button:disabled {
   color: var(--amber);
 }
 
+.pMetricRed {
+  color: var(--red-text);
+}
+
+.attendanceMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: -4px 0 14px;
+}
+
+.attendanceMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
 .pMetricLabel {
   font-size: 10px;
   font-weight: 600;
@@ -1021,18 +1046,29 @@ button:disabled {
 .participantsList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+}
+
+.participantCard {
+  border: 1px solid var(--border-lt);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  overflow: hidden;
 }
 
 .participantRow {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  border: 1px solid var(--border-lt);
-  border-radius: var(--r-xs);
-  background: var(--surface);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   transition: background 0.1s;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .participantRow:hover {
@@ -1131,6 +1167,115 @@ button:disabled {
 .pStatusCancelled {
   background: var(--red-dim);
   color: var(--red-text);
+}
+
+.expandHint {
+  color: var(--ink-ghost);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.passDetails {
+  display: grid;
+  gap: 6px;
+  padding: 0 10px 10px 52px;
+  background: var(--surface);
+}
+
+.passDetailRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+}
+
+.passDetailMain {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.passDetailMain strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.passDetailMain span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.passDetailMain em {
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  background: var(--green-dim);
+  color: var(--green-text);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.passDetailMeta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.passDetailMeta small {
+  max-width: 260px;
+  color: var(--ink-ghost);
+  font-size: 10.5px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.attendanceBadge {
+  border-radius: var(--r-xs);
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.attendancePresent {
+  background: var(--green-dim);
+  color: var(--green-text);
+}
+
+.attendanceAbsent {
+  background: var(--red-dim);
+  color: var(--red-text);
+}
+
+.attendanceNotChecked {
+  background: var(--surface-3);
+  color: var(--ink-muted);
+}
+
+.noPasses {
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* ─── Form ───────────────────────────────────────────────────────────────────── */
@@ -1505,6 +1650,27 @@ textarea.formInput {
 
   .pMetrics {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .attendanceMetrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .passDetails {
+    padding-left: 10px;
+  }
+
+  .passDetailRow {
+    grid-template-columns: 1fr;
+  }
+
+  .passDetailMeta {
+    justify-items: start;
+  }
+
+  .passDetailMeta small {
+    max-width: none;
+    text-align: left;
   }
 
   .toastStack {
