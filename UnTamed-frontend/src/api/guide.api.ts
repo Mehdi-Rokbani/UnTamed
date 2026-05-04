@@ -76,3 +76,12 @@ export async function cancelPendingBookingByGuide(bookingId: string) {
   );
   return data;
 }
+
+export async function removeGuideBooking(bookingId: string, reason: string) {
+  const { data } = await http.post<{ bookingId: string; status: string }>(
+    `/api/guide/sessions/bookings/${bookingId}/remove`,
+    { reason },
+    { withCredentials: true }
+  );
+  return data;
+}

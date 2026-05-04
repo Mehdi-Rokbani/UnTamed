@@ -40,12 +40,6 @@ public class Booking {
     // only relevant for PENDING
     private Instant expiresAt;
 
-    // for later payment/refund integration (works now as metadata)
-    @Builder.Default
-    private int refundSeatsRequested = 0;
-
-    @Builder.Default
-    private boolean refundRequested = false;
 
     @Builder.Default
     @Field("attendance_marked_absent")
@@ -56,4 +50,24 @@ public class Booking {
 
     @Field("attendance_marked_by_guide_id")
     private String attendanceMarkedByGuideId;
+
+    // Refund / cancellation metadata
+    @Builder.Default
+    private RefundStatus refundStatus = RefundStatus.NONE;
+
+    @Builder.Default
+    private int refundPercent = 0;
+
+    @Builder.Default
+    private int refundAmount = 0;
+
+    private String refundCurrency;
+
+    private String stripeRefundId;
+
+    private CancelledBy cancelledBy;
+
+    private String cancellationReason;
+
+    private Instant cancelledAt;
 }

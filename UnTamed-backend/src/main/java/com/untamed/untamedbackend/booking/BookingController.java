@@ -94,5 +94,13 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.listMineWithDetails(userId));
     }
 
+    @GetMapping("/{id}/refund-preview")
+    public ResponseEntity<RefundPreviewResponse> refundPreview(
+            @PathVariable String id,
+            Authentication auth
+    ) {
+        String userId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(bookingService.previewCancelBooking(id, userId));
+    }
 
 }

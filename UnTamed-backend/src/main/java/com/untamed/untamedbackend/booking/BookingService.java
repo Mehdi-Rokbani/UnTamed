@@ -1,7 +1,14 @@
 package com.untamed.untamedbackend.booking;
 
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
+import com.untamed.untamedbackend.guestpass.GuestPass;
+import com.untamed.untamedbackend.guestpass.GuestPassRepository;
 import com.untamed.untamedbackend.model.*;
+import com.untamed.untamedbackend.payment.PaymentAttempt;
+import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
+import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
+import com.untamed.untamedbackend.payment.PaymentProvider;
+import com.untamed.untamedbackend.payment.stripe.StripeRefundService;
 import com.untamed.untamedbackend.repository.*;
 import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
@@ -31,6 +38,11 @@ public class BookingService {
     private final ActivitySessionRepository activitySessionRepository;
     private final UserInsightService userInsightService;
     private final AddressRepository addressRepository;
+
+    private final RefundPolicyService refundPolicyService;
+    private final PaymentAttemptRepository paymentAttemptRepository;
+    private final GuestPassRepository guestPassRepository;
+    private final StripeRefundService stripeRefundService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -150,6 +162,7 @@ public class BookingService {
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
         assertOwned(b, userId);
+
         if (b.getStatus() != BookingStatus.PENDING && b.getStatus() != BookingStatus.PAYING) {
             throw conflict("Guest names can only be updated before payment is completed.");
         }
@@ -229,7 +242,12 @@ public class BookingService {
         assertMutableForCancel(b);
 
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
-        validateSessionChangeAllowed(session);
+        refundPolicyService.assertBeforeSessionStart(session);
+
+        PaymentAttempt attempt = findSucceededStripeAttemptOrNull(b.getId());
+
+        RefundPreviewResponse preview =
+                refundPolicyService.previewUserCancellation(b, session, attempt);
 
         boolean wasCompletedAndPresent =
                 b.getStatus() == BookingStatus.COMPLETED && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
@@ -239,12 +257,46 @@ public class BookingService {
             sessionSeatOps.releaseSeats(b.getSessionId(), toRelease);
         }
 
-        b.setNumberOfPeople(0);
-        b.setStatus(BookingStatus.CANCELLED);
-        b.setUpdatedAt(Instant.now());
-        b.setExpiresAt(null);
+        String stripeRefundId = null;
+
+        if (b.getStatus() == BookingStatus.COMPLETED && preview.refundable()) {
+            try {
+                stripeRefundId = stripeRefundService.refundPaymentAttempt(
+                        attempt,
+                        preview.refundAmount(),
+                        "USER_CANCELLED"
+                );
+
+                preview = RefundPreviewResponse.builder()
+                        .refundable(preview.refundable())
+                        .refundPercent(preview.refundPercent())
+                        .refundAmount(preview.refundAmount())
+                        .currency(preview.currency())
+                        .refundStatus(preview.refundPercent() == 100
+                                ? RefundStatus.REFUNDED
+                                : RefundStatus.PARTIALLY_REFUNDED)
+                        .reason(preview.reason())
+                        .build();
+
+            } catch (RuntimeException e) {
+                b.setRefundStatus(RefundStatus.REFUND_FAILED);
+                b.setUpdatedAt(Instant.now());
+                bookingRepository.save(b);
+                throw e;
+            }
+        }
+
+        applyCancellationMetadata(
+                b,
+                CancelledBy.USER,
+                "User cancelled booking",
+                preview,
+                stripeRefundId
+        );
 
         Booking savedBooking = bookingRepository.save(b);
+        cancelGuestPasses(savedBooking.getId());
+
         userInsightService.onBookingCancelled(savedBooking);
 
         if (wasCompletedAndPresent) {
@@ -256,6 +308,7 @@ public class BookingService {
                 .status(savedBooking.getStatus())
                 .build();
     }
+
     public void expireBooking(String bookingId) {
         Booking b = bookingRepository.findById(bookingId).orElse(null);
         if (b == null) return;
@@ -278,7 +331,6 @@ public class BookingService {
 
         bookingRepository.save(b);
     }
-
 
     public List<Booking> listMine(String userId) {
         return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -364,10 +416,37 @@ public class BookingService {
         return b;
     }
 
+    public Booking handlePaymentFailed(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+
+        if (b.getStatus() == BookingStatus.COMPLETED) return b;
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) return b;
+
+        Instant now = Instant.now();
+        Instant exp = b.getExpiresAt();
+
+        if (exp != null && exp.isBefore(now)) {
+            expireBooking(b.getId());
+            return bookingRepository.findById(b.getId()).orElse(null);
+        }
+
+        if (b.getStatus() == BookingStatus.PAYING) {
+            b.setStatus(BookingStatus.PENDING);
+            b.setUpdatedAt(now);
+            return bookingRepository.save(b);
+        }
+
+        return b;
+    }
+
     private void validateSessionBookable(ActivitySession session, String userId) {
         if (session.getStatus() != ActivityStatus.PUBLISHED) {
             throw conflict(BookingErrors.SESSION_NOT_PUBLISHED);
         }
+
         validateSessionChangeAllowed(session);
 
         if (session.getGuideId() != null && session.getGuideId().equals(userId)) {
@@ -544,6 +623,10 @@ public class BookingService {
     }
 
     public CancelBookingResponse cancelPendingBookingByGuide(String bookingId, String guideId) {
+        return removeBookingByGuide(bookingId, guideId, "Guide cancelled pending booking");
+    }
+
+    public CancelBookingResponse removeBookingByGuide(String bookingId, String guideId, String reason) {
         Booking b = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
 
@@ -556,24 +639,72 @@ public class BookingService {
             );
         }
 
-        if (b.getStatus() != BookingStatus.PENDING) {
-            throw conflict("Only pending bookings can be cancelled by the guide.");
+        refundPolicyService.assertBeforeSessionStart(session);
+
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
         }
 
-        validateSessionChangeAllowed(session);
+        if (b.getStatus() == BookingStatus.PAYING) {
+            throw conflict("Payment in progress. Verify payment status first.");
+        }
+
+        PaymentAttempt attempt = findSucceededStripeAttemptOrNull(b.getId());
+
+        RefundPreviewResponse preview =
+                refundPolicyService.previewGuideRemoval(b, session, attempt);
+
+        boolean wasCompletedAndPresent =
+                b.getStatus() == BookingStatus.COMPLETED && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
 
         int toRelease = b.getNumberOfPeople();
         if (toRelease > 0) {
             sessionSeatOps.releaseSeats(b.getSessionId(), toRelease);
         }
 
-        b.setNumberOfPeople(0);
-        b.setStatus(BookingStatus.CANCELLED);
-        b.setUpdatedAt(Instant.now());
-        b.setExpiresAt(null);
+        String stripeRefundId = null;
+
+        if (b.getStatus() == BookingStatus.COMPLETED && preview.refundable()) {
+            try {
+                stripeRefundId = stripeRefundService.refundPaymentAttempt(
+                        attempt,
+                        preview.refundAmount(),
+                        "GUIDE_REMOVED_USER"
+                );
+
+                preview = RefundPreviewResponse.builder()
+                        .refundable(true)
+                        .refundPercent(100)
+                        .refundAmount(preview.refundAmount())
+                        .currency(preview.currency())
+                        .refundStatus(RefundStatus.REFUNDED)
+                        .reason(preview.reason())
+                        .build();
+
+            } catch (RuntimeException e) {
+                b.setRefundStatus(RefundStatus.REFUND_FAILED);
+                b.setUpdatedAt(Instant.now());
+                bookingRepository.save(b);
+                throw e;
+            }
+        }
+
+        applyCancellationMetadata(
+                b,
+                CancelledBy.GUIDE,
+                reason == null || reason.isBlank() ? "Guide removed participant" : reason.trim(),
+                preview,
+                stripeRefundId
+        );
 
         Booking savedBooking = bookingRepository.save(b);
+        cancelGuestPasses(savedBooking.getId());
+
         userInsightService.onBookingCancelled(savedBooking);
+
+        if (wasCompletedAndPresent) {
+            decrementConfirmedTripsCount(savedBooking.getUserId());
+        }
 
         return CancelBookingResponse.builder()
                 .bookingId(savedBooking.getId())
@@ -705,7 +836,8 @@ public class BookingService {
         ActivitySession session = activitySessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
-        List<Booking> confirmedBookings = bookingRepository.findBySessionIdAndStatus(sessionId, BookingStatus.COMPLETED);
+        List<Booking> confirmedBookings =
+                bookingRepository.findBySessionIdAndStatus(sessionId, BookingStatus.COMPLETED);
 
         List<ParticipantPreviewItem> participants = confirmedBookings.stream()
                 .map(booking -> userRepository.findById(booking.getUserId()).orElse(null))
@@ -729,59 +861,33 @@ public class BookingService {
                 .participants(participants)
                 .build();
     }
-    public Booking handlePaymentFailed(String bookingId, String userId) {
-        Booking b = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
-
-        assertOwned(b, userId);
-
-        if (b.getStatus() == BookingStatus.COMPLETED) return b;
-        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) return b;
-
-        Instant now = Instant.now();
-        Instant exp = b.getExpiresAt();
-
-        if (exp != null && exp.isBefore(now)) {
-            expireBooking(b.getId());
-            return bookingRepository.findById(b.getId()).orElse(null);
-        }
-
-        if (b.getStatus() == BookingStatus.PAYING) {
-            b.setStatus(BookingStatus.PENDING);
-            b.setUpdatedAt(now);
-            return bookingRepository.save(b);
-        }
-
-        return b;
-    }
 
     public List<BookingWithDetailsDto> listMineWithDetails(String userId) {
         List<Booking> bookings = bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
         return bookings.stream().map(b -> {
-            // Defaults
-            String activityTitle    = null;
+            String activityTitle = null;
+            String activityTemplateId = null;
             String activityImageUrl = null;
-            Instant sessionStartAt  = null;
-            String displayName      = null;
-            String governorate      = null;
-            String locality         = null;
-            Double latitude         = null;
-            Double longitude        = null;
+            Instant sessionStartAt = null;
+            String displayName = null;
+            String governorate = null;
+            String locality = null;
+            Double latitude = null;
+            Double longitude = null;
             BigDecimal pricePerPerson = null;
-            BigDecimal totalPrice     = null;
+            BigDecimal totalPrice = null;
 
-            // Resolve session
             ActivitySession session = activitySessionRepository
                     .findById(b.getSessionId())
                     .orElse(null);
 
             if (session != null) {
                 sessionStartAt = session.getStartAt();
+                activityTemplateId = session.getTemplateId();
 
-                // Resolve template
                 ActivityTemplate template = activityTemplateRepository
-                        .findById(session.getTemplateId())
+                        .findById(activityTemplateId)
                         .orElse(null);
 
                 if (template != null) {
@@ -792,7 +898,6 @@ public class BookingService {
                             ? pricePerPerson.multiply(BigDecimal.valueOf(b.getNumberOfPeople()))
                             : null;
 
-                    // Cover image: first image with cover=true, else first image overall
                     if (template.getImages() != null && !template.getImages().isEmpty()) {
                         activityImageUrl = template.getImages().stream()
                                 .filter(img -> Boolean.TRUE.equals(img.isCover()))
@@ -802,7 +907,6 @@ public class BookingService {
                                 .orElse(null);
                     }
 
-                    // Resolve address
                     if (template.getAddressId() != null) {
                         Address address = addressRepository
                                 .findById(template.getAddressId())
@@ -811,9 +915,9 @@ public class BookingService {
                         if (address != null) {
                             displayName = address.getDisplayName();
                             governorate = address.getGovernorate();
-                            locality    = address.getLocality();
-                            latitude    = address.getLatitude();
-                            longitude   = address.getLongitude();
+                            locality = address.getLocality();
+                            latitude = address.getLatitude();
+                            longitude = address.getLongitude();
                         }
                     }
                 }
@@ -829,6 +933,7 @@ public class BookingService {
                     b.getCreatedAt(),
                     b.getUpdatedAt(),
                     b.getExpiresAt(),
+                    activityTemplateId,
                     activityTitle,
                     activityImageUrl,
                     sessionStartAt,
@@ -841,5 +946,67 @@ public class BookingService {
                     totalPrice
             );
         }).toList();
+    }
+
+    public RefundPreviewResponse previewCancelBooking(String bookingId, String userId) {
+        Booking b = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> notFound(BookingErrors.BOOKING_NOT_FOUND));
+
+        assertOwned(b, userId);
+
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            throw conflict(BookingErrors.BOOKING_NOT_ACTIVE);
+        }
+
+        if (b.getStatus() == BookingStatus.PAYING) {
+            throw conflict("Payment in progress. Verify payment status first.");
+        }
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+        PaymentAttempt attempt = findSucceededStripeAttemptOrNull(b.getId());
+
+        return refundPolicyService.previewUserCancellation(b, session, attempt);
+    }
+
+    private PaymentAttempt findSucceededStripeAttemptOrNull(String bookingId) {
+        return paymentAttemptRepository
+                .findFirstByBookingIdAndProviderOrderByCreatedAtDesc(bookingId, PaymentProvider.STRIPE)
+                .filter(a -> a.getStatus() == PaymentAttemptStatus.SUCCEEDED)
+                .orElse(null);
+    }
+
+    private void cancelGuestPasses(String bookingId) {
+        List<GuestPass> passes = guestPassRepository.findByBookingId(bookingId);
+
+        if (passes.isEmpty()) {
+            return;
+        }
+
+        passes.forEach(GuestPass::cancel);
+        guestPassRepository.saveAll(passes);
+    }
+
+    private void applyCancellationMetadata(
+            Booking booking,
+            CancelledBy cancelledBy,
+            String reason,
+            RefundPreviewResponse preview,
+            String stripeRefundId
+    ) {
+        Instant now = Instant.now();
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setNumberOfPeople(0);
+        booking.setExpiresAt(null);
+        booking.setUpdatedAt(now);
+        booking.setCancelledAt(now);
+        booking.setCancelledBy(cancelledBy);
+        booking.setCancellationReason(reason);
+
+        booking.setRefundStatus(preview.refundStatus());
+        booking.setRefundPercent(preview.refundPercent());
+        booking.setRefundAmount(preview.refundAmount());
+        booking.setRefundCurrency(preview.currency());
+        booking.setStripeRefundId(stripeRefundId);
     }
 }

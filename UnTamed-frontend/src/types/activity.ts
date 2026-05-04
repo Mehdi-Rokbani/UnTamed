@@ -178,6 +178,14 @@ export type BookingStatus =
 
 export type GuestPassStatus = "ACTIVE" | "CANCELLED";
 export type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT";
+export type RefundStatus =
+  | "NONE"
+  | "NOT_REFUNDABLE"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
+  | "REFUND_FAILED";
+export type CancelledBy = "USER" | "GUIDE" | "ADMIN" | "SYSTEM";
 
 export type GuidePassAttendanceDto = {
   passId: string;
@@ -201,6 +209,13 @@ export type GuideParticipantDto = {
   numberOfPeople: number;
   status: BookingStatus;
   createdAt: string;
+  refundStatus?: RefundStatus;
+  refundPercent?: number;
+  refundAmount?: number;
+  refundCurrency?: string | null;
+  cancelledBy?: CancelledBy | null;
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
   passes?: GuidePassAttendanceDto[];
 };
 

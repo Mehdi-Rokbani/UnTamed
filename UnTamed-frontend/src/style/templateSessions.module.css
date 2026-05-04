@@ -1278,6 +1278,85 @@ button:disabled {
   font-weight: 600;
 }
 
+.moderationPanel,
+.cancelMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 10px 10px 52px;
+}
+
+.cancelMeta {
+  padding: 8px 10px;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.moderationButton,
+.moderationDanger {
+  min-height: 28px;
+  border-radius: var(--r-xs);
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.moderationButton {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-mid);
+}
+
+.moderationDanger {
+  border: 1px solid #fecaca;
+  background: var(--red-dim);
+  color: var(--red-text);
+}
+
+.refundBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.refundBadgeGreen {
+  background: var(--green-dim);
+  color: var(--green-text);
+}
+
+.refundBadgeAmber {
+  background: var(--amber-dim);
+  color: var(--amber-text);
+}
+
+.refundBadgeBlue {
+  background: rgba(37, 99, 235, 0.11);
+  color: #1d4ed8;
+}
+
+.refundBadgeRed {
+  background: var(--red-dim);
+  color: var(--red-text);
+}
+
+.refundBadgeMuted {
+  background: var(--surface-3);
+  color: var(--ink-muted);
+}
+
 /* ─── Form ───────────────────────────────────────────────────────────────────── */
 
 .formGrid {
@@ -1365,6 +1444,16 @@ textarea.formInput {
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 12px;
+}
+
+.formError {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: var(--r-xs);
+  background: var(--red-dim);
+  color: var(--red-text);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ─── Confirm Modal ─────────────────────────────────────────────────────────── */
@@ -1657,6 +1746,11 @@ textarea.formInput {
   }
 
   .passDetails {
+    padding-left: 10px;
+  }
+
+  .moderationPanel,
+  .cancelMeta {
     padding-left: 10px;
   }
 

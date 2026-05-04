@@ -54,4 +54,19 @@ public class GuideBookingController {
                 bookingService.markAttendanceAbsent(bookingId, guideId, req.isAbsent())
         );
     }
+    @PostMapping("/bookings/{bookingId}/remove")
+    public ResponseEntity<CancelBookingResponse> removeBooking(
+            @PathVariable String bookingId,
+            @RequestBody GuideRemoveBookingRequest request,
+            Authentication auth
+    ) {
+        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        return ResponseEntity.ok(
+                bookingService.removeBookingByGuide(
+                        bookingId,
+                        guideId,
+                        request != null ? request.getReason() : null
+                )
+        );
+    }
 }

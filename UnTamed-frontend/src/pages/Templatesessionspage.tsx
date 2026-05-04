@@ -8,6 +8,7 @@ import type {
   BookingStatus,
   GuideParticipantDto,
   GuideSessionDetailsResponse,
+  RefundStatus,
 } from "../types/activity";
 import {
   listMyTemplates,
@@ -19,6 +20,7 @@ import {
   restoreSession,
   permanentlyDeleteSession,
 } from "../api/activity.api";
+import { removeGuideBooking } from "../api/guide.api";
 import styles from "../style/templateSessions.module.css";
 
 const Icon = {
@@ -183,6 +185,27 @@ function formatDateTime(iso: string) {
   });
 }
 
+function formatMoneyMinor(amount?: number | null, currency?: string | null) {
+  if (amount == null || !Number.isFinite(amount)) return "-";
+  const code = currency || "TND";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${code}`;
+  }
+}
+
+function isSessionStarted(sessionStartAt?: string | null) {
+  if (!sessionStartAt) return false;
+  const time = new Date(sessionStartAt).getTime();
+  return Number.isFinite(time) && time <= Date.now();
+}
+
 function getApiErrorMessage(e: unknown) {
   if (typeof e === "object" && e !== null && "response" in e) {
     const err = e as { response?: { data?: { message?: string } } };
@@ -247,6 +270,23 @@ function participantStatusClass(status: BookingStatus) {
   return styles.pStatusPending;
 }
 
+function refundBadgeLabel(status?: RefundStatus | null) {
+  if (status === "NOT_REFUNDABLE") return "Not refundable";
+  if (status === "REFUND_PENDING") return "Refund pending";
+  if (status === "REFUNDED") return "Refunded";
+  if (status === "PARTIALLY_REFUNDED") return "Partially refunded";
+  if (status === "REFUND_FAILED") return "Refund failed";
+  return "No refund";
+}
+
+function refundBadgeClass(status?: RefundStatus | null) {
+  if (status === "REFUNDED") return styles.refundBadgeGreen;
+  if (status === "PARTIALLY_REFUNDED") return styles.refundBadgeAmber;
+  if (status === "REFUND_PENDING") return styles.refundBadgeBlue;
+  if (status === "REFUND_FAILED") return styles.refundBadgeRed;
+  return styles.refundBadgeMuted;
+}
+
 function attendanceLabel(status: AttendanceStatus) {
   if (status === "NOT_MARKED") return "NOT_CHECKED_IN";
   return status;
@@ -301,6 +341,11 @@ export default function TemplateSessionsPage() {
     useState<AttendanceFilter>("ALL");
   const [expandedBookings, setExpandedBookings] =
     useState<Set<string>>(new Set());
+  const [moderationTarget, setModerationTarget] =
+    useState<GuideParticipantDto | null>(null);
+  const [moderationReason, setModerationReason] = useState("");
+  const [moderationError, setModerationError] = useState<string | null>(null);
+  const [moderationBusy, setModerationBusy] = useState(false);
   const [loadingParticipantsId, setLoadingParticipantsId] =
     useState<string | null>(null);
 
@@ -616,16 +661,36 @@ export default function TemplateSessionsPage() {
     }
   }
 
-  function handleCancelOrDelete(session: ActivitySessionResponse) {
+  async function handleCancelOrDelete(session: ActivitySessionResponse) {
     const booked = session.bookedCount ?? 0;
     const hasBookings = booked > 0;
+    let refundNotice = "";
+
+    if (hasBookings) {
+      setBusyId(session.id);
+      try {
+        const details = await getGuideSessionDetails(session.id);
+        const paid = details.bookings.filter((b) => b.status === "COMPLETED").length;
+        const pending = details.bookings.filter((b) => b.status === "PENDING").length;
+        const paying = details.bookings.filter((b) => b.status === "PAYING").length;
+        const parts: string[] = [];
+        if (paid > 0) parts.push("Paid participants will receive a full refund.");
+        if (pending > 0) parts.push("Pending bookings will be cancelled with no refund.");
+        if (paying > 0) parts.push("This session has payments in progress. The backend may block cancellation.");
+        refundNotice = parts.length ? ` ${parts.join(" ")}` : "";
+      } catch {
+        refundNotice = " Refund details could not be loaded, but the backend will apply the correct policy.";
+      } finally {
+        setBusyId(null);
+      }
+    }
 
     setConfirmAction({
       kind: "session-cancel-delete",
       session,
       title: hasBookings ? "Cancel this session?" : "Delete this session?",
       message: hasBookings
-        ? "This session has pending bookings. Cancelling it will cancel pending bookings, release seats, and move the session to history."
+        ? `Cancelling this session will move it to history and apply refund rules.${refundNotice}`
         : "This session has no bookings and can be permanently deleted.",
       confirmLabel: hasBookings ? "Cancel session" : "Delete session",
       danger: true,
@@ -741,6 +806,37 @@ export default function TemplateSessionsPage() {
       else next.add(bookingId);
       return next;
     });
+  }
+
+  function openModeration(p: GuideParticipantDto) {
+    setModerationTarget(p);
+    setModerationReason("");
+    setModerationError(null);
+  }
+
+  async function confirmModeration() {
+    if (!moderationTarget || !participantsModal) return;
+    const reason = moderationReason.trim();
+    if (!reason) {
+      setModerationError("Please add a reason.");
+      return;
+    }
+
+    setModerationBusy(true);
+    setModerationError(null);
+    try {
+      await removeGuideBooking(moderationTarget.bookingId, reason);
+      const details = await getGuideSessionDetails(participantsModal.session.id);
+      setParticipantsModal(details);
+      await refresh();
+      showToast("success", "Booking removed.");
+      setModerationTarget(null);
+      setModerationReason("");
+    } catch (e) {
+      setModerationError(getApiErrorMessage(e));
+    } finally {
+      setModerationBusy(false);
+    }
   }
 
   return (
@@ -1217,6 +1313,9 @@ export default function TemplateSessionsPage() {
                   {filteredParticipants.map((p) => {
                     const passes = p.passes ?? [];
                     const isExpanded = expandedBookings.has(p.bookingId);
+                    const canModerate =
+                      !isSessionStarted(participantsModal.session.startAt) &&
+                      (p.status === "PENDING" || p.status === "COMPLETED");
 
                     return (
                       <article key={p.bookingId} className={styles.participantCard}>
@@ -1265,6 +1364,34 @@ export default function TemplateSessionsPage() {
                       </div>
                     </button>
 
+                    {(p.status === "CANCELLED" || canModerate) && (
+                      <div className={styles.moderationPanel}>
+                        {p.status === "CANCELLED" && (
+                          <div className={styles.cancelMeta}>
+                            <span className={`${styles.refundBadge} ${refundBadgeClass(p.refundStatus)}`}>
+                              {refundBadgeLabel(p.refundStatus)}
+                            </span>
+                            {(p.refundAmount ?? 0) > 0 && (
+                              <span>{formatMoneyMinor(p.refundAmount, p.refundCurrency)} refund</span>
+                            )}
+                            {p.cancelledBy && <span>Cancelled by {p.cancelledBy.toLowerCase()}</span>}
+                            {p.cancelledAt && <span>{formatDateTime(p.cancelledAt)}</span>}
+                            {p.cancellationReason && <span>{p.cancellationReason}</span>}
+                          </div>
+                        )}
+
+                        {canModerate && (
+                          <button
+                            type="button"
+                            className={p.status === "COMPLETED" ? styles.moderationDanger : styles.moderationButton}
+                            onClick={() => openModeration(p)}
+                          >
+                            {p.status === "COMPLETED" ? "Remove & refund" : "Cancel pending"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {isExpanded && (
                       <div className={styles.passDetails}>
                         {passes.length === 0 ? (
@@ -1282,6 +1409,11 @@ export default function TemplateSessionsPage() {
                                 </span>
                               </div>
                               <div className={styles.passDetailMeta}>
+                                {pass.status === "CANCELLED" && (
+                                  <span className={`${styles.attendanceBadge} ${styles.attendanceAbsent}`}>
+                                    PASS CANCELLED
+                                  </span>
+                                )}
                                 <span
                                   className={`${styles.attendanceBadge} ${attendanceStatusClass(
                                     pass.attendanceStatus
@@ -1459,6 +1591,63 @@ export default function TemplateSessionsPage() {
                   : modal.kind === "add"
                     ? "Add Session"
                     : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moderationTarget && (
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => !moderationBusy && setModerationTarget(null)}
+        >
+          <div className={`${styles.modal} ${styles.confirmModal}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 className={styles.modalTitle}>
+                  {moderationTarget.status === "COMPLETED" ? "Remove participant?" : "Cancel pending booking?"}
+                </h2>
+                <p className={styles.modalSub}>{moderationTarget.username ?? moderationTarget.email ?? moderationTarget.userId}</p>
+              </div>
+              <button
+                className={styles.modalClose}
+                type="button"
+                disabled={moderationBusy}
+                onClick={() => setModerationTarget(null)}
+              >
+                <Icon.X />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={moderationTarget.status === "COMPLETED" ? styles.confirmBoxDanger : styles.confirmBox}>
+                {moderationTarget.status === "COMPLETED"
+                  ? "This participant will receive a full refund."
+                  : "No refund is needed because payment was not captured."}
+              </div>
+              <label className={styles.formField}>
+                <span className={styles.formLabel}>Reason</span>
+                <textarea
+                  className={styles.formInput}
+                  value={moderationReason}
+                  onChange={(event) => setModerationReason(event.target.value)}
+                  placeholder="Participant cannot attend / guide removed participant"
+                  rows={4}
+                />
+              </label>
+              {moderationError && <div className={styles.formError}>{moderationError}</div>}
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.btnGhost} type="button" disabled={moderationBusy} onClick={() => setModerationTarget(null)}>
+                Keep booking
+              </button>
+              <button
+                className={moderationTarget.status === "COMPLETED" ? styles.modalBtnDanger : styles.btnPrimary}
+                type="button"
+                disabled={moderationBusy}
+                onClick={() => void confirmModeration()}
+              >
+                {moderationBusy ? "Removing..." : moderationTarget.status === "COMPLETED" ? "Remove & refund" : "Cancel pending"}
               </button>
             </div>
           </div>

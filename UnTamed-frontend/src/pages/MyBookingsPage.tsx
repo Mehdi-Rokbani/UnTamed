@@ -9,6 +9,7 @@ import { Header } from "../components/Header";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
 import type { BookingWithDetails } from "../api/booking.api";
+import type { RefundPreviewResponse, RefundStatus } from "../api/booking.api";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuestPass } from "../api/guestPass.api";
 import styles from "../style/my-bookings.module.css";
@@ -24,6 +25,7 @@ L.Icon.Default.mergeOptions({
 // ─── Types ──────────────────────────────────────────────────────────────────────
 type LoadState   = "loading" | "done" | "error";
 type ViewMode    = "map" | "list";
+type ToastTone   = "success" | "error" | "info";
 type DisplayStatus =
   | "UPCOMING"
   | "PENDING_PAYMENT"
@@ -402,6 +404,55 @@ function getLocationText(b: BookingWithDetails): string {
   return [b.governorate, b.locality].filter(Boolean).join(", ") || b.displayName || "Location to be announced";
 }
 
+function activityDetailsPath(b: BookingWithDetails): string | null {
+  return b.activityTemplateId ? `/activities/${b.activityTemplateId}` : null;
+}
+
+function ActivityDetailsUnavailable({ className }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled
+      title="Activity details are not available for this booking."
+    >
+      View activity <IcoExtLink />
+    </button>
+  );
+}
+
+function formatMoneyMinor(amount?: number | null, currency?: string | null): string {
+  if (amount == null || !Number.isFinite(amount)) return "-";
+  const code = currency || "TND";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${code}`;
+  }
+}
+
+function refundBadgeLabel(status?: RefundStatus | null): string {
+  if (status === "NOT_REFUNDABLE") return "Not refundable";
+  if (status === "REFUND_PENDING") return "Refund pending";
+  if (status === "REFUNDED") return "Refunded";
+  if (status === "PARTIALLY_REFUNDED") return "Partially refunded";
+  if (status === "REFUND_FAILED") return "Refund failed";
+  return "No refund";
+}
+
+function refundBadgeTone(status?: RefundStatus | null): string {
+  if (status === "REFUNDED") return styles.refundBadgeGreen;
+  if (status === "PARTIALLY_REFUNDED") return styles.refundBadgeAmber;
+  if (status === "REFUND_PENDING") return styles.refundBadgeBlue;
+  if (status === "REFUND_FAILED") return styles.refundBadgeRed;
+  return styles.refundBadgeMuted;
+}
+
 function resizeGuestNames(names: string[] | undefined, count: number, mainGuestName: string): string[] {
   return Array.from({ length: Math.max(1, count) }, (_, index) => {
     if (index === 0) return names?.[0] ?? mainGuestName;
@@ -605,6 +656,7 @@ function PreviewBookingCard({
   const canReview = ds === "COMPLETED";
   const canViewPasses = b.status === "COMPLETED";
   const coverStyle = b.activityImageUrl ? ({ backgroundImage: `url(${b.activityImageUrl})` } as CSSProperties) : undefined;
+  const detailsPath = activityDetailsPath(b);
   const tone =
     ds === "PENDING_PAYMENT" || ds === "PAYING" ? styles.previewCardPayment :
     ds === "CANCELLED" || ds === "EXPIRED" ? styles.previewCardMuted :
@@ -685,6 +737,18 @@ function PreviewBookingCard({
                 {guestNameError && <p className={styles.guestNameError}>{guestNameError}</p>}
               </section>
             )}
+            {b.status === "CANCELLED" && (
+              <div className={styles.refundMeta}>
+                <span className={`${styles.refundBadge} ${refundBadgeTone(b.refundStatus)}`}>
+                  {refundBadgeLabel(b.refundStatus)}
+                </span>
+                {(b.refundAmount ?? 0) > 0 && (
+                  <span>{formatMoneyMinor(b.refundAmount, b.refundCurrency)} refund</span>
+                )}
+                {b.cancelledBy && <span>Cancelled by {b.cancelledBy.toLowerCase()}</span>}
+                {b.cancelledAt && <span>{fmtDate(b.cancelledAt)}</span>}
+              </div>
+            )}
           </div>
           <div className={styles.expandedPreviewFooter}>
             <span className={styles.expandedStatusText}>{getExpandedStatusText(ds)}</span>
@@ -692,7 +756,11 @@ function PreviewBookingCard({
               {canAdjust && <button type="button" onClick={() => onAdjustGuests(b)}>Adjust guests</button>}
               {canPay && <button type="button" className={styles.modalPrimary} onClick={() => onPay(b)}>Pay now</button>}
               {canCancel && <button type="button" className={styles.modalDanger} onClick={() => onCancel(b)}>Cancel</button>}
-              {b.sessionId && <Link to={`/activities/${b.sessionId}`}>View activity <IcoExtLink /></Link>}
+              {detailsPath ? (
+                <Link to={detailsPath as string}>View activity <IcoExtLink /></Link>
+              ) : (
+                <ActivityDetailsUnavailable />
+              )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
               {canReview && <button type="button">Review</button>}
             </div>
@@ -752,26 +820,55 @@ function PayNowModal({
 }
 
 function CancelBookingModal({
+  b,
+  preview,
+  previewLoading,
+  previewError,
   busy,
   onDismiss,
   onConfirm,
 }: {
+  b: BookingWithDetails;
+  preview?: RefundPreviewResponse | null;
+  previewLoading: boolean;
+  previewError?: string;
   busy: boolean;
   onDismiss: () => void;
   onConfirm: () => void;
 }) {
+  const refundAmount = preview ? formatMoneyMinor(preview.refundAmount, preview.currency) : "-";
   return (
     <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="cancel-booking-title">
       <div className={styles.bookingModal}>
         <div className={styles.modalDangerIcon}><IcoAlert /></div>
         <h3 id="cancel-booking-title" className={styles.modalTitle}>Cancel this booking?</h3>
-        <p className={styles.modalBody}>Your spot will be released. Refunds depend on the activity's cancellation policy.</p>
-        <div className={styles.warningBox}>
-          Refunds are not guaranteed - check the activity page for the cancellation terms before proceeding.
-        </div>
+        <p className={styles.modalBody}>{b.activityTitle ?? "This booking"} - {fmtDate(b.sessionStartAt)}</p>
+        {previewLoading && <div className={styles.warningBox}>Checking refund eligibility...</div>}
+        {previewError && <div className={styles.warningBox}>{previewError}</div>}
+        {preview && (
+          <div className={styles.refundPreviewBox}>
+            <div>
+              <span>Refund</span>
+              <strong>{preview.refundPercent}%</strong>
+            </div>
+            <div>
+              <span>Amount</span>
+              <strong>{refundAmount}</strong>
+            </div>
+            <span className={`${styles.refundBadge} ${refundBadgeTone(preview.refundStatus)}`}>
+              {refundBadgeLabel(preview.refundStatus)}
+            </span>
+            <p>{preview.reason}</p>
+            <p className={preview.refundPercent > 0 ? styles.refundPositive : styles.refundWarning}>
+              {preview.refundPercent > 0
+                ? `You will receive a refund of ${refundAmount}.`
+                : "This booking is not refundable."}
+            </p>
+          </div>
+        )}
         <div className={styles.modalActions}>
           <button className={styles.modalSecondary} onClick={onDismiss} disabled={busy} type="button">Keep it</button>
-          <button className={styles.modalDanger} onClick={onConfirm} disabled={busy} type="button">
+          <button className={styles.modalDanger} onClick={onConfirm} disabled={busy || previewLoading || !preview} type="button">
             {busy ? "Cancelling..." : "Yes, cancel"}
           </button>
         </div>
@@ -864,6 +961,7 @@ const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
   const dateMonth = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : "TBD";
   const dateTime = date && !Number.isNaN(date.getTime()) ? date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
   const totalPrice = getTotalPrice(displayBooking);
+  const detailsPath = activityDetailsPath(displayBooking);
   const isCompleted = ds === "COMPLETED";
   const locationText = [displayBooking.governorate, displayBooking.locality].filter(Boolean).join(", ") || displayBooking.displayName;
   const isPendingPayment = ds === "PENDING_PAYMENT";
@@ -947,10 +1045,12 @@ const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
                     </button>
                   </>
                 )}
-                {displayBooking.sessionId && (
-                  <Link to={`/activities/${displayBooking.sessionId}`} className={styles.heroViewBtn}>
+                {detailsPath ? (
+                  <Link to={detailsPath as string} className={styles.heroViewBtn}>
                     View activity <IcoExtLink />
                   </Link>
+                ) : (
+                  <ActivityDetailsUnavailable className={styles.heroViewBtn} />
                 )}
               </div>
             )}
@@ -1209,6 +1309,7 @@ function DetailDrawer({
   const busy        = busyId === b.id;
   const unitPrice   = getUnitPrice(b);
   const totalPrice  = getTotalPrice(b);
+  const detailsPath = activityDetailsPath(b);
   const locationText = [b.governorate, b.locality].filter(Boolean).join(", ") || b.displayName;
 
   const statusText = isCompleted && !isUpcoming
@@ -1326,10 +1427,12 @@ function DetailDrawer({
               </button>
             </>
           )}
-          {b.sessionId && (
-            <Link to={`/activities/${b.sessionId}`} className={styles.expandedAction}>
+          {detailsPath ? (
+            <Link to={detailsPath as string} className={styles.expandedAction}>
               View activity <IcoExtLink />
             </Link>
+          ) : (
+            <ActivityDetailsUnavailable className={styles.expandedAction} />
           )}
         </div>
       </div>
@@ -1474,10 +1577,12 @@ function DetailDrawer({
         </div>
 
         {/* Activity link */}
-        {b.sessionId && (
-          <Link to={`/activities/${b.sessionId}`} className={styles.viewActivityLink}>
+        {detailsPath ? (
+          <Link to={detailsPath as string} className={styles.viewActivityLink}>
             View activity <IcoExtLink />
           </Link>
+        ) : (
+          <ActivityDetailsUnavailable className={styles.viewActivityLink} />
         )}
         </div>
       </div>
@@ -1505,6 +1610,25 @@ function PayingNotice({ count }: { count: number }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+function PageToast({
+  tone,
+  message,
+  onClose,
+}: {
+  tone: ToastTone;
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className={`${styles.pageToast} ${styles[`pageToast${tone}`]}`} role="status" aria-live="polite">
+      <span>{message}</span>
+      <button type="button" onClick={onClose} aria-label="Dismiss notification">
+        <IcoClose />
+      </button>
+    </div>
+  );
+}
+
 export default function MyBookingsPage() {
   const { user } = useAuth();
   const [bookings,     setBookings]     = useState<BookingWithDetails[]>([]);
@@ -1514,6 +1638,9 @@ export default function MyBookingsPage() {
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [busyId,       setBusyId]       = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelPreview, setCancelPreview] = useState<RefundPreviewResponse | null>(null);
+  const [cancelPreviewLoading, setCancelPreviewLoading] = useState(false);
+  const [cancelPreviewError, setCancelPreviewError] = useState("");
   const [payTarget,    setPayTarget]    = useState<BookingWithDetails | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<BookingWithDetails | null>(null);
   const [flyTarget,    setFlyTarget]    = useState<{ lat: number; lng: number } | null>(null);
@@ -1525,6 +1652,7 @@ export default function MyBookingsPage() {
   const [passErrors, setPassErrors] = useState<Record<string, string>>({});
   const [guestNamesByBooking, setGuestNamesByBooking] = useState<Record<string, string[]>>({});
   const [guestNameErrors, setGuestNameErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const mainGuestName = user?.username?.trim() || user?.email || "";
@@ -1664,6 +1792,12 @@ export default function MyBookingsPage() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
     setGuestNamesByBooking((prev) => {
       const next: Record<string, string[]> = {};
       for (const b of bookings) {
@@ -1722,6 +1856,20 @@ export default function MyBookingsPage() {
       delete next[bookingId];
       return next;
     });
+  }
+
+  async function openCancelPreview(bookingId: string) {
+    setCancelTarget(bookingId);
+    setCancelPreview(null);
+    setCancelPreviewError("");
+    setCancelPreviewLoading(true);
+    try {
+      setCancelPreview(await BookingApi.getRefundPreview(bookingId));
+    } catch (e: unknown) {
+      setCancelPreviewError(e instanceof Error ? e.message : "Could not load refund preview");
+    } finally {
+      setCancelPreviewLoading(false);
+    }
   }
 
   async function saveGuestNamesForPayment(b: BookingWithDetails): Promise<boolean> {
@@ -1799,9 +1947,14 @@ export default function MyBookingsPage() {
       await BookingApi.cancelBooking(cancelTarget);
       await load();
       if (selectedId === cancelTarget) deselectBooking();
+      setToast({ tone: "success", message: "Booking cancelled. Refund details are updated in your booking." });
+    } catch (e: unknown) {
+      setToast({ tone: "error", message: e instanceof Error ? e.message : "Could not cancel booking" });
     } finally {
       setBusyId(null);
       setCancelTarget(null);
+      setCancelPreview(null);
+      setCancelPreviewError("");
     }
   }
 
@@ -1863,10 +2016,26 @@ export default function MyBookingsPage() {
     <>
       <Header />
 
+      {toast && (
+        <PageToast
+          tone={toast.tone}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       {cancelBooking && (
         <CancelBookingModal
+          b={cancelBooking}
+          preview={cancelPreview}
+          previewLoading={cancelPreviewLoading}
+          previewError={cancelPreviewError}
           onConfirm={confirmCancel}
-          onDismiss={() => setCancelTarget(null)}
+          onDismiss={() => {
+            setCancelTarget(null);
+            setCancelPreview(null);
+            setCancelPreviewError("");
+          }}
           busy={busyId === cancelTarget}
         />
       )}
@@ -2000,7 +2169,7 @@ export default function MyBookingsPage() {
                           selected={selectedId === booking.id}
                           onSelect={selectBooking}
                           onPay={setPayTarget}
-                          onCancel={(target) => setCancelTarget(target.id)}
+                          onCancel={(target) => void openCancelPreview(target.id)}
                           onAdjustGuests={setAdjustTarget}
                           onViewPasses={viewGuestPasses}
                           guestNames={guestNamesByBooking[booking.id] ?? getEditableGuestNames(booking, mainGuestName)}
@@ -2234,7 +2403,7 @@ export default function MyBookingsPage() {
                               onSelect={selectBooking}
                               onHover={setHoveredId}
                               onPay={onPay}
-                              onCancel={(id) => setCancelTarget(id)}
+                              onCancel={(id) => void openCancelPreview(id)}
                               onInc={onInc}
                               onDec={onDec}
                               busyId={busyId}

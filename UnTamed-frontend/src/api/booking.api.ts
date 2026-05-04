@@ -2,6 +2,14 @@
 import { http } from "./http";
 
 export type BookingStatus = "PENDING" | "PAYING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+export type RefundStatus =
+  | "NONE"
+  | "NOT_REFUNDABLE"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
+  | "REFUND_FAILED";
+export type CancelledBy = "USER" | "GUIDE" | "ADMIN" | "SYSTEM";
 
 export type Booking = {
   id: string;
@@ -9,9 +17,26 @@ export type Booking = {
   sessionId: string;
   numberOfPeople: number;
   status: BookingStatus;
+  refundStatus?: RefundStatus;
+  refundPercent?: number;
+  refundAmount?: number;
+  refundCurrency?: string | null;
+  cancelledBy?: CancelledBy | null;
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
+  stripeRefundId?: string | null;
   createdAt?: string;
   updatedAt?: string;
   expiresAt?: string | null;
+};
+
+export type RefundPreviewResponse = {
+  refundable: boolean;
+  refundPercent: number;
+  refundAmount: number;
+  currency?: string | null;
+  refundStatus: RefundStatus;
+  reason: string;
 };
 
 // ── Enriched booking returned by the new /api/bookings/mine/details endpoint ──
@@ -20,6 +45,7 @@ export type Booking = {
 // to the basic /api/bookings/mine and leaves location fields null.
 export type BookingWithDetails = Booking & {
   // Activity template info
+  activityTemplateId?: string | null;
   activityTitle: string | null;
   activityImageUrl: string | null;
 
@@ -79,6 +105,7 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
     const basic = await listMyBookings();
     return basic.map((b) => ({
       ...b,
+      activityTemplateId: null,
       activityTitle:    null,
       activityImageUrl: null,
       pricePerPerson:   null,
@@ -156,6 +183,14 @@ export async function cancelStripePayment(bookingId: string): Promise<void> {
     null,
     { withCredentials: true }
   );
+}
+
+export async function getRefundPreview(bookingId: string): Promise<RefundPreviewResponse> {
+  const { data } = await http.get<RefundPreviewResponse>(
+    `/api/bookings/${bookingId}/refund-preview`,
+    { withCredentials: true }
+  );
+  return data;
 }
 
 export async function updateBookingGuestNames(bookingId: string, guestNames: string[]): Promise<Booking> {

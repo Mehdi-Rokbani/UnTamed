@@ -16,6 +16,7 @@ public record BookingWithDetailsDto(
         Instant expiresAt,
 
         // Template
+        String activityTemplateId,
         String activityTitle,
         String activityImageUrl,
 

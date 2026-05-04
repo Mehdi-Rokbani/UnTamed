@@ -1039,9 +1039,13 @@
 
 .heroPayBtn:disabled,
 .heroCancelBtn:disabled,
-.heroMiniAction:disabled {
+.heroMiniAction:disabled,
+.heroViewBtn:disabled,
+.expandedAction:disabled,
+.viewActivityLink:disabled,
+.expandedActions button:disabled {
   opacity: 0.55;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .heroSecondaryMeta {
@@ -1655,6 +1659,148 @@
   color: var(--red);
   font-size: 12px;
   font-weight: 800;
+}
+
+.refundPreviewBox,
+.refundMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-section);
+}
+
+.refundPreviewBox {
+  margin: 12px 0;
+}
+
+.refundPreviewBox div {
+  display: grid;
+  gap: 3px;
+  min-width: 110px;
+}
+
+.refundPreviewBox span,
+.refundMeta span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.refundPreviewBox strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.refundPreviewBox p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.refundPreviewBox .refundPositive {
+  color: var(--forest);
+}
+
+.refundPreviewBox .refundWarning {
+  color: var(--red);
+}
+
+.refundMeta {
+  margin-top: 14px;
+}
+
+.refundBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+}
+
+.refundBadgeGreen {
+  background: rgba(29, 158, 117, 0.14);
+  color: #13745a !important;
+}
+
+.refundBadgeAmber {
+  background: rgba(217, 119, 6, 0.13);
+  color: #b45309 !important;
+}
+
+.refundBadgeBlue {
+  background: rgba(37, 99, 235, 0.11);
+  color: #1d4ed8 !important;
+}
+
+.refundBadgeRed {
+  background: var(--red-bg);
+  color: var(--red) !important;
+}
+
+.refundBadgeMuted {
+  background: #eef0ec;
+  color: var(--text-muted) !important;
+}
+
+.pageToast {
+  position: fixed;
+  top: calc(var(--header-h, 86px) + 14px);
+  right: 18px;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 36px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.pageToast button {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+
+.pageToastsuccess {
+  border-color: rgba(29, 158, 117, 0.24);
+  background: #f0fbf6;
+  color: var(--forest);
+}
+
+.pageToasterror {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.pageToastinfo {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .expandedPreviewFooter {
