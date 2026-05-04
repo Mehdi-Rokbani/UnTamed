@@ -6,12 +6,15 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { QRCodeCanvas } from "qrcode.react";
 import L from "leaflet";
 import { Header } from "../components/Header";
+import ReviewForm from "../components/review/ReviewForm";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
 import type { BookingWithDetails } from "../api/booking.api";
 import type { RefundPreviewResponse, RefundStatus } from "../api/booking.api";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuestPass } from "../api/guestPass.api";
+import * as ReviewApi from "../api/review.api";
+import type { ReviewEligibility } from "../types/review";
 import styles from "../style/my-bookings.module.css";
 
 import "leaflet/dist/leaflet.css";
@@ -63,6 +66,10 @@ function getDisplayStatus(b: BookingWithDetails): DisplayStatus {
   }
 
   return "EXPIRED";
+}
+
+function isReviewCandidate(b: BookingWithDetails): boolean {
+  return getDisplayStatus(b) === "COMPLETED";
 }
 
 // ─── Status config (raw API statuses) ────────────────────────────────────────
@@ -626,6 +633,9 @@ function PreviewBookingCard({
   passes,
   passesLoading,
   passesError,
+  reviewEligibility,
+  reviewLoading,
+  onReview,
 }: {
   b: BookingWithDetails;
   selected: boolean;
@@ -640,6 +650,9 @@ function PreviewBookingCard({
   passes?: GuestPass[];
   passesLoading: boolean;
   passesError?: string;
+  reviewEligibility?: ReviewEligibility;
+  reviewLoading: boolean;
+  onReview: (b: BookingWithDetails) => void;
 }) {
   const ds = getDisplayStatus(b);
   const cfg = getDisplayCfg(ds);
@@ -692,7 +705,6 @@ function PreviewBookingCard({
 
       {selected && (
         <div className={styles.expandedPreview}>
-          <div className={styles.expandedPreviewHero} style={coverStyle} />
           <div className={styles.expandedPreviewContent}>
             <h3 className={styles.expandedPreviewTitle}>{b.activityTitle ?? "Adventure"}</h3>
             <p className={styles.expandedPreviewLocation}><IcoPin /> {getLocationText(b)}</p>
@@ -762,7 +774,15 @@ function PreviewBookingCard({
                 <ActivityDetailsUnavailable />
               )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
-              {canReview && <button type="button">Review</button>}
+              {canReview && reviewEligibility?.alreadyReviewed && (
+                <button type="button" disabled>Reviewed</button>
+              )}
+              {canReview && !reviewEligibility?.alreadyReviewed && reviewEligibility?.eligible && (
+                <button type="button" onClick={() => onReview(b)}>Review</button>
+              )}
+              {canReview && reviewLoading && !reviewEligibility && (
+                <button type="button" disabled>Checking...</button>
+              )}
             </div>
           </div>
           {canViewPasses && (
@@ -924,6 +944,32 @@ function AdjustGuestsModal({
 }
 
 // ─── Grouped Sidebar Card ─────────────────────────────────────────────────────
+function ReviewBookingModal({
+  booking,
+  onDismiss,
+  onSubmit,
+}: {
+  booking: BookingWithDetails;
+  onDismiss: () => void;
+  onSubmit: (data: { rating: number; comment: string }) => Promise<void>;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="review-booking-title">
+      <div className={`${styles.bookingModal} ${styles.reviewModal}`}>
+        <h3 id="review-booking-title" className={styles.modalTitle}>Review this trip</h3>
+        <p className={styles.modalBody}>
+          {booking.activityTitle ?? "This activity"} - {fmtDate(booking.sessionStartAt)}
+        </p>
+        <ReviewForm
+          submitLabel="Post review"
+          onCancel={onDismiss}
+          onSubmit={onSubmit}
+        />
+      </div>
+    </div>
+  );
+}
+
 const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
   group: SidebarBookingGroup;
   selectedId: string | null;
@@ -1652,9 +1698,13 @@ export default function MyBookingsPage() {
   const [passErrors, setPassErrors] = useState<Record<string, string>>({});
   const [guestNamesByBooking, setGuestNamesByBooking] = useState<Record<string, string[]>>({});
   const [guestNameErrors, setGuestNameErrors] = useState<Record<string, string>>({});
+  const [reviewEligibilityByBooking, setReviewEligibilityByBooking] = useState<Record<string, ReviewEligibility>>({});
+  const [reviewEligibilityLoading, setReviewEligibilityLoading] = useState<Record<string, boolean>>({});
+  const [reviewTarget, setReviewTarget] = useState<BookingWithDetails | null>(null);
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const reviewEligibilityRequestedRef = useRef<Set<string>>(new Set());
   const mainGuestName = user?.username?.trim() || user?.email || "";
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -1808,6 +1858,48 @@ export default function MyBookingsPage() {
       return next;
     });
   }, [bookings, mainGuestName]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const candidates = bookings.filter(
+      (booking) =>
+        isReviewCandidate(booking) &&
+        !reviewEligibilityByBooking[booking.id] &&
+        !reviewEligibilityRequestedRef.current.has(booking.id)
+    );
+
+    candidates.forEach((booking) => {
+      reviewEligibilityRequestedRef.current.add(booking.id);
+      setReviewEligibilityLoading((prev) => ({ ...prev, [booking.id]: true }));
+      ReviewApi.getReviewEligibility(booking.id)
+        .then((eligibility) => {
+          if (cancelled) return;
+          setReviewEligibilityByBooking((prev) => ({ ...prev, [booking.id]: eligibility }));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setReviewEligibilityByBooking((prev) => ({
+            ...prev,
+            [booking.id]: {
+              eligible: false,
+              alreadyReviewed: false,
+              activityTemplateId: booking.activityTemplateId ?? "",
+              reason: "Review eligibility is unavailable right now.",
+            },
+          }));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setReviewEligibilityLoading((prev) => {
+            const next = { ...prev };
+            delete next[booking.id];
+            return next;
+          });
+        });
+    });
+
+    return () => { cancelled = true; };
+  }, [bookings, reviewEligibilityByBooking]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   function selectBooking(b: BookingWithDetails) {
@@ -1999,6 +2091,67 @@ export default function MyBookingsPage() {
   }
 
   // ── Map legend display statuses ───────────────────────────────────────────
+  async function openReviewModal(b: BookingWithDetails) {
+    setReviewEligibilityLoading((prev) => ({ ...prev, [b.id]: true }));
+    try {
+      const eligibility = await ReviewApi.getReviewEligibility(b.id);
+      setReviewEligibilityByBooking((prev) => ({ ...prev, [b.id]: eligibility }));
+
+      if (!eligibility.eligible) {
+        setToast({
+          tone: eligibility.alreadyReviewed ? "info" : "error",
+          message: eligibility.reason || "This booking is not eligible for review.",
+        });
+        return;
+      }
+
+      setReviewTarget(b);
+    } catch (e: unknown) {
+      setToast({
+        tone: "error",
+        message: e instanceof Error ? e.message : "Could not check review eligibility.",
+      });
+    } finally {
+      setReviewEligibilityLoading((prev) => {
+        const next = { ...prev };
+        delete next[b.id];
+        return next;
+      });
+    }
+  }
+
+  async function submitReview(data: { rating: number; comment: string }) {
+    if (!reviewTarget) return;
+    const booking = reviewTarget;
+
+    try {
+      const review = await ReviewApi.createReview({
+        bookingId: booking.id,
+        rating: data.rating,
+        comment: data.comment,
+      });
+
+      setReviewEligibilityByBooking((prev) => ({
+        ...prev,
+        [booking.id]: {
+          eligible: false,
+          alreadyReviewed: true,
+          existingReviewId: review.id,
+          activityTemplateId: review.activityTemplateId,
+          reason: "You already reviewed this activity.",
+        },
+      }));
+      setReviewTarget(null);
+      setToast({ tone: "success", message: "Review posted. Thanks for sharing your experience." });
+    } catch (e: unknown) {
+      setToast({
+        tone: "error",
+        message: e instanceof Error ? e.message : "Could not submit review.",
+      });
+      throw e;
+    }
+  }
+
   const hoveredOrSelectedBooking = bookings.find((b) => b.id === hoveredId || b.id === selectedId) ?? null;
   const hoveredOrSelectedStatus = hoveredOrSelectedBooking ? getDisplayStatus(hoveredOrSelectedBooking) : null;
   const shouldShowHistoryLegend =
@@ -2055,6 +2208,14 @@ export default function MyBookingsPage() {
           onConfirm={confirmAdjustGuests}
           onDismiss={() => setAdjustTarget(null)}
           busy={busyId === adjustTarget.id}
+        />
+      )}
+
+      {reviewTarget && (
+        <ReviewBookingModal
+          booking={reviewTarget}
+          onDismiss={() => setReviewTarget(null)}
+          onSubmit={submitReview}
         />
       )}
 
@@ -2178,6 +2339,9 @@ export default function MyBookingsPage() {
                           passes={passesByBooking[booking.id]}
                           passesLoading={passLoadingId === booking.id}
                           passesError={passErrors[booking.id]}
+                          reviewEligibility={reviewEligibilityByBooking[booking.id]}
+                          reviewLoading={!!reviewEligibilityLoading[booking.id]}
+                          onReview={openReviewModal}
                         />
                       ))}
                     </div>

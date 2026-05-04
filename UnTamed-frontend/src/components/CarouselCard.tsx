@@ -112,9 +112,9 @@ export function CarouselCard({ activity }: { activity: PublicTemplateCard }) {
               <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>({cnt})</span>
             )}
           </div>
-          {nextSession?.startAt && (
+          {nextSession?.date && (
             <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-              {formatDate(nextSession.startAt)}
+              {formatDate(nextSession.date)}
             </span>
           )}
         </div>

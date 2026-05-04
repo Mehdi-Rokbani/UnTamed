@@ -47,7 +47,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 safeList(template.getSemanticHints()),
                 difficulty,
                 template.getPrice(),
-                safeList(template.getTags())
+                safeList(template.getTags()),
+                safeList(template.getSafetyNotes()),
+                template.getLocation() != null ? template.getLocation().toString() : null
         );
 
         return TemplateEmbeddingPayload.builder()
@@ -160,7 +162,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
             List<String> semanticHints,
             String difficulty,
             BigDecimal price,
-            List<String> tags
+            List<String> tags,
+            List<String> safetyNotes,
+            String location
     ) {
         StringBuilder sb = new StringBuilder();
 
@@ -195,7 +199,15 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
             appendLine(sb, "Price", price.stripTrailingZeros().toPlainString() + " TND");
         }
 
-        appendLine(sb, "Tags", (tags == null || tags.isEmpty()) ? "none" : String.join(", ", tags));
+        if (tags != null && !tags.isEmpty()) {
+            appendLine(sb, "Tags", String.join(", ", tags));
+        }
+
+        if (safetyNotes != null && !safetyNotes.isEmpty()) {
+            appendLine(sb, "Safety notes", String.join(", ", safetyNotes));
+        }
+
+        appendLine(sb, "Location coordinates", location);
 
         return sb.toString().trim();
     }

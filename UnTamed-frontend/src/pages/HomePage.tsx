@@ -168,8 +168,8 @@ export default function HomePage() {
             },
             nextSession: r.nextSessionDate
               ? {
-                  id: `next-${r.templateId}`,
-                  startAt: r.nextSessionDate,
+                  sessionId: `next-${r.templateId}`,
+                  date: r.nextSessionDate,
                   capacity: 0,
                   bookedCount: 0,
                 }

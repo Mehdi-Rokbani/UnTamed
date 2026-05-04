@@ -162,7 +162,7 @@ function mapSuggestionToCard(item: SuggestionItem): PublicTemplateCard {
       : [],
     rating: { average: item.ratingAverage ?? 0, count: item.ratingCount ?? 0 },
     nextSession: item.nextSessionDate
-      ? { id: `${item.templateId}-next`, startAt: item.nextSessionDate, endAt: item.nextSessionDate, capacity: 999, bookedCount: 0 }
+      ? { sessionId: `${item.templateId}-next`, date: item.nextSessionDate, capacity: 999, bookedCount: 0 }
       : null,
     upcomingSessionsCount: item.nextSessionDate ? 1 : 0,
     totalBookedCount: 0,
@@ -199,8 +199,8 @@ function CarouselCard({ activity }: { activity: PublicTemplateCard }) {
             <span className={styles.carouselRatingVal}>{avg > 0 ? avg.toFixed(1) : "New"}</span>
             {cnt > 0 && <span className={styles.carouselRatingCnt}>({cnt})</span>}
           </div>
-          {nextSession?.startAt && (
-            <span className={styles.carouselDate}>{formatDateCompact(nextSession.startAt)}</span>
+          {nextSession?.date && (
+            <span className={styles.carouselDate}>{formatDateCompact(nextSession.date)}</span>
           )}
         </div>
       </div>

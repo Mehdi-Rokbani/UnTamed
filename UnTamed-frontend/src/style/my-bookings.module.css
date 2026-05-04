@@ -1527,7 +1527,7 @@
 }
 
 .expandedPreviewContent {
-  padding: 20px;
+  padding: 22px 20px 20px;
 }
 
 .expandedPreviewTitle {
@@ -1865,6 +1865,14 @@
   box-shadow: var(--shadow-lg);
   padding: 24px;
   color: var(--text);
+}
+
+.reviewModal {
+  width: min(100%, 560px);
+}
+
+.reviewModal .modalBody {
+  margin-bottom: 16px;
 }
 
 .modalSummary {

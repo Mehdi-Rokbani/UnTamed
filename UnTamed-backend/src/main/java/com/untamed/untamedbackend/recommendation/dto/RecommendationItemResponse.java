@@ -29,4 +29,12 @@ public class RecommendationItemResponse {
 
     private double score;
     private List<String> reasons;
+
+    private Double semanticScore;
+    private Double categoryScore;
+    private Double difficultyScore;
+    private Double budgetScore;
+    private Double ratingScore;
+    private Double availabilityScore;
+    private String recommendationType;
 }

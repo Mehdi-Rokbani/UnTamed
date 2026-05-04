@@ -11,6 +11,13 @@ export type RecommendationItem = {
   nextSessionDate: string | null;
   score: number;
   reasons: string[];
+  semanticScore?: number | null;
+  categoryScore?: number | null;
+  difficultyScore?: number | null;
+  budgetScore?: number | null;
+  ratingScore?: number | null;
+  availabilityScore?: number | null;
+  recommendationType?: string | null;
 };
 export type SimilarActivityItem = {
   templateId: string;
@@ -25,4 +32,11 @@ export type SimilarActivityItem = {
   nextSessionDate: string | null;
   score: number;
   reasons: string[];
+  semanticScore?: number | null;
+  categoryScore?: number | null;
+  difficultyScore?: number | null;
+  budgetScore?: number | null;
+  ratingScore?: number | null;
+  availabilityScore?: number | null;
+  recommendationType?: string | null;
 };
