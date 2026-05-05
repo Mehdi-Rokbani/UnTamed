@@ -15,6 +15,7 @@ import com.untamed.untamedbackend.repository.ReviewRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.review.ReviewUserDto;
 import com.untamed.untamedbackend.dto.PaginatedResponse;
+import com.untamed.untamedbackend.service.LevelingService;
 import com.untamed.untamedbackend.service.UserInsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -40,6 +41,7 @@ public class ReviewService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
     private final UserInsightService userInsightService;
+    private final LevelingService levelingService;
 
     @Transactional
     public ReviewResponse createReview(String currentUserId, CreateReviewRequest req) {
@@ -90,7 +92,7 @@ public class ReviewService {
 
         try {
             saved = reviewRepository.save(review);
-
+            levelingService.recalculateUserLevel(saved.getReviewerId());
             incrementReviewsWrittenCount(currentUserId);
             userInsightService.onReviewCreated(saved);
 
@@ -280,6 +282,7 @@ public class ReviewService {
         try {
             saved = reviewRepository.save(review);
 
+            levelingService.recalculateUserLevel(saved.getReviewerId());
             incrementReviewsWrittenCount(currentUserId);
             userInsightService.onReviewCreated(saved);
 

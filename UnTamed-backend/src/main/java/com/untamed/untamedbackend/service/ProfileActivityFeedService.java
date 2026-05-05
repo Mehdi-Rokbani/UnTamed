@@ -20,12 +20,13 @@ import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.Address;
 import com.untamed.untamedbackend.model.Category;
 import com.untamed.untamedbackend.model.Review;
-import com.untamed.untamedbackend.model.ReviewStatus;
+import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
 import com.untamed.untamedbackend.repository.CategoryRepository;
 import com.untamed.untamedbackend.repository.ReviewRepository;
+import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -56,6 +57,7 @@ public class ProfileActivityFeedService {
     private final AddressRepository addressRepository;
     private final ReviewRepository reviewRepository;
     private final GuestPassRepository guestPassRepository;
+    private final UserRepository userRepository;
 
     public ProfileActivityFeedResponse getFeed(
             String userId,
@@ -64,6 +66,9 @@ public class ProfileActivityFeedService {
             int reviewsPage,
             int reviewsSize
     ) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
         int safeTripsSize = sanitizeSize(tripsSize);
         int safeReviewsSize = sanitizeSize(reviewsSize);
 
@@ -94,10 +99,12 @@ public class ProfileActivityFeedService {
                 .collect(Collectors.toMap(ActivitySession::getId, Function.identity(), (a, b) -> a));
 
         Set<String> templateIds = new java.util.LinkedHashSet<>();
+
         sessionsById.values().stream()
                 .map(ActivitySession::getTemplateId)
                 .filter(Objects::nonNull)
                 .forEach(templateIds::add);
+
         pageReviews.stream()
                 .map(Review::getActivityTemplateId)
                 .filter(Objects::nonNull)
@@ -127,11 +134,12 @@ public class ProfileActivityFeedService {
                 .collect(Collectors.toMap(Address::getId, Function.identity(), (a, b) -> a));
 
         List<String> pageBookingIds = pageBookings.stream().map(Booking::getId).toList();
+
         Map<String, List<GuestPass>> passesByBookingId = pageBookingIds.isEmpty()
                 ? Map.of()
                 : guestPassRepository.findByBookingIdIn(pageBookingIds)
-                        .stream()
-                        .collect(Collectors.groupingBy(GuestPass::getBookingId));
+                .stream()
+                .collect(Collectors.groupingBy(GuestPass::getBookingId));
 
         Set<String> pageTripTemplateIds = pageBookings.stream()
                 .map(Booking::getSessionId)
@@ -175,7 +183,14 @@ public class ProfileActivityFeedService {
                 allCompletedBookings.size(),
                 reviewPage.getTotalElements(),
                 topCategories.isEmpty() ? null : topCategories.get(0).categoryName(),
-                allCompletedBookings.stream().mapToInt(Booking::getNumberOfPeople).sum()
+                allCompletedBookings.stream().mapToInt(Booking::getNumberOfPeople).sum(),
+
+                user.getLevel(),
+                user.getXp(),
+                user.getLevelNumber(),
+                user.getLevelTitle(),
+                user.getXpToNextLevel(),
+                user.getLevelProgressPercent()
         );
 
         return new ProfileActivityFeedResponse(
@@ -198,7 +213,9 @@ public class ProfileActivityFeedService {
         ActivitySession session = sessionsById.get(booking.getSessionId());
         ActivityTemplate template = session != null ? templatesById.get(session.getTemplateId()) : null;
         Address address = template != null ? addressesById.get(template.getAddressId()) : null;
+
         List<String> categoryIds = template == null ? List.of() : safeList(template.getCategoryIds());
+
         List<String> categoryNames = categoryIds.stream()
                 .map(categoriesById::get)
                 .filter(Objects::nonNull)
@@ -258,7 +275,10 @@ public class ProfileActivityFeedService {
         for (Booking booking : completedBookings) {
             ActivitySession session = sessionsById.get(booking.getSessionId());
             ActivityTemplate template = session != null ? templatesById.get(session.getTemplateId()) : null;
-            if (template == null) continue;
+
+            if (template == null) {
+                continue;
+            }
 
             safeList(template.getCategoryIds())
                     .forEach(categoryId -> counts.merge(categoryId, 1, Integer::sum));
@@ -268,6 +288,7 @@ public class ProfileActivityFeedService {
                 .stream()
                 .map(entry -> {
                     Category category = categoriesById.get(entry.getKey());
+
                     return new ProfileTopCategoryDto(
                             entry.getKey(),
                             category != null && category.getName() != null && !category.getName().isBlank()
@@ -282,21 +303,51 @@ public class ProfileActivityFeedService {
     }
 
     private ProfileTripAttendanceSummaryDto attendanceSummary(List<GuestPass> passes) {
-        int cancelled = (int) passes.stream().filter(pass -> pass.getStatus() == GuestPassStatus.CANCELLED).count();
-        List<GuestPass> active = passes.stream().filter(pass -> pass.getStatus() == GuestPassStatus.ACTIVE).toList();
+        int cancelled = (int) passes.stream()
+                .filter(pass -> pass.getStatus() == GuestPassStatus.CANCELLED)
+                .count();
 
-        int present = (int) active.stream().filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.PRESENT).count();
-        int absent = (int) active.stream().filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.ABSENT).count();
-        int notMarked = (int) active.stream().filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.NOT_MARKED).count();
+        List<GuestPass> active = passes.stream()
+                .filter(pass -> pass.getStatus() == GuestPassStatus.ACTIVE)
+                .toList();
 
-        return new ProfileTripAttendanceSummaryDto(passes.size(), present, absent, notMarked, cancelled);
+        int present = (int) active.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.PRESENT)
+                .count();
+
+        int absent = (int) active.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.ABSENT)
+                .count();
+
+        int notMarked = (int) active.stream()
+                .filter(pass -> pass.getAttendanceStatus() == AttendanceStatus.NOT_MARKED)
+                .count();
+
+        return new ProfileTripAttendanceSummaryDto(
+                passes.size(),
+                present,
+                absent,
+                notMarked,
+                cancelled
+        );
     }
 
     private boolean reviewEligible(Booking booking, ActivitySession session, Review existingReview) {
-        if (existingReview != null) return false;
-        if (booking.getStatus() != BookingStatus.COMPLETED) return false;
-        if (booking.isAttendanceMarkedAbsent()) return false;
-        return session != null && session.getStartAt() != null && session.getStartAt().isBefore(Instant.now());
+        if (existingReview != null) {
+            return false;
+        }
+
+        if (booking.getStatus() != BookingStatus.COMPLETED) {
+            return false;
+        }
+
+        if (booking.isAttendanceMarkedAbsent()) {
+            return false;
+        }
+
+        return session != null
+                && session.getStartAt() != null
+                && session.getStartAt().isBefore(Instant.now());
     }
 
     private String templateIdForBooking(Booking booking, Map<String, ActivitySession> sessionsById) {

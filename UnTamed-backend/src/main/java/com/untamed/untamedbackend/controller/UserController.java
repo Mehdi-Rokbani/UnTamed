@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.controller;
 
 import com.untamed.untamedbackend.dto.ProfileActivityFeedResponse;
+import com.untamed.untamedbackend.dto.PublicUserProfileResponse;
 import com.untamed.untamedbackend.dto.UpdateProfileRequest;
 import com.untamed.untamedbackend.dto.UserGuideProfileResponse;
 import com.untamed.untamedbackend.dto.UserResponse;
@@ -8,6 +9,7 @@ import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.model.UserInsight;
 import com.untamed.untamedbackend.service.ProfileActivityFeedService;
+import com.untamed.untamedbackend.service.PublicUserProfileService;
 import com.untamed.untamedbackend.service.UserInsightService;
 import com.untamed.untamedbackend.service.UserService;
 import jakarta.validation.Valid;
@@ -26,15 +28,19 @@ public class UserController {
     private final UserService users;
     private final UserInsightService userInsightService;
     private final ProfileActivityFeedService profileActivityFeedService;
+    private final PublicUserProfileService publicUserProfileService;
 
     public UserController(
             UserService users,
             UserInsightService userInsightService,
-            ProfileActivityFeedService profileActivityFeedService
-    ) {
+            ProfileActivityFeedService profileActivityFeedService,
+            PublicUserProfileService publicUserProfileService
+
+            ) {
         this.users = users;
         this.userInsightService = userInsightService;
         this.profileActivityFeedService = profileActivityFeedService;
+        this.publicUserProfileService = publicUserProfileService;
     }
 
     @GetMapping("/me")
@@ -43,6 +49,11 @@ public class UserController {
             throw new AccessDeniedException("Not authenticated");
         }
         return users.getMe(auth.getName());
+    }
+
+    @GetMapping("/{userId}/public-profile")
+    public PublicUserProfileResponse publicProfile(@PathVariable String userId) {
+        return publicUserProfileService.getPublicProfile(userId);
     }
 
     @PatchMapping("/me")
@@ -118,6 +129,11 @@ public class UserController {
                 u.getRole().name(),
                 u.getUsername(),
                 u.getLevel(),
+                u.getXp(),
+                u.getLevelNumber(),
+                u.getLevelTitle(),
+                u.getXpToNextLevel(),
+                u.getLevelProgressPercent(),
                 u.getProfileImageUrl(),
                 u.getPhoneNumber(),
                 u.getPreferences(),
@@ -129,6 +145,11 @@ public class UserController {
                 u.getCreatedAt(),
                 toGuideProfileResponse(u)
         );
+    }
+
+    @PostMapping("/me/level/recalculate")
+    public UserResponse recalculateMyLevel(Authentication authentication) {
+        return users.recalculateCurrentUserLevel(authentication.getName());
     }
 
     private UserGuideProfileResponse toGuideProfileResponse(User u) {

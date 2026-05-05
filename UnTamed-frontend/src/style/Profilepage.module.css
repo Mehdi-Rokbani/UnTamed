@@ -169,36 +169,293 @@
   color: #8a5516;
 }
 
-.levelBlock {
-  margin: 10px 24px 18px;
-  padding: 12px;
-  border: 1px solid #eee7dd;
-  border-radius: 18px;
-  background: #fbfaf6;
-  display: flex;
+.tierPill {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #3f4a43;
-  font-size: 13px;
-  font-weight: 800;
+  width: fit-content;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #d9e7dd;
+  border-radius: 999px;
+  background: #edf6f0;
+  color: #2d6a4f;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
-.levelDots {
+.tierPillLegend {
+  border-color: #ead08f;
+  background: #fff6d8;
+  color: #8a5516;
+}
+
+.badgeStamp {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #2d6a4f;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #fff 0 46%, transparent 47%),
+    repeating-conic-gradient(from -12deg, rgba(45, 106, 79, 0.16) 0 10deg, transparent 10deg 20deg),
+    #f8f4eb;
+  color: #2d6a4f;
+  box-shadow: inset 0 0 0 7px #fff, inset 0 0 0 9px rgba(45, 106, 79, 0.16);
+  animation: stampPop 0.45s ease both;
+}
+
+.badgeStamp::before,
+.badgeStamp::after {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border: 1px dashed rgba(45, 106, 79, 0.45);
+  border-radius: 50%;
+}
+
+.badgeStamp span {
+  position: absolute;
+  top: 22px;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.badgeStamp strong {
+  margin-top: 14px;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.badgeStampCompact {
+  width: 58px;
+  height: 58px;
+  box-shadow: inset 0 0 0 5px #fff, inset 0 0 0 7px rgba(45, 106, 79, 0.14);
+}
+
+.badgeStampCompact::before,
+.badgeStampCompact::after {
+  inset: 8px;
+}
+
+.badgeStampCompact span {
+  top: 12px;
+  font-size: 8px;
+}
+
+.badgeStampCompact strong {
+  margin-top: 10px;
+  font-size: 23px;
+}
+
+.badgeStampLegend {
+  border-color: #d69b28;
+  background:
+    radial-gradient(circle, #fff 0 46%, transparent 47%),
+    repeating-conic-gradient(from -12deg, rgba(224, 123, 57, 0.18) 0 10deg, transparent 10deg 20deg),
+    #fff4cf;
+  color: #8a5516;
+  box-shadow: inset 0 0 0 7px #fff, inset 0 0 0 9px rgba(224, 123, 57, 0.18);
+}
+
+.segmentedTrail {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+}
+
+.segmentedTrail span {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8e1d6;
+}
+
+.segmentedTrail i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d6a4f, #7fb38a, #e07b39);
+  transition: width 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.segmentFilled i {
+  background: #2d6a4f;
+}
+
+.xpBlock {
+  display: grid;
+  gap: 9px;
+  min-height: 110px;
+  margin: 12px 24px 18px;
+  padding: 12px;
+  border: 1px solid #e7e1d6;
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(45, 106, 79, 0.06), rgba(224, 123, 57, 0.05)),
+    #fffdf8;
+}
+
+.xpBlockLegend {
+  border-color: #ead08f;
+  background:
+    linear-gradient(135deg, rgba(224, 123, 57, 0.13), rgba(45, 106, 79, 0.05)),
+    #fff9e8;
+}
+
+.xpBlockTop {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.xpBlockTitle {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.xpBlockTitle > span {
+  color: #8a8277;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.xpBlockTitle strong {
+  max-width: 100%;
+  color: #17231c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.xpBlockMeta {
   display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #6c655d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.xpBlockMeta span:first-child {
+  color: #2d6a4f;
+}
+
+.xpHintButton {
+  min-height: 36px;
+  border: 1px solid #ded6ca;
+  border-radius: 12px;
+  background: #fff;
+  color: #3e4a41;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.xpHintButton:hover {
+  transform: translateY(-1px);
+  border-color: #2d6a4f;
+  background: #f2f7f3;
+}
+
+.xpHintText {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8f4eb;
+  color: #6e675f;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.guideCredibilityBlock {
+  display: grid;
+  gap: 12px;
+  min-height: 110px;
+  margin: 12px 24px 18px;
+  padding: 14px;
+  border: 1px solid #ead8bd;
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(45, 106, 79, 0.08), rgba(224, 123, 57, 0.08)),
+    #fffdf8;
+}
+
+.guideCredibilityTop {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.guideCredibilityIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #2d6a4f;
+  color: #fff;
+}
+
+.guideCredibilityIcon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guideCredibilityTop span:not(.guideCredibilityIcon) {
+  display: block;
+  color: #8a8277;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.guideCredibilityTop strong {
+  display: block;
+  margin-top: 3px;
+  color: #17231c;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.guideCredibilityRows {
+  display: grid;
   gap: 5px;
 }
 
-.levelDots i {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  transform: rotate(45deg);
-  background: #ded8cd;
+.guideCredibilityRows p {
+  margin: 0;
+  color: #625b52;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
 }
 
-.levelDots .levelDotActive {
-  background: #e07b39;
+.guideCredibilityRows p:first-child {
+  color: #2d6a4f;
 }
 
 .profileStats {
@@ -234,13 +491,19 @@
   text-transform: uppercase;
 }
 
+.profileActions {
+  display: grid;
+  gap: 10px;
+  margin: 20px 24px 24px;
+}
+
 .editProfileButton,
+.publicProfileButton,
 .secondaryAction {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 46px;
-  margin: 20px 24px 24px;
   border: 1px solid #cfc8bc;
   border-radius: 16px;
   color: #243329;
@@ -251,10 +514,30 @@
 }
 
 .editProfileButton:hover,
+.publicProfileButton:hover,
 .secondaryAction:hover {
   transform: translateY(-1px);
   border-color: #2d6a4f;
   background: #f2f7f3;
+}
+
+.publicProfileButton {
+  gap: 8px;
+  min-height: 44px;
+  border-color: #e2dbcf;
+  background: #fffdf8;
+  color: #5e685f;
+  font-size: 13px;
+}
+
+.publicProfileButton svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .contentColumn {
@@ -326,6 +609,258 @@
 
 .panel {
   padding: 24px;
+}
+
+.explorerProgressCard {
+  position: relative;
+  overflow: hidden;
+  padding: 26px;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(45, 106, 79, 0.08), transparent 30%),
+    linear-gradient(135deg, #fff 0%, #fffdf8 100%);
+}
+
+.explorerProgressCard::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  bottom: -100px;
+  width: 260px;
+  height: 260px;
+  border: 1px solid rgba(45, 106, 79, 0.08);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.explorerProgressLegend {
+  border-color: #ead08f;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(224, 123, 57, 0.12), transparent 30%),
+    linear-gradient(135deg, #fff 0%, #fff8e4 100%);
+}
+
+.guideTrustCard {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  border-color: #ead8bd;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(224, 123, 57, 0.1), transparent 30%),
+    linear-gradient(135deg, #fff 0%, #fffdf8 100%);
+}
+
+.guideTrustIcon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: #2d6a4f;
+  color: #fff;
+}
+
+.guideTrustIcon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guideTrustCard h2 {
+  margin: 2px 0 8px;
+  color: #17231c;
+}
+
+.guideTrustCard p {
+  margin: 0;
+  color: #6c655d;
+  line-height: 1.65;
+}
+
+.guideTrustFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.guideTrustFacts span {
+  padding: 7px 10px;
+  border: 1px solid #ead8bd;
+  border-radius: 999px;
+  background: #fffaf1;
+  color: #4d5a50;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.explorerProgressMain {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  gap: 26px;
+  align-items: center;
+}
+
+.explorerCompassWrap {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.compassRing {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: grid;
+  place-items: center;
+  color: #2d6a4f;
+}
+
+.compassRing svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.compassRingTrack,
+.compassRingProgress {
+  fill: none;
+  stroke-width: 8;
+}
+
+.compassRingTrack {
+  stroke: #e8e1d6;
+}
+
+.compassRingProgress {
+  stroke: #2d6a4f;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.compassNeedle {
+  fill: rgba(224, 123, 57, 0.16);
+  stroke: #e07b39;
+  stroke-width: 1.5;
+  transform: rotate(90deg);
+  transform-origin: 60px 60px;
+}
+
+.compassRing strong {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  color: #17231c;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  text-align: center;
+}
+
+.compassRing span {
+  position: absolute;
+  top: 84px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  color: #8a8277;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.compassRingLegend .compassRingProgress {
+  stroke: #e07b39;
+}
+
+.explorerProgressContent {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+.explorerProgressContent h2 {
+  margin: 0;
+  color: #17231c;
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
+.explorerProgressContent p {
+  max-width: 620px;
+  margin: 0;
+  color: #5f685f;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.xpRuleStrip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.xpRuleStrip span {
+  padding: 8px 10px;
+  border: 1px solid #ece5da;
+  border-radius: 999px;
+  background: #fbfaf6;
+  color: #5d675e;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.explorerStatsGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.explorerStatsGrid div {
+  padding: 14px;
+  border: 1px solid #eee7dd;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.explorerStatsGrid strong {
+  display: block;
+  color: #17231c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.explorerStatsGrid span {
+  display: block;
+  margin-top: 6px;
+  color: #8a8277;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .panelHeader {
@@ -612,6 +1147,7 @@
   background: linear-gradient(135deg, #2d6a4f, #e07b39);
   color: #fff;
   font-weight: 900;
+  text-decoration: none;
 }
 
 .guideReviewAvatar img {
@@ -630,6 +1166,23 @@
 .guideReviewTopline strong {
   color: #17231c;
   font-size: 14px;
+}
+
+.guideReviewProfileLink {
+  min-width: 0;
+  overflow: hidden;
+  color: #17231c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.guideReviewProfileLink:hover {
+  color: #2d6a4f;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .guideReviewTopline span {
@@ -739,6 +1292,22 @@
   }
 }
 
+@keyframes stampPop {
+  from {
+    opacity: 0;
+    transform: scale(0.82) rotate(-6deg);
+  }
+
+  70% {
+    transform: scale(1.04) rotate(2deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
 @media (max-width: 1024px) {
   .profileLayout,
   .loadingPage {
@@ -753,6 +1322,10 @@
 
   .tabNav {
     top: 80px;
+  }
+
+  .explorerProgressMain {
+    grid-template-columns: 168px minmax(0, 1fr);
   }
 }
 
@@ -785,6 +1358,72 @@
   .credibilityPanel {
     padding: 18px;
     border-radius: 20px;
+  }
+
+  .xpBlock {
+    margin-inline: 18px;
+  }
+
+  .xpBlockMeta {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .explorerProgressCard {
+    padding: 20px;
+  }
+
+  .explorerProgressMain {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    text-align: center;
+  }
+
+  .explorerProgressContent {
+    justify-items: center;
+  }
+
+  .explorerProgressContent h2 {
+    font-size: 32px;
+  }
+
+  .explorerProgressContent p {
+    font-size: 14px;
+  }
+
+  .compassRing {
+    width: 128px;
+    height: 128px;
+  }
+
+  .compassRing strong {
+    top: 45px;
+    font-size: 26px;
+  }
+
+  .compassRing span {
+    top: 73px;
+  }
+
+  .badgeStamp:not(.badgeStampCompact) {
+    width: 78px;
+    height: 78px;
+  }
+
+  .badgeStamp:not(.badgeStampCompact) span {
+    top: 18px;
+  }
+
+  .badgeStamp:not(.badgeStampCompact) strong {
+    font-size: 30px;
+  }
+
+  .xpRuleStrip {
+    justify-content: center;
+  }
+
+  .explorerStatsGrid {
+    grid-template-columns: 1fr;
   }
 
   .infoGrid,

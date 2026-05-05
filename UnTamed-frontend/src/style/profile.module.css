@@ -211,3 +211,52 @@
     grid-template-columns: 1fr;
   }
 }
+.levelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.levelHeader span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2d6a4f;
+}
+
+.levelHeader strong {
+  font-size: 0.98rem;
+  color: #1f2933;
+}
+
+.levelMeta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.levelProgressTrack {
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(45, 106, 79, 0.14);
+}
+
+.levelProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d6a4f, #e07b39);
+  transition: width 700ms ease;
+}
+
+.levelNext {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: #4a5568;
+}

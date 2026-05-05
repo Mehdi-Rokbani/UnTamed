@@ -687,10 +687,10 @@ function ParticipantsModal({ preview, onClose }: { preview: ParticipantsPreviewR
         </div>
         {preview.participants.map((p) => (
           <div key={p.userId} className={styles.participantRow}>
-            <div className={styles.participantAvatar}>
+            <Link to={`/users/${p.userId}`} className={styles.participantAvatar} aria-label={`View ${p.username}'s public profile`}>
               {p.profileImageUrl ? <img src={p.profileImageUrl} alt={p.username} /> : <span>{p.username.charAt(0).toUpperCase()}</span>}
-            </div>
-            <span className={styles.participantName}>{p.username}</span>
+            </Link>
+            <Link to={`/users/${p.userId}`} className={styles.participantName}>{p.username}</Link>
           </div>
         ))}
         {preview.totalConfirmed > preview.participants.length && (
@@ -1315,11 +1315,13 @@ export default function ActivityDetailsPage() {
               {guide && (
                 <div className={styles.guideCard}>
                   <div className={styles.guideAvatarWrap}>
-                    {guide.profileImageUrl ? (
-                      <img src={guide.profileImageUrl} alt={guide.username} className={styles.guideImg} />
-                    ) : (
-                      <div className={styles.guidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
-                    )}
+                    <Link to={`/users/${guide.id}`} aria-label={`View ${guide.username}'s public profile`}>
+                      {guide.profileImageUrl ? (
+                        <img src={guide.profileImageUrl} alt={guide.username} className={styles.guideImg} />
+                      ) : (
+                        <div className={styles.guidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
+                      )}
+                    </Link>
                     {guide.verifiedBadge && (
                       <div className={styles.guideBadgeRing}>
                         <IcoShield />
@@ -1329,7 +1331,9 @@ export default function ActivityDetailsPage() {
                   <div className={styles.guideInfo}>
                     <div className={styles.guideLabel}>Your guide</div>
                     <div className={styles.guideName}>
-                      {guide.username}
+                      <Link to={`/users/${guide.id}`} className={styles.guideProfileLink}>
+                        {guide.username}
+                      </Link>
                       {guide.verifiedBadge && (
                         <span className={styles.verifiedChip}>
                           <IcoCheck /> Verified
@@ -1703,9 +1707,15 @@ export default function ActivityDetailsPage() {
                         <div className={styles.whoJoiningInner}>
                           <div className={styles.avatarStack}>
                             {participantsPreview.participants.slice(0, 4).map((p) => (
-                              <div key={p.userId} className={styles.avatar} title={p.username}>
+                              <Link
+                                key={p.userId}
+                                to={`/users/${p.userId}`}
+                                className={styles.avatar}
+                                title={p.username}
+                                aria-label={`View ${p.username}'s public profile`}
+                              >
                                 {p.profileImageUrl ? <img src={p.profileImageUrl} alt={p.username} /> : <span>{p.username.charAt(0).toUpperCase()}</span>}
-                              </div>
+                              </Link>
                             ))}
                             {participantsPreview.totalConfirmed > 4 && <div className={styles.moreAvatar}>+{participantsPreview.totalConfirmed - 4}</div>}
                           </div>
@@ -1728,14 +1738,16 @@ export default function ActivityDetailsPage() {
 
                     {guide && (
                       <div className={styles.sidebarGuide}>
-                        {guide.profileImageUrl ? (
-                          <img src={guide.profileImageUrl} alt={guide.username} className={styles.sidebarGuideImg} />
-                        ) : (
-                          <div className={styles.sidebarGuidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
-                        )}
+                        <Link to={`/users/${guide.id}`} aria-label={`View ${guide.username}'s public profile`}>
+                          {guide.profileImageUrl ? (
+                            <img src={guide.profileImageUrl} alt={guide.username} className={styles.sidebarGuideImg} />
+                          ) : (
+                            <div className={styles.sidebarGuidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
+                          )}
+                        </Link>
                         <div>
                           <div className={styles.sidebarGuideLabel}>Guided by</div>
-                          <div className={styles.sidebarGuideName}>{guide.username}</div>
+                          <Link to={`/users/${guide.id}`} className={styles.sidebarGuideName}>{guide.username}</Link>
                         </div>
                       </div>
                     )}

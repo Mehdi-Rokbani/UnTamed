@@ -1,6 +1,7 @@
 import { http } from "./http";
-import type { AuthUser } from "../types/auth";
+import type { AuthUser, Level } from "../types/auth";
 import type { PaginatedResponse } from "../types/pagination";
+import type { PublicUserProfile } from "../types/publicProfile";
 
 export type UpdateProfilePayload = {
   username?: string;
@@ -61,6 +62,12 @@ export type ProfileActivitySummary = {
   reviewsCount: number;
   favoriteCategory?: string | null;
   totalPeople: number;
+  level?: Level | null;
+  xp?: number;
+  levelNumber?: number;
+  levelTitle?: string | null;
+  xpToNextLevel?: number;
+  levelProgressPercent?: number;
 };
 
 export type ProfileActivityFeed = {
@@ -110,6 +117,13 @@ export async function getMyActivityFeed(params: ProfileActivityFeedParams = {}) 
       reviewsPage: params.reviewsPage ?? 0,
       reviewsSize: params.reviewsSize ?? 10,
     },
+  });
+  return data;
+}
+
+export async function getPublicUserProfile(userId: string) {
+  const { data } = await http.get<PublicUserProfile>(`/api/users/${userId}/public-profile`, {
+    withCredentials: true,
   });
   return data;
 }

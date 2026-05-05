@@ -11,6 +11,13 @@ public record UserResponse(
         String role,
         String username,
         Level level,
+
+        int xp,
+        int levelNumber,
+        String levelTitle,
+        int xpToNextLevel,
+        int levelProgressPercent,
+
         String profileImageUrl,
         String phoneNumber,
         List<String> preferences,

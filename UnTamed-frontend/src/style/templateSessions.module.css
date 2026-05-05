@@ -1097,6 +1097,18 @@ button:disabled {
   object-fit: cover;
 }
 
+.profileAvatarLink {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.profileAvatarLink:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
 .pInfo {
   flex: 1;
   min-width: 0;
@@ -1111,6 +1123,13 @@ button:disabled {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.pName:hover {
+  color: var(--forest);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .pEmail {

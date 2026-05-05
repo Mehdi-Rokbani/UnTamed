@@ -14,6 +14,7 @@ import ActivityDetailsPage from "./pages/ActivityDetailsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { GuideProfileEditPage } from "./pages/GuideProfileEditPage";
+import PublicUserProfilePage from "./pages/PublicUserProfilePage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 
 import GuideLayout from "./components/GuideLayout";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/passes/:token" element={<GuestPassPage />} />
+        <Route path="/users/:userId" element={<PublicUserProfilePage />} />
         <Route path="/guide/check-in/:token" element={<GuideCheckInPage />} />
 
         {/* Authenticated */}

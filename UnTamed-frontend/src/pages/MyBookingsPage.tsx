@@ -773,6 +773,9 @@ function PreviewBookingCard({
               ) : (
                 <ActivityDetailsUnavailable />
               )}
+              {b.guideId && (
+                <Link to={`/users/${b.guideId}`}>View guide <IcoExtLink /></Link>
+              )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
               {canReview && b.alreadyReviewed && (
                 <button type="button" disabled>Activity reviewed</button>

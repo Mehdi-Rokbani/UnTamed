@@ -24,19 +24,21 @@ public class UserService {
     private final CloudinaryService cloudinaryService;
     private final EmailVerificationService emailVerificationService;
     private final UserInsightService userInsightService;
+    private final LevelingService levelingService;
 
     public UserService(
             UserRepository repo,
             BCryptPasswordEncoder encoder,
             CloudinaryService cloudinaryService,
             EmailVerificationService emailVerificationService,
-            UserInsightService userInsightService
+            UserInsightService userInsightService, LevelingService levelingService
     ) {
         this.repo = repo;
         this.encoder = encoder;
         this.cloudinaryService = cloudinaryService;
         this.emailVerificationService = emailVerificationService;
         this.userInsightService = userInsightService;
+        this.levelingService = levelingService;
     }
 
     public UserResponse register(RegisterRequest req) {
@@ -92,6 +94,16 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         return toUserResponse(user);
+    }
+    public User getCurrentUser(String email) {
+        return repo.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    }
+
+    public UserResponse recalculateCurrentUserLevel(String email) {
+        User user = getCurrentUser(email);
+        User updated = levelingService.recalculateUserLevel(user.getId());
+        return toUserResponse(updated);
     }
 
     public UserResponse updateMe(String authEmail, UpdateProfileRequest req) {
@@ -158,6 +170,11 @@ public class UserService {
                 u.getRole().name(),
                 u.getUsername(),
                 u.getLevel(),
+                u.getXp(),
+                u.getLevelNumber(),
+                u.getLevelTitle(),
+                u.getXpToNextLevel(),
+                u.getLevelProgressPercent(),
                 u.getProfileImageUrl(),
                 u.getPhoneNumber(),
                 u.getPreferences(),

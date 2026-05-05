@@ -1,5 +1,12 @@
 export type Role = "ADVENTURER" | "USER" | "GUIDE" | "ADMIN";
-export type Level = "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT";
+
+export type Level =
+  | "BEGINNER"
+  | "AMATEUR"
+  | "INTERMEDIATE"
+  | "ADVANCED"
+  | "EXPERT"
+  | "LEGEND";
 
 export type Certificate = {
   id?: string;
@@ -17,6 +24,7 @@ export type Certificate = {
 export type AuthGuideProfile = {
   verifiedBadge?: boolean;
   certificates?: Certificate[];
+  certificateCount?: number;
   ratingSummary?: {
     average?: number;
     count?: number;
@@ -37,7 +45,14 @@ export type AuthUser = {
   confirmedTripsCount: number;
   reviewsWrittenCount: number;
   bio: string | null;
+
   level: Level | null;
+  xp?: number;
+  levelNumber?: number;
+  levelTitle?: string | null;
+  xpToNextLevel?: number;
+  levelProgressPercent?: number;
+
   preferences: string[];
 
   profileImageUrl: string | null;
@@ -45,7 +60,7 @@ export type AuthUser = {
   verified: boolean; // account/email verification only
   guideProfile?: AuthGuideProfile | null;
 
-  // keep suspended optional (only if backend returns it)
+  // keep suspended optional only if backend returns it
   suspended?: boolean;
 };
 
@@ -55,7 +70,10 @@ export type LoginResponse =
 
 export type RegisterResponse = AuthUser;
 
-export type LoginRequest = { email: string; password: string };
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
 
 export type RegisterRequest = {
   email: string;

@@ -70,6 +70,21 @@ public class User {
     private Level level;                 // enum (BEGINNER..)
     private List<String> preferences= new ArrayList<>();   // tags like: "hiking", "history", "budget"
 
+    @Builder.Default
+    private int xp = 0;
+
+    @Builder.Default
+    private int levelNumber = 1;
+
+    @Builder.Default
+    private String levelTitle = "Campfire Rookie";
+
+    @Builder.Default
+    private int xpToNextLevel = 200;
+
+    @Builder.Default
+    private int levelProgressPercent = 0;
+
     // Only relevant if role == GUIDE (still optional)
     private GuideProfile guideProfile;
 

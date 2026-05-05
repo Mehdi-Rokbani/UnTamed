@@ -26,4 +26,10 @@ public interface ReviewRepository extends MongoRepository<Review, String> {
     List<Review> findByReviewerIdOrderByCreatedAtDesc(String reviewerId);
 
     Page<Review> findByReviewerId(String reviewerId, Pageable pageable);
+
+    Page<Review> findByReviewerIdAndStatus(String reviewerId, ReviewStatus status, Pageable pageable);
+
+    long countByReviewerId(String reviewerId);
+
+    long countByReviewerIdAndStatus(String reviewerId, ReviewStatus status);
 }

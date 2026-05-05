@@ -120,15 +120,23 @@ export function RegisterPage() {
 
   const levelDescriptions: Record<Level, string> = {
     BEGINNER: "New to outdoor adventures",
+    AMATEUR: "Building trail confidence",
     INTERMEDIATE: "Some experience with activities",
     ADVANCED: "Experienced adventurer",
     EXPERT: "Outdoor expert & leader",
+    LEGEND: "Elite Untamed explorer",
   };
 
   const levelIcons: Record<Level, ReactElement> = {
     BEGINNER: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    ),
+    AMATEUR: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M4 19 10 5l4 9 2-4 4 9" />
+        <path d="M4 19h16" />
       </svg>
     ),
     INTERMEDIATE: (
@@ -146,6 +154,12 @@ export function RegisterPage() {
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="8" r="6" />
         <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" />
+      </svg>
+    ),
+    LEGEND: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="m12 2 3 7 7 .6-5.3 4.6 1.6 6.8L12 17.4 5.7 21l1.6-6.8L2 9.6 9 9l3-7Z" />
+        <path d="M12 8v4l3 2" />
       </svg>
     ),
   };

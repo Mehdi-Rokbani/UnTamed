@@ -140,7 +140,7 @@ public class GuestPass {
         return attendanceStatus == AttendanceStatus.ABSENT;
     }
 
-    public void markPresent(String guideId) {
+    public void markPresent(String guideId)     {
         this.attendanceStatus = AttendanceStatus.PRESENT;
         this.markedAt = Instant.now();
         this.markedByGuideId = guideId;

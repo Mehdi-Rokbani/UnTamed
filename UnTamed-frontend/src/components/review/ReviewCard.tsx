@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Review } from "../../types/review";
 import styles from "../../style/reviews.module.css";
 import RatingStars from "./RatingStars";
@@ -123,10 +124,22 @@ export default function ReviewCard({
     >
       {/* ── HEADER ── */}
       <div className={styles.cardHeader}>
-        <Avatar url={user?.profileImageUrl} name={user?.username || "?"} />
+        {user?.id ? (
+          <Link to={`/users/${user.id}`} aria-label={`View ${user.username}'s public profile`}>
+            <Avatar url={user?.profileImageUrl} name={user?.username || "?"} />
+          </Link>
+        ) : (
+          <Avatar url={user?.profileImageUrl} name={user?.username || "?"} />
+        )}
         <div className={styles.userInfo}>
           <div className={styles.usernameRow}>
-            <span className={styles.username}>{user?.username ?? "Anonymous"}</span>
+            {user?.id ? (
+              <Link to={`/users/${user.id}`} className={styles.userProfileLink}>
+                {user?.username ?? "Anonymous"}
+              </Link>
+            ) : (
+              <span className={styles.username}>{user?.username ?? "Anonymous"}</span>
+            )}
             {(review as any).verifiedBooking && (
               <span className={styles.verifiedBadge} title="Verified booking">
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true">
@@ -199,10 +212,22 @@ export default function ReviewCard({
       {localReply && (
         <div className={styles.replyBox}>
           <div className={styles.replyHeader}>
-            <Avatar url={guide?.profileImageUrl} name={guide?.username || "Guide"} />
+            {guide?.id ? (
+              <Link to={`/users/${guide.id}`} aria-label={`View ${guide.username}'s public profile`}>
+                <Avatar url={guide?.profileImageUrl} name={guide?.username || "Guide"} />
+              </Link>
+            ) : (
+              <Avatar url={guide?.profileImageUrl} name={guide?.username || "Guide"} />
+            )}
             <div className={styles.userInfo}>
               <div className={styles.usernameRow}>
-                <span className={styles.username}>{guide?.username || "Guide"}</span>
+                {guide?.id ? (
+                  <Link to={`/users/${guide.id}`} className={styles.userProfileLink}>
+                    {guide?.username || "Guide"}
+                  </Link>
+                ) : (
+                  <span className={styles.username}>{guide?.username || "Guide"}</span>
+                )}
                 <span className={styles.guideBadge}>
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>

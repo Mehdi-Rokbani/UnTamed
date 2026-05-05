@@ -59,4 +59,6 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
     List<ActivitySession> findByGuideIdAndStartAtAfterOrderByStartAtAsc(String guideId, Instant now);
 
     List<ActivitySession> findByGuideIdAndStatusOrderByStartAtDesc(String guideId, ActivityStatus status);
+
+    long countByGuideIdAndStatusAndStartAtAfter(String guideId, ActivityStatus status, Instant now);
 }

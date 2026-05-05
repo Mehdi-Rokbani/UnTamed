@@ -17,4 +17,7 @@ public interface GuideReviewRepository extends MongoRepository<GuideReview, Stri
     Page<GuideReview> findByGuideIdAndStatus(String guideId, ReviewStatus status, Pageable pageable);
 
     List<GuideReview> findByGuideIdAndStatus(String guideId, ReviewStatus status);
+    long countByReviewerId(String reviewerId);
+
+    long countByReviewerIdAndStatus(String reviewerId, ReviewStatus status);
 }

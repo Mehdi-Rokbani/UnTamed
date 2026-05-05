@@ -10,6 +10,7 @@ import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.service.LevelingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,19 +30,21 @@ public class GuestPassService {
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
+    private final LevelingService levelingService;
 
     public GuestPassService(
             GuestPassRepository guestPassRepository,
             BookingRepository bookingRepository,
             ActivitySessionRepository activitySessionRepository,
             ActivityTemplateRepository activityTemplateRepository,
-            UserRepository userRepository
+            UserRepository userRepository, LevelingService levelingService
     ) {
         this.guestPassRepository = guestPassRepository;
         this.bookingRepository = bookingRepository;
         this.activitySessionRepository = activitySessionRepository;
         this.activityTemplateRepository = activityTemplateRepository;
         this.userRepository = userRepository;
+        this.levelingService = levelingService;
     }
 
     public List<GuestPassDto> generatePassesForPaidBooking(String bookingId) {
@@ -189,8 +192,16 @@ public class GuestPassService {
 
         validateGuideCanMarkAttendance(pass, guideId);
 
+        boolean wasAlreadyPresent = pass.getAttendanceStatus() == AttendanceStatus.PRESENT;
+
         pass.markPresent(guideId);
         guestPassRepository.save(pass);
+
+        if (!wasAlreadyPresent && pass.getBookingId() != null) {
+            bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
+                    levelingService.recalculateUserLevel(booking.getUserId())
+            );
+        }
 
         return buildVerificationResponse(token);
     }
@@ -204,8 +215,16 @@ public class GuestPassService {
 
         validateGuideCanMarkAttendance(pass, guideId);
 
+        boolean wasPresent = pass.getAttendanceStatus() == AttendanceStatus.PRESENT;
+
         pass.markAbsent(guideId);
         guestPassRepository.save(pass);
+
+        if (wasPresent && pass.getBookingId() != null) {
+            bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
+                    levelingService.recalculateUserLevel(booking.getUserId())
+            );
+        }
 
         return buildVerificationResponse(token);
     }
@@ -487,7 +506,6 @@ public class GuestPassService {
 
         return PaginatedResponse.from(passPage, content);
     }
-
 
     private GuideGuestPassAttendanceDto toGuideAttendanceDto(GuestPass pass) {
         Booking booking = bookingRepository.findById(pass.getBookingId())

@@ -12,6 +12,7 @@ import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.service.LevelingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,7 @@ public class GuideReviewService {
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
+    private final LevelingService levelingService;
 
     @Transactional
     public GuideReviewResponse createGuideReview(String reviewerId, String guideId, GuideReviewCreateRequest request) {
@@ -62,6 +64,7 @@ public class GuideReviewService {
         GuideReview saved;
         try {
             saved = guideReviewRepository.save(review);
+            levelingService.recalculateUserLevel(saved.getReviewerId());
         } catch (DuplicateKeyException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "You already reviewed this guide for this booking.");
         }

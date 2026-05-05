@@ -29,4 +29,13 @@ public interface GuestPassRepository extends MongoRepository<GuestPass, String> 
     Page<GuestPass> findByGuideId(String guideId, Pageable pageable);
 
     boolean existsByBookingId(String bookingId);
+    long countByBookingIdInAndAttendanceStatus(Collection<String> bookingIds, AttendanceStatus attendanceStatus);
+
+    List<GuestPass> findByBookingIdInAndAttendanceStatus(Collection<String> bookingIds, AttendanceStatus attendanceStatus);
+
+    List<GuestPass> findByBookingIdInAndStatusAndAttendanceStatus(
+            Collection<String> bookingIds,
+            GuestPassStatus status,
+            AttendanceStatus attendanceStatus
+    );
 }

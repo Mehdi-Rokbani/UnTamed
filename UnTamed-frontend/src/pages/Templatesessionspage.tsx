@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type {
   ActivitySessionResponse,
   ActivityStatus,
@@ -1375,27 +1375,47 @@ export default function TemplateSessionsPage() {
 
                     return (
                       <article key={p.bookingId} className={styles.participantCard}>
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           className={styles.participantRow}
                           onClick={() => toggleExpandedBooking(p.bookingId)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleExpandedBooking(p.bookingId);
+                            }
+                          }}
                           aria-expanded={isExpanded}
                         >
-                      <div className={styles.pAvatar}>
-                        {p.profileImageUrl ? (
-                          <img
-                            src={p.profileImageUrl}
-                            alt={p.username ?? "User"}
-                          />
-                        ) : (
-                          <span>{participantInitial(p.username, p.email)}</span>
-                        )}
-                      </div>
+                      <Link
+                        to={`/users/${p.userId}`}
+                        className={styles.profileAvatarLink}
+                        aria-label={`View ${(p.username ?? "participant")}'s public profile`}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <div className={styles.pAvatar}>
+                          {p.profileImageUrl ? (
+                            <img
+                              src={p.profileImageUrl}
+                              alt={p.username ?? "User"}
+                            />
+                          ) : (
+                            <span>{participantInitial(p.username, p.email)}</span>
+                          )}
+                        </div>
+                      </Link>
 
                       <div className={styles.pInfo}>
-                        <span className={styles.pName}>
+                        <Link
+                          to={`/users/${p.userId}`}
+                          className={styles.pName}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
                           {p.username ?? "Unknown user"}
-                        </span>
+                        </Link>
                         <span className={styles.pEmail}>{p.email ?? p.userId}</span>
                         <span className={styles.pDate}>
                           Booked {formatDateTime(p.createdAt)}
@@ -1418,7 +1438,7 @@ export default function TemplateSessionsPage() {
                           {isExpanded ? "Hide guests" : `${passes.length || p.numberOfPeople} guests`}
                         </span>
                       </div>
-                    </button>
+                    </div>
 
                     {(p.status === "CANCELLED" || canModerate) && (
                       <div className={styles.moderationPanel}>

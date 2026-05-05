@@ -12,6 +12,7 @@ import com.untamed.untamedbackend.payment.stripe.StripeRefundService;
 import com.untamed.untamedbackend.repository.*;
 import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
+import com.untamed.untamedbackend.service.LevelingService;
 import com.untamed.untamedbackend.service.UserInsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,7 @@ public class BookingService {
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final GuestPassRepository guestPassRepository;
     private final StripeRefundService stripeRefundService;
+    private final LevelingService levelingService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -300,6 +302,7 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(b);
         cancelGuestPasses(savedBooking.getId());
+        levelingService.recalculateUserLevel(savedBooking.getUserId());
 
         userInsightService.onBookingCancelled(savedBooking);
 
@@ -391,6 +394,7 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(b);
         userInsightService.onBookingCompleted(savedBooking);
+        levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
 
         return savedBooking;
@@ -549,6 +553,7 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(b);
         userInsightService.onBookingCompleted(savedBooking);
+        levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
 
         return savedBooking;
@@ -703,6 +708,7 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(b);
         cancelGuestPasses(savedBooking.getId());
+        levelingService.recalculateUserLevel(savedBooking.getUserId());
 
         userInsightService.onBookingCancelled(savedBooking);
 
@@ -740,6 +746,7 @@ public class BookingService {
         b.setAttendanceMarkedByGuideId(guideId);
 
         Booking savedBooking = bookingRepository.save(b);
+        levelingService.recalculateUserLevel(savedBooking.getUserId());
 
         if (!wasAbsent && absent) {
             decrementConfirmedTripsCount(savedBooking.getUserId());
