@@ -20,6 +20,8 @@ import java.time.Instant;
         @CompoundIndex(name = "idx_status_startAt", def = "{'status': 1, 'start_at': 1}"),
         @CompoundIndex(name = "idx_template_status_startAt", def = "{'template_id': 1, 'status': 1, 'start_at': 1}"),
         @CompoundIndex(name = "idx_guide_status_startAt", def = "{'guide_id': 1, 'status': 1, 'start_at': 1}"),
+        @CompoundIndex(name = "idx_guide_startAt", def = "{'guide_id': 1, 'start_at': 1}"),
+        @CompoundIndex(name = "idx_template_startAt", def = "{'template_id': 1, 'start_at': 1}"),
         @CompoundIndex(name = "uniq_template_startAt", def = "{'template_id': 1, 'start_at': 1}", unique = true)
 })
 public class ActivitySession {

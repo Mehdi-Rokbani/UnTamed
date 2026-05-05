@@ -22,6 +22,9 @@ import java.util.List;
 @Document(collection = "activity_templates")
 @CompoundIndexes({
         @CompoundIndex(name = "idx_guide", def = "{'guide_id': 1}"),
+        @CompoundIndex(name = "idx_guide_created", def = "{'guide_id': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_archived_created", def = "{'archived': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_archived_categories_created", def = "{'archived': 1, 'category_ids': 1, 'createdAt': -1}"),
         @CompoundIndex(name = "idx_categories", def = "{'category_ids': 1}")
 })
 public class ActivityTemplate {

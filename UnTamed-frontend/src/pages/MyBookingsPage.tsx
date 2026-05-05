@@ -14,7 +14,6 @@ import type { RefundPreviewResponse, RefundStatus } from "../api/booking.api";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuestPass } from "../api/guestPass.api";
 import * as ReviewApi from "../api/review.api";
-import type { ReviewEligibility } from "../types/review";
 import styles from "../style/my-bookings.module.css";
 
 import "leaflet/dist/leaflet.css";
@@ -66,10 +65,6 @@ function getDisplayStatus(b: BookingWithDetails): DisplayStatus {
   }
 
   return "EXPIRED";
-}
-
-function isReviewCandidate(b: BookingWithDetails): boolean {
-  return getDisplayStatus(b) === "COMPLETED";
 }
 
 // ─── Status config (raw API statuses) ────────────────────────────────────────
@@ -633,8 +628,6 @@ function PreviewBookingCard({
   passes,
   passesLoading,
   passesError,
-  reviewEligibility,
-  reviewLoading,
   onReview,
 }: {
   b: BookingWithDetails;
@@ -650,8 +643,6 @@ function PreviewBookingCard({
   passes?: GuestPass[];
   passesLoading: boolean;
   passesError?: string;
-  reviewEligibility?: ReviewEligibility;
-  reviewLoading: boolean;
   onReview: (b: BookingWithDetails) => void;
 }) {
   const ds = getDisplayStatus(b);
@@ -774,14 +765,11 @@ function PreviewBookingCard({
                 <ActivityDetailsUnavailable />
               )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
-              {canReview && reviewEligibility?.alreadyReviewed && (
+              {canReview && b.alreadyReviewed && (
                 <button type="button" disabled>Reviewed</button>
               )}
-              {canReview && !reviewEligibility?.alreadyReviewed && reviewEligibility?.eligible && (
+              {canReview && !b.alreadyReviewed && b.reviewEligible && (
                 <button type="button" onClick={() => onReview(b)}>Review</button>
-              )}
-              {canReview && reviewLoading && !reviewEligibility && (
-                <button type="button" disabled>Checking...</button>
               )}
             </div>
           </div>
@@ -1698,13 +1686,10 @@ export default function MyBookingsPage() {
   const [passErrors, setPassErrors] = useState<Record<string, string>>({});
   const [guestNamesByBooking, setGuestNamesByBooking] = useState<Record<string, string[]>>({});
   const [guestNameErrors, setGuestNameErrors] = useState<Record<string, string>>({});
-  const [reviewEligibilityByBooking, setReviewEligibilityByBooking] = useState<Record<string, ReviewEligibility>>({});
-  const [reviewEligibilityLoading, setReviewEligibilityLoading] = useState<Record<string, boolean>>({});
   const [reviewTarget, setReviewTarget] = useState<BookingWithDetails | null>(null);
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const reviewEligibilityRequestedRef = useRef<Set<string>>(new Set());
   const mainGuestName = user?.username?.trim() || user?.email || "";
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -1858,48 +1843,6 @@ export default function MyBookingsPage() {
       return next;
     });
   }, [bookings, mainGuestName]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const candidates = bookings.filter(
-      (booking) =>
-        isReviewCandidate(booking) &&
-        !reviewEligibilityByBooking[booking.id] &&
-        !reviewEligibilityRequestedRef.current.has(booking.id)
-    );
-
-    candidates.forEach((booking) => {
-      reviewEligibilityRequestedRef.current.add(booking.id);
-      setReviewEligibilityLoading((prev) => ({ ...prev, [booking.id]: true }));
-      ReviewApi.getReviewEligibility(booking.id)
-        .then((eligibility) => {
-          if (cancelled) return;
-          setReviewEligibilityByBooking((prev) => ({ ...prev, [booking.id]: eligibility }));
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setReviewEligibilityByBooking((prev) => ({
-            ...prev,
-            [booking.id]: {
-              eligible: false,
-              alreadyReviewed: false,
-              activityTemplateId: booking.activityTemplateId ?? "",
-              reason: "Review eligibility is unavailable right now.",
-            },
-          }));
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setReviewEligibilityLoading((prev) => {
-            const next = { ...prev };
-            delete next[booking.id];
-            return next;
-          });
-        });
-    });
-
-    return () => { cancelled = true; };
-  }, [bookings, reviewEligibilityByBooking]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   function selectBooking(b: BookingWithDetails) {
@@ -2091,33 +2034,18 @@ export default function MyBookingsPage() {
   }
 
   // ── Map legend display statuses ───────────────────────────────────────────
-  async function openReviewModal(b: BookingWithDetails) {
-    setReviewEligibilityLoading((prev) => ({ ...prev, [b.id]: true }));
-    try {
-      const eligibility = await ReviewApi.getReviewEligibility(b.id);
-      setReviewEligibilityByBooking((prev) => ({ ...prev, [b.id]: eligibility }));
-
-      if (!eligibility.eligible) {
-        setToast({
-          tone: eligibility.alreadyReviewed ? "info" : "error",
-          message: eligibility.reason || "This booking is not eligible for review.",
-        });
-        return;
-      }
-
-      setReviewTarget(b);
-    } catch (e: unknown) {
-      setToast({
-        tone: "error",
-        message: e instanceof Error ? e.message : "Could not check review eligibility.",
-      });
-    } finally {
-      setReviewEligibilityLoading((prev) => {
-        const next = { ...prev };
-        delete next[b.id];
-        return next;
-      });
+  function openReviewModal(b: BookingWithDetails) {
+    if (b.alreadyReviewed) {
+      setToast({ tone: "info", message: b.reviewReason || "You already reviewed this activity." });
+      return;
     }
+
+    if (!b.reviewEligible) {
+      setToast({ tone: "error", message: b.reviewReason || "This booking is not eligible for review." });
+      return;
+    }
+
+    setReviewTarget(b);
   }
 
   async function submitReview(data: { rating: number; comment: string }) {
@@ -2131,16 +2059,17 @@ export default function MyBookingsPage() {
         comment: data.comment,
       });
 
-      setReviewEligibilityByBooking((prev) => ({
-        ...prev,
-        [booking.id]: {
-          eligible: false,
-          alreadyReviewed: true,
-          existingReviewId: review.id,
-          activityTemplateId: review.activityTemplateId,
-          reason: "You already reviewed this activity.",
-        },
-      }));
+      setBookings((prev) => prev.map((item) => (
+        item.id === booking.id
+          ? {
+              ...item,
+              reviewEligible: false,
+              alreadyReviewed: true,
+              reviewId: review.id,
+              reviewReason: "You already reviewed this activity.",
+            }
+          : item
+      )));
       setReviewTarget(null);
       setToast({ tone: "success", message: "Review posted. Thanks for sharing your experience." });
     } catch (e: unknown) {
@@ -2339,8 +2268,6 @@ export default function MyBookingsPage() {
                           passes={passesByBooking[booking.id]}
                           passesLoading={passLoadingId === booking.id}
                           passesError={passErrors[booking.id]}
-                          reviewEligibility={reviewEligibilityByBooking[booking.id]}
-                          reviewLoading={!!reviewEligibilityLoading[booking.id]}
                           onReview={openReviewModal}
                         />
                       ))}

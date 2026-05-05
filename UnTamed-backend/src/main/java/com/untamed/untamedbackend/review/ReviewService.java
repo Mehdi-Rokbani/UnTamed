@@ -14,9 +14,13 @@ import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.ReviewRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.review.ReviewUserDto;
+import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.service.UserInsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -143,6 +147,21 @@ public class ReviewService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public PaginatedResponse<ReviewResponse> listVisibleReviewsForTemplatePage(String templateId, int page, int size) {
+        Page<Review> reviewPage = reviewRepository.findByActivityTemplateIdAndStatus(
+                templateId,
+                ReviewStatus.VISIBLE,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        List<ReviewResponse> content = reviewPage.getContent()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+
+        return PaginatedResponse.from(reviewPage, content);
     }
 
     public ReviewResponse getMyReviewForTemplate(String currentUserId, String templateId) {
@@ -277,6 +296,20 @@ public class ReviewService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public PaginatedResponse<ReviewResponse> listMyReviewsPage(String userId, int page, int size) {
+        Page<Review> reviewPage = reviewRepository.findByReviewerId(
+                userId,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        List<ReviewResponse> content = reviewPage.getContent()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+
+        return PaginatedResponse.from(reviewPage, content);
     }
 
     private void incrementReviewsWrittenCount(String userId) {

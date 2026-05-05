@@ -1,4 +1,6 @@
 import { http } from "./http";
+import type { PaginatedResponse } from "../types/pagination";
+import { toPaginatedResponse } from "../types/pagination";
 
 export type GuestPassStatus = "ACTIVE" | "CANCELLED";
 export type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT";
@@ -119,4 +121,21 @@ export async function getGuideAttendanceHistory(): Promise<GuideGuestPassAttenda
     { withCredentials: true }
   );
   return data;
+}
+
+export async function getGuideAttendanceHistoryPage(
+  page = 0,
+  size = 10
+): Promise<PaginatedResponse<GuideGuestPassAttendance>> {
+  const { data } = await http.get<
+    GuideGuestPassAttendance[] | PaginatedResponse<GuideGuestPassAttendance>
+  >(
+    "/api/guest-passes/guide/history",
+    {
+      params: { page, size },
+      withCredentials: true,
+    }
+  );
+
+  return toPaginatedResponse(data, page, size);
 }

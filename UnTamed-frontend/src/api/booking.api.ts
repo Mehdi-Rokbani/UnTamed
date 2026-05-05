@@ -70,6 +70,12 @@ export type BookingWithDetails = Booking & {
   locality: string | null;
   latitude: number | null;
   longitude: number | null;
+
+  // Review eligibility from /api/bookings/mine/details
+  reviewEligible?: boolean;
+  alreadyReviewed?: boolean;
+  reviewId?: string | null;
+  reviewReason?: string | null;
 };
 
 export type CreateBookingRequest = {
@@ -118,6 +124,10 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
       locality:         null,
       latitude:         null,
       longitude:        null,
+      reviewEligible:   false,
+      alreadyReviewed:  false,
+      reviewId:         null,
+      reviewReason:     null,
     }));
   }
 }

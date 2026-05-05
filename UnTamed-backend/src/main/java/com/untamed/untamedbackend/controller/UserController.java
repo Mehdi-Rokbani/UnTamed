@@ -1,9 +1,11 @@
 package com.untamed.untamedbackend.controller;
 
+import com.untamed.untamedbackend.dto.ProfileActivityFeedResponse;
 import com.untamed.untamedbackend.dto.UpdateProfileRequest;
 import com.untamed.untamedbackend.dto.UserResponse;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.model.UserInsight;
+import com.untamed.untamedbackend.service.ProfileActivityFeedService;
 import com.untamed.untamedbackend.service.UserInsightService;
 import com.untamed.untamedbackend.service.UserService;
 import jakarta.validation.Valid;
@@ -21,10 +23,16 @@ public class UserController {
 
     private final UserService users;
     private final UserInsightService userInsightService;
+    private final ProfileActivityFeedService profileActivityFeedService;
 
-    public UserController(UserService users, UserInsightService userInsightService) {
+    public UserController(
+            UserService users,
+            UserInsightService userInsightService,
+            ProfileActivityFeedService profileActivityFeedService
+    ) {
         this.users = users;
         this.userInsightService = userInsightService;
+        this.profileActivityFeedService = profileActivityFeedService;
     }
 
     @GetMapping("/me")
@@ -77,6 +85,28 @@ public class UserController {
         User user = users.getUserByEmail(email);
 
         return userInsightService.rebuildForUser(user.getId());
+    }
+
+    @GetMapping("/me/activity-feed")
+    public ProfileActivityFeedResponse getMyActivityFeed(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int tripsPage,
+            @RequestParam(defaultValue = "10") int tripsSize,
+            @RequestParam(defaultValue = "0") int reviewsPage,
+            @RequestParam(defaultValue = "10") int reviewsSize
+    ) {
+        if (auth == null || auth.getName() == null) {
+            throw new AccessDeniedException("Not authenticated");
+        }
+
+        User user = users.getUserByEmail(auth.getName());
+        return profileActivityFeedService.getFeed(
+                user.getId(),
+                tripsPage,
+                tripsSize,
+                reviewsPage,
+                reviewsSize
+        );
     }
 
     private UserResponse toResponse(User u) {

@@ -6,10 +6,14 @@ import com.untamed.untamedbackend.booking.BookingStatus;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -468,6 +472,20 @@ public class GuestPassService {
                 .stream()
                 .map(this::toGuideAttendanceDto)
                 .toList();
+    }
+
+    public PaginatedResponse<GuideGuestPassAttendanceDto> getGuideAttendanceHistoryPage(String guideId, int page, int size) {
+        Page<GuestPass> passPage = guestPassRepository.findByGuideId(
+                guideId,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        List<GuideGuestPassAttendanceDto> content = passPage.getContent()
+                .stream()
+                .map(this::toGuideAttendanceDto)
+                .toList();
+
+        return PaginatedResponse.from(passPage, content);
     }
 
 

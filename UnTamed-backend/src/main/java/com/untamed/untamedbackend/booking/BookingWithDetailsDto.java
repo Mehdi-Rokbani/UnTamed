@@ -32,5 +32,11 @@ public record BookingWithDetailsDto(
 
         // Price
         BigDecimal pricePerPerson,
-        BigDecimal totalPrice
+        BigDecimal totalPrice,
+
+        // Review eligibility
+        boolean reviewEligible,
+        boolean alreadyReviewed,
+        String reviewId,
+        String reviewReason
 ) {}

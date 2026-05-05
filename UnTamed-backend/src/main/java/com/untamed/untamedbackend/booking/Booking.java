@@ -2,6 +2,8 @@ package com.untamed.untamedbackend.booking;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
@@ -15,6 +17,11 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Document(collection = "bookings")
+@CompoundIndexes({
+        @CompoundIndex(name = "idx_user_created", def = "{'userId': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_user_status_created", def = "{'userId': 1, 'status': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_session_status_created", def = "{'sessionId': 1, 'status': 1, 'createdAt': 1}")
+})
 public class Booking {
 
     @Id

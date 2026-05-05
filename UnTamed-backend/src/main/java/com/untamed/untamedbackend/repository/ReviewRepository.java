@@ -2,6 +2,8 @@ package com.untamed.untamedbackend.repository;
 
 import com.untamed.untamedbackend.model.Review;
 import com.untamed.untamedbackend.model.ReviewStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
@@ -13,7 +15,15 @@ public interface ReviewRepository extends MongoRepository<Review, String> {
 
     Optional<Review> findByReviewerIdAndActivityTemplateId(String reviewerId, String activityTemplateId);
 
+    List<Review> findByReviewerIdAndBookingIdIn(String reviewerId, List<String> bookingIds);
+
+    List<Review> findByReviewerIdAndActivityTemplateIdIn(String reviewerId, List<String> activityTemplateIds);
+
     List<Review> findByActivityTemplateIdAndStatusOrderByCreatedAtDesc(String activityTemplateId, ReviewStatus status);
 
+    Page<Review> findByActivityTemplateIdAndStatus(String activityTemplateId, ReviewStatus status, Pageable pageable);
+
     List<Review> findByReviewerIdOrderByCreatedAtDesc(String reviewerId);
+
+    Page<Review> findByReviewerId(String reviewerId, Pageable pageable);
 }

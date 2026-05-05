@@ -12,10 +12,16 @@ import type {
   ActivitySessionResponse,
   ActivitySessionDeleteResponse,
   GuideSessionDetailsResponse,
+  GuideTemplateSessionsDashboardResponse,
   PublicTemplateCard,
   PublicSession,
   Difficulty,
 } from "../types/activity";
+import type { PaginatedResponse } from "../types/pagination";
+import { toPaginatedResponse } from "../types/pagination";
+import type { Review } from "../types/review";
+import type { ParticipantsPreviewResponse } from "../types/participants";
+import type { RecommendationItem, SimilarActivityItem } from "../types/recommendation";
 
 /** ---------------------------
  *  GUIDE TEMPLATES
@@ -262,6 +268,22 @@ export async function getGuideSessionDetails(sessionId: string) {
   return data;
 }
 
+export async function getGuideTemplateSessionsDashboard(
+  templateId: string,
+  page = 0,
+  size = 20
+) {
+  const { data } = await http.get<GuideTemplateSessionsDashboardResponse>(
+    `/api/guides/templates/${templateId}/sessions-dashboard`,
+    {
+      params: { page, size },
+      withCredentials: true,
+    }
+  );
+
+  return data;
+}
+
 /** ---------------------------
  *  PUBLIC TEMPLATES
  *  ---------------------------
@@ -274,6 +296,18 @@ export async function listPublicTemplates() {
   );
 
   return data;
+}
+
+export async function listPublicTemplatesPage(page = 0, size = 12) {
+  const { data } = await http.get<PublicTemplateCard[] | PaginatedResponse<PublicTemplateCard>>(
+    "/api/templates/public",
+    {
+      params: { page, size },
+      withCredentials: true,
+    }
+  );
+
+  return toPaginatedResponse(data, page, size);
 }
 
 export async function getPublicTemplate(id: string) {
@@ -317,6 +351,22 @@ export async function searchPublicTemplates(params: TemplateSearchParams) {
 
   return data;
 }
+
+export async function searchPublicTemplatesPage(
+  params: TemplateSearchParams,
+  page = 0,
+  size = 12
+) {
+  const { data } = await http.get<PublicTemplateCard[] | PaginatedResponse<PublicTemplateCard>>(
+    "/api/templates/public/search",
+    {
+      params: { ...params, page, size },
+      withCredentials: true,
+    }
+  );
+
+  return toPaginatedResponse(data, page, size);
+}
 export type AddressSuggestion = {
   id: string;
   displayName: string;
@@ -345,6 +395,37 @@ export async function getPublicTemplateById(id: string) {
 
 export async function listPublicTemplateSessions(templateId: string) {
   return listPublicSessions(templateId);
+}
+
+export type PublicActivityReviewState = {
+  myReview: Review | null;
+  reviewEligible: boolean;
+  alreadyReviewed: boolean;
+  reviewId: string | null;
+  reviewReason: string | null;
+};
+
+export type PublicActivityDetailsResponse = {
+  template: PublicTemplateCard;
+  upcomingSessions: PublicSession[];
+  reviewsSummary: {
+    average: number;
+    count: number;
+  };
+  reviews: PaginatedResponse<Review>;
+  currentUserReview: PublicActivityReviewState;
+  participantsPreview: ParticipantsPreviewResponse | null;
+  similarActivities: SimilarActivityItem[];
+  recommendations: RecommendationItem[];
+};
+
+export async function getPublicActivityDetails(templateId: string) {
+  const { data } = await http.get<PublicActivityDetailsResponse>(
+    `/api/activities/public/${templateId}/details`,
+    { withCredentials: true }
+  );
+
+  return data;
 }
 
 export async function restoreSession(id: string) {

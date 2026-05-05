@@ -15,6 +15,7 @@ import com.untamed.untamedbackend.dto.GuidePassAttendanceDto;
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.dto.GuideSessionDetailsResponse;
 import com.untamed.untamedbackend.dto.RatingSummaryDto;
+import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.guestpass.AttendanceStatus;
 import com.untamed.untamedbackend.guestpass.GuestPass;
 import com.untamed.untamedbackend.guestpass.GuestPassRepository;
@@ -30,6 +31,9 @@ import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -100,6 +104,21 @@ public class ActivitySessionService {
                 ))
                 .map(this::toSessionResponse)
                 .toList();
+    }
+
+    public PaginatedResponse<ActivitySessionResponse> listMinePage(String authEmail, int page, int size) {
+        User guide = getGuideByEmail(authEmail);
+        Page<ActivitySession> sessionPage = sessionRepo.findByGuideId(
+                guide.getId(),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "startAt"))
+        );
+
+        List<ActivitySessionResponse> content = sessionPage.getContent()
+                .stream()
+                .map(this::toSessionResponse)
+                .toList();
+
+        return PaginatedResponse.from(sessionPage, content);
     }
 
     // -------- Public sessions --------

@@ -656,14 +656,19 @@
   transition: border-color var(--rv-transition), background var(--rv-transition), box-shadow var(--rv-transition);
 }
 
-.loadMoreBtn:hover {
+.loadMoreBtn:hover:not(:disabled) {
   border-color: var(--rv-green-900);
   background: var(--rv-green-50);
   box-shadow: 0 2px 8px rgba(26, 77, 46, 0.1);
 }
 
-.loadMoreBtn:active {
+.loadMoreBtn:active:not(:disabled) {
   transform: scale(0.98);
+}
+
+.loadMoreBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ═══════════════════════════════════════════════════════════

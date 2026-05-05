@@ -25,8 +25,15 @@ public class ActivityTemplateController {
     // -------- Guide templates --------
 
     @GetMapping("/mine")
-    public List<ActivityTemplateResponse> listMine() {
-        return templateService.listMineTemplates(requireAuthEmail());
+    public Object listMine(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page == null && size == null) {
+            return templateService.listMineTemplates(requireAuthEmail());
+        }
+
+        return templateService.listMineTemplatesPage(requireAuthEmail(), resolvePage(page), resolveSize(size, 20));
     }
 
     @GetMapping("/{id}")
@@ -117,6 +124,15 @@ public class ActivityTemplateController {
 
         return auth.getName();
     }
+
+    private int resolvePage(Integer page) {
+        return page == null ? 0 : Math.max(0, page);
+    }
+
+    private int resolveSize(Integer size, int defaultSize) {
+        return size == null ? defaultSize : Math.max(1, Math.min(size, 50));
+    }
+
     @DeleteMapping("/{id}")
     public ActivityTemplateDeleteResponse delete(@PathVariable String id) {
         return templateService.deleteTemplate(id, requireAuthEmail());

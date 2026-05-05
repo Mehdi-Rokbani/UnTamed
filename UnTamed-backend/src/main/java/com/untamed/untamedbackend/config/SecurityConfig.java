@@ -44,6 +44,7 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/geo/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/activities/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/search/semantic").permitAll()

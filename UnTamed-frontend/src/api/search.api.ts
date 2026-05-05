@@ -1,4 +1,6 @@
 import { http } from "./http";
+import type { PaginatedResponse } from "../types/pagination";
+import { toPaginatedResponse } from "../types/pagination";
 
 export type SemanticSearchRequest = {
   query: string;
@@ -33,4 +35,18 @@ export type SemanticSearchItem = {
 export async function semanticSearch(body: SemanticSearchRequest) {
   const { data } = await http.post<SemanticSearchItem[]>("/api/search/semantic", body);
   return data;
+}
+
+export async function semanticSearchPage(
+  body: SemanticSearchRequest,
+  page = 0,
+  size = 12
+) {
+  const { data } = await http.post<SemanticSearchItem[] | PaginatedResponse<SemanticSearchItem>>(
+    "/api/search/semantic",
+    body,
+    { params: { page, size } }
+  );
+
+  return toPaginatedResponse(data, page, size);
 }

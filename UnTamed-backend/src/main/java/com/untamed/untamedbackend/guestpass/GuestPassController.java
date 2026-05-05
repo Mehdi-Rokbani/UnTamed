@@ -71,9 +71,26 @@ public class GuestPassController {
     }
 
     @GetMapping("/guide/history")
-    public List<GuideGuestPassAttendanceDto> getGuideAttendanceHistory(Authentication auth) {
+    public Object getGuideAttendanceHistory(
+            Authentication auth,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         String guideId = requireAuthenticatedGuideId(auth);
-        return guestPassService.getGuideAttendanceHistory(guideId);
+
+        if (page == null && size == null) {
+            return guestPassService.getGuideAttendanceHistory(guideId);
+        }
+
+        return guestPassService.getGuideAttendanceHistoryPage(guideId, resolvePage(page), resolveSize(size, 10));
+    }
+
+    private int resolvePage(Integer page) {
+        return page == null ? 0 : Math.max(0, page);
+    }
+
+    private int resolveSize(Integer size, int defaultSize) {
+        return size == null ? defaultSize : Math.max(1, Math.min(size, 50));
     }
 
     private String requireAuthenticatedGuideId(Authentication auth) {

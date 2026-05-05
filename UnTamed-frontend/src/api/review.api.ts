@@ -6,10 +6,21 @@ import type {
   UpdateReviewRequest,
   ReplyReviewRequest,
 } from "../types/review";
+import type { PaginatedResponse } from "../types/pagination";
+import { toPaginatedResponse } from "../types/pagination";
 
 export async function listTemplateReviews(templateId: string) {
   const { data } = await http.get<Review[]>(`/api/reviews/template/${templateId}`);
   return data;
+}
+
+export async function listTemplateReviewsPage(templateId: string, page = 0, size = 10) {
+  const { data } = await http.get<Review[] | PaginatedResponse<Review>>(
+    `/api/reviews/template/${templateId}`,
+    { params: { page, size } }
+  );
+
+  return toPaginatedResponse(data, page, size);
 }
 
 export async function getMyReviewForTemplate(templateId: string) {
@@ -50,4 +61,13 @@ export async function createReviewForTemplate(
 export async function getMyReviews() {
   const { data } = await http.get<Review[]>("/api/reviews/me");
   return data;
+}
+
+export async function getMyReviewsPage(page = 0, size = 10) {
+  const { data } = await http.get<Review[] | PaginatedResponse<Review>>(
+    "/api/reviews/me",
+    { params: { page, size } }
+  );
+
+  return toPaginatedResponse(data, page, size);
 }

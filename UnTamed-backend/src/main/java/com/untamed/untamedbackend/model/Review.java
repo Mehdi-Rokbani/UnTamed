@@ -32,6 +32,18 @@ import java.time.Instant;
         @CompoundIndex(
                 name = "idx_guide_created",
                 def = "{'guide_id': 1, 'created_at': -1}"
+        ),
+        @CompoundIndex(
+                name = "idx_reviewer_created",
+                def = "{'reviewer_id': 1, 'created_at': -1}"
+        ),
+        @CompoundIndex(
+                name = "idx_reviewer_booking",
+                def = "{'reviewer_id': 1, 'booking_id': 1}"
+        ),
+        @CompoundIndex(
+                name = "idx_booking",
+                def = "{'booking_id': 1}"
         )
 })
 public class Review {

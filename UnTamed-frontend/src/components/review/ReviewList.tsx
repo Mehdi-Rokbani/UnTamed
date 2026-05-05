@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Review } from "../../types/review";
+import type { PaginatedResponse } from "../../types/pagination";
 import * as ReviewApi from "../../api/review.api";
 import styles from "../../style/reviews.module.css";
 import ReviewCard from "./ReviewCard";
 import ReviewForm from "./ReviewForm";
 import RatingStars from "./RatingStars";
+
+const REVIEW_PAGE_SIZE = 10;
 
 type Props = {
   templateId: string;
@@ -16,6 +19,7 @@ type Props = {
   userReviewId?: string | null;
   /** Open parent edit modal for the current user's review */
   onEditMyReview?: () => void;
+  initialReviewsPage?: PaginatedResponse<Review> | null;
 };
 
 /* ── Skeleton card ── */
@@ -178,26 +182,50 @@ export default function ReviewList({
   canReview = false,
   userReviewId,
   onEditMyReview,
+  initialReviewsPage,
 }: Props) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [page, setPage] = useState(0);
+  const [lastPage, setLastPage] = useState(true);
+  const [totalReviews, setTotalReviews] = useState(0);
   const [showForm, setShowForm] = useState(false);
 
   const hasReviewed = !!userReviewId;
   const isGuide = !!currentUserId && currentUserId === guideOwnerId;
 
-  async function load() {
+  async function load(pageToLoad = 0, mode: "replace" | "append" = "replace") {
     try {
-      setLoading(true);
+      if (mode === "replace") {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError("");
-      const data = await ReviewApi.listTemplateReviews(templateId);
-      setReviews(data);
+      const data = await ReviewApi.listTemplateReviewsPage(
+        templateId,
+        pageToLoad,
+        REVIEW_PAGE_SIZE
+      );
+
+      setReviews((prev) => {
+        if (mode === "replace") {
+          return data.content;
+        }
+
+        const existingIds = new Set(prev.map((review) => review.id));
+        return [...prev, ...data.content.filter((review) => !existingIds.has(review.id))];
+      });
+      setPage(data.page);
+      setLastPage(data.last);
+      setTotalReviews(data.totalElements);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Failed to load reviews.");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }
 
@@ -205,12 +233,31 @@ export default function ReviewList({
     let cancelled = false;
 
     async function run() {
+      if (initialReviewsPage) {
+        setReviews(initialReviewsPage.content);
+        setPage(initialReviewsPage.page);
+        setLastPage(initialReviewsPage.last);
+        setTotalReviews(initialReviewsPage.totalElements);
+        setLoading(false);
+        setError("");
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
-        const data = await ReviewApi.listTemplateReviews(templateId);
-        if (!cancelled) setReviews(data);
-        if (!cancelled) setLoading(false);
+        const data = await ReviewApi.listTemplateReviewsPage(
+          templateId,
+          0,
+          REVIEW_PAGE_SIZE
+        );
+        if (!cancelled) {
+          setReviews(data.content);
+          setPage(data.page);
+          setLastPage(data.last);
+          setTotalReviews(data.totalElements);
+          setLoading(false);
+        }
       } catch (err: any) {
         if (!cancelled) {
           setError(err?.response?.data?.message || "Failed to load reviews.");
@@ -224,14 +271,22 @@ export default function ReviewList({
     return () => {
       cancelled = true;
     };
-  }, [templateId]);
+  }, [templateId, initialReviewsPage]);
+
+  const loadMore = () => {
+    if (loadingMore || lastPage) {
+      return;
+    }
+
+    void load(page + 1, "append");
+  };
 
   const SectionHeader = () => (
     <div className={styles.sectionHeader}>
       <div>
         <h2 className={styles.sectionTitle}>Reviews</h2>
         {!loading && reviews.length > 0 && (
-          <span className={styles.sectionCount}>{reviews.length}</span>
+          <span className={styles.sectionCount}>{totalReviews || reviews.length}</span>
         )}
       </div>
 
@@ -320,7 +375,7 @@ export default function ReviewList({
           onCancel={() => setShowForm(false)}
           onSubmit={async () => {
             setShowForm(false);
-            await load();
+            await load(0, "replace");
           }}
           confirmDiscard
         />
@@ -376,7 +431,7 @@ export default function ReviewList({
             role="list"
             aria-label="Customer reviews"
           >
-            {reviews.slice(0, visibleCount).map((review) => (
+            {reviews.map((review) => (
               <ReviewCard
                 key={review.id}
                 review={review}
@@ -391,13 +446,14 @@ export default function ReviewList({
             ))}
           </div>
 
-          {visibleCount < reviews.length && (
+          {!lastPage && (
             <button
               className={styles.loadMoreBtn}
-              onClick={() => setVisibleCount((v) => v + 5)}
+              onClick={loadMore}
+              disabled={loadingMore}
               type="button"
             >
-              Show {Math.min(5, reviews.length - visibleCount)} more reviews
+              {loadingMore ? "Loading reviews..." : "Load more reviews"}
               <svg
                 width="14"
                 height="14"

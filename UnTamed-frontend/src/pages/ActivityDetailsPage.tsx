@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState, useCallback, useRef, type CSSProperties }
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PublicSession, PublicTemplateCard } from "../types/activity";
 import type { Review } from "../types/review";
+import type { PaginatedResponse } from "../types/pagination";
 import type { RecommendationItem, SimilarActivityItem } from "../types/recommendation";
 import styles from "../style/activity-details.module.css";
 import {
+  getPublicActivityDetails,
   getPublicTemplateById,
   listPublicTemplateSessions,
 } from "../api/activity.api";
 import { getDailyForecast } from "../api/weather.api";
-import { getMyRecommendations, getSimilarActivities } from "../api/recommendation.api";
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
@@ -715,6 +716,7 @@ export default function ActivityDetailsPage() {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [participantsModalOpen, setParticipantsModalOpen] = useState(false);
   const [participantsPreview, setParticipantsPreview] = useState<ParticipantsPreviewResponse | null>(null);
+  const [participantsPreviewSessionId, setParticipantsPreviewSessionId] = useState<string | null>(null);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [people, setPeople] = useState(1);
   const [guestNames, setGuestNames] = useState<string[]>([]);
@@ -723,14 +725,16 @@ export default function ActivityDetailsPage() {
   const [bookingSuccessId, setBookingSuccessId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [myReview, setMyReview] = useState<Review | null>(null);
+  const [reviewEligible, setReviewEligible] = useState(false);
+  const [initialReviewsPage, setInitialReviewsPage] = useState<PaginatedResponse<Review> | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewReloadKey, setReviewReloadKey] = useState(0);
   const [similarActivities, setSimilarActivities] = useState<SimilarActivityItem[]>([]);
   const [recommendedActivities, setRecommendedActivities] = useState<RecommendationItem[]>([]);
-  const [loadingSimilar, setLoadingSimilar] = useState(false);
-  const [loadingRecommended, setLoadingRecommended] = useState(false);
+  const [loadingSimilar, setLoadingSimilar] = useState(true);
+  const [loadingRecommended, setLoadingRecommended] = useState(true);
   const [weather, setWeather] = useState<SessionWeather | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
@@ -765,76 +769,63 @@ export default function ActivityDetailsPage() {
       return;
     }
     setState("loading");
+    setLoadingSimilar(true);
+    setLoadingRecommended(true);
     try {
-      const [tpl, sess] = await Promise.all([getPublicTemplateById(id), listPublicTemplateSessions(id)]);
+      const details = await getPublicActivityDetails(id);
+      const tpl = details.template;
+      const sess = details.upcomingSessions ?? [];
+
       setTemplate(tpl);
-      setSessions(sess ?? []);
-      const tplNextSessionId = (tpl as any)?.nextSession?.id ?? null;
+      setSessions(sess);
+      setMyReview(details.currentUserReview?.myReview ?? null);
+      setReviewEligible(Boolean(details.currentUserReview?.reviewEligible));
+      setInitialReviewsPage(details.reviews ?? null);
+      setSimilarActivities((details.similarActivities ?? []).filter((item) => item.templateId !== id));
+      setRecommendedActivities((details.recommendations ?? []).filter((item) => item.templateId !== id));
+
+      const tplNextSessionId = (tpl as any)?.nextSession?.id ?? (tpl as any)?.nextSession?.sessionId ?? null;
       const firstSessionId = sess?.[0]?.id ?? null;
       setSelectedSessionId(tplNextSessionId ?? firstSessionId);
+      setParticipantsPreview(details.participantsPreview ?? null);
+      setParticipantsPreviewSessionId((tplNextSessionId ?? firstSessionId) && details.participantsPreview ? (tplNextSessionId ?? firstSessionId) : null);
       setState("done");
     } catch (err: any) {
-      setState(String(err?.message ?? "").includes("404") ? "notfound" : "error");
+      try {
+        const [tpl, sess] = await Promise.all([getPublicTemplateById(id), listPublicTemplateSessions(id)]);
+        setTemplate(tpl);
+        setSessions(sess ?? []);
+        setMyReview(null);
+        setReviewEligible(false);
+        setInitialReviewsPage(null);
+        setSimilarActivities([]);
+        setRecommendedActivities([]);
+        setParticipantsPreview(null);
+        setParticipantsPreviewSessionId(null);
+        const tplNextSessionId = (tpl as any)?.nextSession?.id ?? (tpl as any)?.nextSession?.sessionId ?? null;
+        const firstSessionId = sess?.[0]?.id ?? null;
+        setSelectedSessionId(tplNextSessionId ?? firstSessionId);
+        setState("done");
+      } catch (fallbackErr: any) {
+        setState(String(fallbackErr?.message ?? err?.message ?? "").includes("404") ? "notfound" : "error");
+      }
+    } finally {
+      setLoadingSimilar(false);
+      setLoadingRecommended(false);
     }
   }, [id]);
 
-  const loadMyReview = useCallback(async () => {
-    if (!id || !user) {
-      setMyReview(null);
-      return;
-    }
-    try {
-      const data = await ReviewApi.getMyReviewForTemplate(id);
-      setMyReview(data);
-    } catch {
-      setMyReview(null);
-    }
-  }, [id, user]);
-
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
-
-  useEffect(() => {
-    if (!id) return;
-    const currentTemplateId = id;
-    let cancelled = false;
-
-    async function loadSuggestions() {
-      try {
-        setLoadingSimilar(true);
-        const similar = await getSimilarActivities(currentTemplateId, 8);
-        if (!cancelled) setSimilarActivities((similar ?? []).filter((item) => item.templateId !== currentTemplateId));
-      } catch {
-        if (!cancelled) setSimilarActivities([]);
-      } finally {
-        if (!cancelled) setLoadingSimilar(false);
-      }
-
-      try {
-        setLoadingRecommended(true);
-        const recommendations = await getMyRecommendations(8);
-        if (!cancelled) setRecommendedActivities((recommendations ?? []).filter((item) => item.templateId !== currentTemplateId));
-      } catch {
-        if (!cancelled) setRecommendedActivities([]);
-      } finally {
-        if (!cancelled) setLoadingRecommended(false);
-      }
-    }
-
-    loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  useEffect(() => {
-    if (!authLoading) loadMyReview();
-  }, [authLoading, loadMyReview]);
+    if (!authLoading) void loadAll();
+  }, [authLoading, loadAll]);
 
   useEffect(() => {
     if (!selectedSessionId) {
       setParticipantsPreview(null);
+      setParticipantsPreviewSessionId(null);
+      return;
+    }
+    if (participantsPreview && participantsPreviewSessionId === selectedSessionId) {
       return;
     }
     let cancelled = false;
@@ -842,9 +833,15 @@ export default function ActivityDetailsPage() {
       try {
         setParticipantsLoading(true);
         const data = await getParticipantsPreview(selectedSessionId);
-        if (!cancelled) setParticipantsPreview(data);
+        if (!cancelled) {
+          setParticipantsPreview(data);
+          setParticipantsPreviewSessionId(selectedSessionId);
+        }
       } catch {
-        if (!cancelled) setParticipantsPreview(null);
+        if (!cancelled) {
+          setParticipantsPreview(null);
+          setParticipantsPreviewSessionId(null);
+        }
       } finally {
         if (!cancelled) setParticipantsLoading(false);
       }
@@ -852,7 +849,7 @@ export default function ActivityDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSessionId]);
+  }, [selectedSessionId, participantsPreview, participantsPreviewSessionId]);
 
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
   const spotsLeft = useMemo(() => (selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null), [selectedSession]);
@@ -976,7 +973,7 @@ export default function ActivityDetailsPage() {
     return sessions.reduce((a, b) => (b.bookedCount > a.bookedCount ? b : a)).id;
   }, [sessions]);
 
-  const canWriteOrEditReview = !!user && !isGuideOwner && !!template;
+  const canWriteOrEditReview = !!user && !isGuideOwner && !!template && (reviewEligible || !!myReview);
 
   const openReviewModal = useCallback(() => {
     setReviewError(null);
@@ -1005,9 +1002,23 @@ export default function ActivityDetailsPage() {
       setBookingSuccessId(res.id);
       setBookingStep("success");
       await refreshMe();
-      const [tpl, sess] = await Promise.all([getPublicTemplateById(id), listPublicTemplateSessions(id)]);
-      setTemplate(tpl);
+      const sess = await listPublicTemplateSessions(id);
       setSessions(sess ?? []);
+      const refreshedSelected = sess?.find((session) => session.id === selectedSessionId)?.id ?? sess?.[0]?.id ?? null;
+      setSelectedSessionId(refreshedSelected);
+      if (refreshedSelected) {
+        try {
+          setParticipantsLoading(true);
+          const preview = await getParticipantsPreview(refreshedSelected);
+          setParticipantsPreview(preview);
+          setParticipantsPreviewSessionId(refreshedSelected);
+        } catch {
+          setParticipantsPreview(null);
+          setParticipantsPreviewSessionId(null);
+        } finally {
+          setParticipantsLoading(false);
+        }
+      }
     } catch (e: any) {
       setBookingError(e?.message ?? "Booking failed");
       setBookingStep("idle");
@@ -1032,7 +1043,11 @@ export default function ActivityDetailsPage() {
         await ReviewApi.createReviewForTemplate(templateId, payload);
       }
       setReviewModalOpen(false);
-      await Promise.all([loadAll(), loadMyReview()]);
+      const details = await getPublicActivityDetails(templateId);
+      setTemplate(details.template);
+      setMyReview(details.currentUserReview?.myReview ?? null);
+      setReviewEligible(Boolean(details.currentUserReview?.reviewEligible));
+      setInitialReviewsPage(details.reviews ?? null);
       setReviewReloadKey((v) => v + 1);
     } catch (err: any) {
       setReviewError(err?.response?.data?.message || err?.message || "Failed to submit review.");
@@ -1421,6 +1436,7 @@ export default function ActivityDetailsPage() {
                   canReview={canWriteOrEditReview}
                   userReviewId={myReview?.id ?? null}
                   onEditMyReview={canWriteOrEditReview ? openReviewModal : undefined}
+                  initialReviewsPage={initialReviewsPage}
                 />
               </section>
 

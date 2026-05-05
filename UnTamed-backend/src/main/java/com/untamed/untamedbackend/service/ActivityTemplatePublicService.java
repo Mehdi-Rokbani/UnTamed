@@ -7,6 +7,9 @@ import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -38,6 +41,21 @@ public class ActivityTemplatePublicService {
                 .map(t -> toCard(t, now))
                 .filter(card -> card.nextSession() != null)
                 .toList();
+    }
+
+    public PaginatedResponse<PublicTemplateCardResponse> listPage(int page, int size) {
+        Instant now = Instant.now();
+        Page<ActivityTemplate> templatePage = templateRepo.findByArchivedFalse(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        List<PublicTemplateCardResponse> cards = templatePage.getContent()
+                .stream()
+                .map(t -> toCard(t, now))
+                .filter(card -> card.nextSession() != null)
+                .toList();
+
+        return PaginatedResponse.from(templatePage, cards);
     }
 
     public PublicTemplateCardResponse get(String templateId) {
@@ -164,6 +182,112 @@ public class ActivityTemplatePublicService {
 
         return sortResults(cards, c.sort());
     }
+
+    public PaginatedResponse<PublicTemplateCardResponse> searchPage(TemplateSearchCriteria c, int page, int size) {
+        SearchQueryBuild build = buildSearchQuery(c);
+
+        if (build.empty()) {
+            return PaginatedResponse.of(List.of(), page, size, 0);
+        }
+
+        Query query = build.query();
+        long total = mongo.count(query, ActivityTemplate.class);
+
+        query.with(PageRequest.of(page, size, sortForSearch(c.sort())));
+
+        Instant now = Instant.now();
+        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class)
+                .stream()
+                .filter(t -> !t.isArchived())
+                .map(t -> toCard(t, now))
+                .filter(card -> card.nextSession() != null)
+                .toList();
+
+        return PaginatedResponse.of(sortResults(cards, c.sort()), page, size, total);
+    }
+
+    private SearchQueryBuild buildSearchQuery(TemplateSearchCriteria c) {
+        Query query = new Query();
+        List<Criteria> criteriaList = new ArrayList<>();
+
+        criteriaList.add(Criteria.where("archived").ne(true));
+
+        boolean hasAddressId = c.addressId() != null && !c.addressId().isBlank();
+        boolean hasQ = c.q() != null && !c.q().isBlank();
+
+        if (hasAddressId) {
+            criteriaList.add(Criteria.where("address_id").is(c.addressId()));
+        } else if (hasQ) {
+            List<String> addressIds = addressRepo
+                    .findTop10ByDisplayNameContainingIgnoreCaseOrderByUsesCountDesc(c.q())
+                    .stream()
+                    .map(Address::getId)
+                    .toList();
+
+            if (addressIds.isEmpty()) {
+                return new SearchQueryBuild(query, true);
+            }
+
+            criteriaList.add(Criteria.where("address_id").in(addressIds));
+        }
+
+        if (c.categoryIds() != null && !c.categoryIds().isEmpty()) {
+            List<String> cleanedCategoryIds = c.categoryIds()
+                    .stream()
+                    .filter(id -> id != null && !id.isBlank())
+                    .toList();
+
+            if (!cleanedCategoryIds.isEmpty()) {
+                criteriaList.add(Criteria.where("category_ids").in(cleanedCategoryIds));
+            }
+        }
+
+        if (c.difficulty() != null) {
+            criteriaList.add(Criteria.where("difficulty").is(c.difficulty()));
+        }
+
+        if (c.minPrice() != null || c.maxPrice() != null) {
+            Criteria priceCriteria = Criteria.where("price");
+
+            if (c.minPrice() != null) {
+                priceCriteria.gte(c.minPrice());
+            }
+
+            if (c.maxPrice() != null) {
+                priceCriteria.lte(c.maxPrice());
+            }
+
+            criteriaList.add(priceCriteria);
+        }
+
+        Set<String> templateIdsMatchingDate = findTemplateIdsMatchingDateRange(c.dateFrom(), c.dateTo());
+
+        if (templateIdsMatchingDate != null) {
+            if (templateIdsMatchingDate.isEmpty()) {
+                return new SearchQueryBuild(query, true);
+            }
+
+            criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
+        }
+
+        query.addCriteria(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])));
+        return new SearchQueryBuild(query, false);
+    }
+
+    private Sort sortForSearch(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        return switch (sort) {
+            case "priceAsc" -> Sort.by(Sort.Direction.ASC, "price");
+            case "priceDesc" -> Sort.by(Sort.Direction.DESC, "price");
+            case "rating" -> Sort.by(Sort.Direction.DESC, "rating.average");
+            default -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
+    }
+
+    private record SearchQueryBuild(Query query, boolean empty) {}
 
     private Set<String> findTemplateIdsMatchingDateRange(Instant dateFrom, Instant dateTo) {
         boolean hasDateFrom = dateFrom != null;

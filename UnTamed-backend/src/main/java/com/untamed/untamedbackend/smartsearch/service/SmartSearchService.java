@@ -3,6 +3,7 @@ package com.untamed.untamedbackend.smartsearch.service;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.model.ActivityTemplate;
+import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.recommendation.dto.RecommendationItemResponse;
 import com.untamed.untamedbackend.recommendation.util.VectorUtils;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
@@ -180,6 +181,20 @@ public class SmartSearchService {
         return scored.stream()
                 .map(item -> toResponse(item, nextSessionByTemplateId.get(item.template().getId())))
                 .collect(Collectors.toList());
+    }
+
+    public PaginatedResponse<RecommendationItemResponse> searchPage(SmartSearchRequest request, int page, int size) {
+        int originalLimit = request.getLimit() == null ? 10 : request.getLimit();
+        int requestedLimit = Math.min(50, Math.max(size, (page + 1) * size));
+        request.setLimit(requestedLimit);
+
+        List<RecommendationItemResponse> ranked = search(request);
+        request.setLimit(originalLimit);
+
+        int from = Math.min(page * size, ranked.size());
+        int to = Math.min(from + size, ranked.size());
+
+        return PaginatedResponse.of(ranked.subList(from, to), page, size, ranked.size());
     }
 
     private ScoredTemplate scoreTemplate(

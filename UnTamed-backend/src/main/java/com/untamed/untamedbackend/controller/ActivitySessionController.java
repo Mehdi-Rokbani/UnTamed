@@ -48,8 +48,15 @@ public class ActivitySessionController {
     // -------- Guide dashboard --------
 
     @GetMapping("/mine")
-    public List<ActivitySessionResponse> listMine() {
-        return sessionService.listMine(requireAuthEmail());
+    public Object listMine(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page == null && size == null) {
+            return sessionService.listMine(requireAuthEmail());
+        }
+
+        return sessionService.listMinePage(requireAuthEmail(), resolvePage(page), resolveSize(size, 20));
     }
 
     @GetMapping("/mine/past")
@@ -155,5 +162,13 @@ public class ActivitySessionController {
         }
 
         return auth.getName();
+    }
+
+    private int resolvePage(Integer page) {
+        return page == null ? 0 : Math.max(0, page);
+    }
+
+    private int resolveSize(Integer size, int defaultSize) {
+        return size == null ? defaultSize : Math.max(1, Math.min(size, 50));
     }
 }

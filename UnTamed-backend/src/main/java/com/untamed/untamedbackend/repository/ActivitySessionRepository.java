@@ -2,6 +2,8 @@ package com.untamed.untamedbackend.repository;
 
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.time.Instant;
@@ -15,6 +17,12 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
 
     // guide dashboard
     List<ActivitySession> findByGuideId(String guideId);
+
+    Page<ActivitySession> findByGuideId(String guideId, Pageable pageable);
+
+    Page<ActivitySession> findByTemplateIdAndGuideId(String templateId, String guideId, Pageable pageable);
+
+    List<ActivitySession> findByTemplateIdAndGuideIdOrderByStartAtAsc(String templateId, String guideId);
 
     // ownership check
     Optional<ActivitySession> findByIdAndGuideId(String id, String guideId);

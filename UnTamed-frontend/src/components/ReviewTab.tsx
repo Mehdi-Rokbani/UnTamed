@@ -1,150 +1,120 @@
-import { useEffect, useState } from "react";
-import * as ReviewApi from "../api/review.api";
-import * as ActivityApi from "../api/activity.api";
-import { ReviewCard } from "./ReviewCard";
+import { Link } from "react-router-dom";
+import type { ProfileReview } from "../api/user.api";
+import type { PaginatedResponse } from "../types/pagination";
 import styles from "../style/ReviewTab.module.css";
 
-type EnrichedReview = {
-    kind: "review";
-    id: string;
-    rating: number;
-    comment: string;
-    createdAt?: string;
-    activityTemplateId: string;
-    activityTitle: string;
-    coverImageUrl?: string;
-    governorate?: string;
+type ReviewTabProps = {
+  reviews: PaginatedResponse<ProfileReview> | null;
+  loading?: boolean;
+  loadingMore?: boolean;
+  error?: string | null;
+  onLoadMore?: () => void;
 };
 
-async function enrichReviews(reviews: any[]): Promise<EnrichedReview[]> {
-    const enriched = await Promise.all(
-        reviews.map(async (review) => {
-            try {
-                const template = await ActivityApi.getPublicTemplateById(review.activityTemplateId);
-                console.log("TEMPLATE", template);
+function formatDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
-                return {
-                    kind: "review" as const,
-                    id: review.id,
-                    rating: review.rating,
-                    comment: review.comment,
-                    createdAt: review.createdAt,
-                    activityTemplateId: review.activityTemplateId,
-                    activityTitle: template.title ?? "Adventure",
-                    coverImageUrl:
-                        template.coverImageUrl ??
-                        template.images?.[0]?.url ??
-                        undefined,
-                    governorate: template.governorate ?? "",
-                };
-            } catch {
-                return {
-                    kind: "review" as const,
-                    id: review.id,
-                    rating: review.rating,
-                    comment: review.comment,
-                    createdAt: review.createdAt,
-                    activityTemplateId: review.activityTemplateId,
-                    activityTitle: "Adventure",
-                    coverImageUrl: undefined,
-                    governorate: "",
-                };
-            }
-        })
-    );
+function Rating({ value }: { value: number }) {
+  return (
+    <span className={styles.rating} aria-label={`${value} out of 5 stars`}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <i key={index} className={index < value ? styles.starOn : ""}>
+          *
+        </i>
+      ))}
+      <strong>{value}.0</strong>
+    </span>
+  );
+}
 
-    return enriched;
+function SkeletonList() {
+  return (
+    <div className={styles.list} aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className={styles.skeletonRow}>
+          <span />
+          <div>
+            <i />
+            <i />
+            <i />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function EmptyState() {
-    return (
-        <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}>⭐</div>
-            <h3 className={styles.emptyTitle}>No reviews yet</h3>
-            <p className={styles.emptyText}>
-                Once you review an adventure, it will appear here.
-            </p>
-        </div>
-    );
+  return (
+    <div className={styles.emptyState}>
+      <div className={styles.emptyIcon}>*</div>
+      <h3>You have not written any reviews yet.</h3>
+      <p>Share your experience after your next adventure.</p>
+    </div>
+  );
 }
 
-function SkeletonCard() {
-    return (
-        <div className={styles.skeletonCard}>
-            <div className={styles.skeletonImage} />
-            <div className={styles.skeletonBody}>
-                <div className={styles.skeletonLine} style={{ width: "60%", height: 18 }} />
-                <div className={styles.skeletonLine} style={{ width: "35%", height: 14 }} />
-                <div className={styles.skeletonLine} style={{ width: "100%", height: 60 }} />
+export function ReviewTab({
+  reviews,
+  loading = false,
+  loadingMore = false,
+  error = null,
+  onLoadMore,
+}: ReviewTabProps) {
+  const reviewItems = [...(reviews?.content ?? [])].sort((a, b) => {
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return db - da;
+  });
+
+  if (loading) return <SkeletonList />;
+  if (error) return <div className={styles.errorState}>{error}</div>;
+  if (reviewItems.length === 0) return <EmptyState />;
+
+  return (
+    <div className={styles.wrapper}>
+      <div className={styles.feedHeader}>
+        <span>{reviewItems.length} of {reviews?.totalElements ?? reviewItems.length} reviews written</span>
+      </div>
+
+      <div className={styles.list}>
+        {reviewItems.map((review) => (
+          <article key={review.reviewId} className={styles.reviewRow}>
+            <div className={styles.reviewImage}>
+              {review.activityImageUrl ? (
+                <img src={review.activityImageUrl} alt={review.activityTitle} loading="lazy" />
+              ) : (
+                <span>*</span>
+              )}
             </div>
+            <div className={styles.reviewBody}>
+              <div className={styles.reviewTop}>
+                <h3>{review.activityTitle || "Adventure"}</h3>
+                <span>{formatDate(review.createdAt)}</span>
+              </div>
+              <Rating value={review.rating} />
+              <p>{review.comment}</p>
+              <Link to={`/activities/${review.templateId}`}>View activity</Link>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {reviews && !reviews.last && onLoadMore && (
+        <div className={styles.loadMoreWrap}>
+          <button type="button" onClick={onLoadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading reviews..." : "Load more reviews"}
+          </button>
         </div>
-    );
-}
-
-export function ReviewTab() {
-    const [reviews, setReviews] = useState<EnrichedReview[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        let alive = true;
-
-        async function load() {
-            setLoading(true);
-            setError(null);
-
-            try {
-                const raw = await ReviewApi.getMyReviews();
-                const enriched = await enrichReviews(raw);
-
-                enriched.sort((a, b) => {
-                    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                    return db - da;
-                });
-
-                if (alive) setReviews(enriched);
-            } catch (e: any) {
-                if (alive) setError(e?.message ?? "Failed to load reviews");
-            } finally {
-                if (alive) setLoading(false);
-            }
-        }
-
-        load();
-        return () => {
-            alive = false;
-        };
-    }, []);
-
-    if (loading) {
-        return (
-            <div className={styles.grid}>
-                <SkeletonCard />
-                <SkeletonCard />
-            </div>
-        );
-    }
-
-    if (error) {
-        return <div className={styles.errorState}>⚠ {error}</div>;
-    }
-
-    if (reviews.length === 0) return <EmptyState />;
-
-    return (
-        <div className={styles.wrapper}>
-            <div className={styles.feedHeader}>
-                <span className={styles.reviewCount}>
-                    {reviews.length} review{reviews.length !== 1 ? "s" : ""} written
-                </span>
-            </div>
-
-            <div className={styles.grid}>
-                {reviews.map((review, i) => (
-                    <ReviewCard key={review.id} review={review} index={i} />
-                ))}
-            </div>
-        </div>
-    );
+      )}
+    </div>
+  );
 }

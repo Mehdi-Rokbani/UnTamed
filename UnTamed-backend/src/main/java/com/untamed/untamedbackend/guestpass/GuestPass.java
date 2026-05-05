@@ -1,21 +1,34 @@
 package com.untamed.untamedbackend.guestpass;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
 @Document(collection = "guest_passes")
+@CompoundIndexes({
+        @CompoundIndex(name = "idx_guide_created", def = "{'guideId': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_guide_session", def = "{'guideId': 1, 'sessionId': 1}"),
+        @CompoundIndex(name = "idx_guide_attendance_created", def = "{'guideId': 1, 'attendanceStatus': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "idx_session_pass_number", def = "{'sessionId': 1, 'passNumber': 1}")
+})
 public class GuestPass {
 
     @Id
     private String id;
 
+    @Indexed
     private String bookingId;
+    @Indexed
     private String sessionId;
     private String activityTemplateId;
+    @Indexed
     private String guideId;
 
+    @Indexed(unique = true)
     private String token;
 
     private int passNumber;

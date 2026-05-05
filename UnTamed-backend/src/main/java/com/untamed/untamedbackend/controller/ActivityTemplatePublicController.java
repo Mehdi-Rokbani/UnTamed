@@ -22,12 +22,27 @@ public class ActivityTemplatePublicController {
     }
 
     @GetMapping
-    public List<PublicTemplateCardResponse> list() {
-        return publicService.list();
+    public Object list(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page == null && size == null) {
+            return publicService.list();
+        }
+
+        return publicService.listPage(resolvePage(page), resolveSize(size, 12));
+    }
+
+    private int resolvePage(Integer page) {
+        return page == null ? 0 : Math.max(0, page);
+    }
+
+    private int resolveSize(Integer size, int defaultSize) {
+        return size == null ? defaultSize : Math.max(1, Math.min(size, 50));
     }
 
     @GetMapping("/search")
-    public List<PublicTemplateCardResponse> search(
+    public Object search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String addressId,
             @RequestParam(required = false) List<String> categoryIds,
@@ -36,9 +51,11 @@ public class ActivityTemplatePublicController {
             @RequestParam(required = false) Difficulty difficulty,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateTo,
-            @RequestParam(required = false, defaultValue = "popular") String sort
+            @RequestParam(required = false, defaultValue = "popular") String sort,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return publicService.search(new TemplateSearchCriteria(
+        TemplateSearchCriteria criteria = new TemplateSearchCriteria(
                 q,
                 addressId,
                 categoryIds,
@@ -48,7 +65,13 @@ public class ActivityTemplatePublicController {
                 dateFrom,
                 dateTo,
                 sort
-        ));
+        );
+
+        if (page == null && size == null) {
+            return publicService.search(criteria);
+        }
+
+        return publicService.searchPage(criteria, resolvePage(page), resolveSize(size, 12));
     }
 
     @GetMapping("/{id}")

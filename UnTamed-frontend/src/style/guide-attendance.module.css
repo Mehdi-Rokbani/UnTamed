@@ -83,6 +83,12 @@
   box-shadow: 0 12px 24px rgba(28, 94, 58, 0.16);
 }
 
+.refreshBtn:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .clearBtn,
 .actionLink {
   border: 1px solid var(--line);
@@ -274,6 +280,22 @@
   border-radius: 24px;
   background: #fffdf8;
   box-shadow: 0 16px 36px rgba(23, 32, 27, 0.045);
+}
+
+.historyMeta {
+  max-width: 1180px;
+  margin: 0 auto 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.loadMoreWrap {
+  display: flex;
+  justify-content: center;
+  max-width: 1180px;
+  margin: 22px auto 0;
 }
 
 .monthGroup {

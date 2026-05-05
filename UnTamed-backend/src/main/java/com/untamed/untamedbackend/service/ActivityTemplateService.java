@@ -8,6 +8,9 @@ import com.untamed.untamedbackend.model.*;
 import com.untamed.untamedbackend.recommendation.n8n.N8nWebhookService;
 import com.untamed.untamedbackend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -48,6 +51,21 @@ public class ActivityTemplateService {
                 .stream()
                 .map(this::toTemplateResponse)
                 .toList();
+    }
+
+    public PaginatedResponse<ActivityTemplateResponse> listMineTemplatesPage(String authEmail, int page, int size) {
+        User guide = getGuideByEmail(authEmail);
+        Page<ActivityTemplate> templatePage = templateRepo.findByGuideIdAndArchivedFalse(
+                guide.getId(),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        List<ActivityTemplateResponse> content = templatePage.getContent()
+                .stream()
+                .map(this::toTemplateResponse)
+                .toList();
+
+        return PaginatedResponse.from(templatePage, content);
     }
 
     public ActivityTemplateResponse getTemplate(String templateId, String authEmail) {

@@ -1,434 +1,281 @@
-import { useEffect, useState, useMemo } from "react";
-import * as BookingApi from "../api/booking.api";
-import * as ReviewApi from "../api/review.api";
-import * as ActivityApi from "../api/activity.api";
-import { TripCard } from "./TripCard";
-import { ReviewCard } from "./ReviewCard";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import type { ProfileCompletedTrip, ProfileReview } from "../api/user.api";
+import type { PaginatedResponse } from "../types/pagination";
 import styles from "../style/ActivityTab.module.css";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export type EnrichedTrip = {
-    kind: "trip";
-    bookingId: string;
-    sessionId: string;
-    numberOfPeople: number;
-    date: string;
-    location: string;
-    title: string;
-    coverImageUrl?: string;
-    activitySlug?: string;
+  kind: "trip";
+  bookingId: string;
+  sessionId: string;
+  numberOfPeople: number;
+  date: string;
+  location: string;
+  title: string;
+  coverImageUrl?: string;
+  activitySlug?: string;
 };
 
 export type EnrichedReview = {
-    kind: "review";
-    id: string;
-    rating: number;
-    comment: string;
-    createdAt?: string;
-    activityTemplateId: string;
-    activityTitle: string;
-    coverImageUrl?: string;
-    governorate?: string;
+  kind: "review";
+  id: string;
+  rating: number;
+  comment: string;
+  createdAt?: string;
+  activityTemplateId: string;
+  activityTitle: string;
+  coverImageUrl?: string;
+  governorate?: string;
 };
 
 type ActivityItem = EnrichedTrip | EnrichedReview;
 type ActivityFilter = "all" | "trips" | "reviews";
 
-const PAGE_SIZE = 6;
-
-// ── Data helpers ──────────────────────────────────────────────────────────────
-
-async function fetchSession(sessionId: string): Promise<any> {
-    const { data } = await (await import("../api/http")).http.get<any>(
-        `/api/sessions/${sessionId}`,
-        { withCredentials: true }
-    );
-    return data;
-}
-
-function resolveTemplateId(session: any): string | undefined {
-    return (
-        session.activityTemplateId ??
-        session.templateId ??
-        session.activityId ??
-        session.template?.id ??
-        session.activity?.id ??
-        undefined
-    );
-}
-
-async function enrichBookings(
-    bookings: BookingApi.Booking[]
-): Promise<EnrichedTrip[]> {
-    const completed = bookings.filter((b) => b.status === "COMPLETED");
-    const enriched = await Promise.all(
-        completed.map(async (booking): Promise<EnrichedTrip | null> => {
-            try {
-                const session = await fetchSession(booking.sessionId);
-                const templateId = resolveTemplateId(session);
-
-                if (!templateId) {
-                    console.warn(
-                        `[ActivityTab] Session "${booking.sessionId}" has no resolvable template ID.\n` +
-                        `Raw session keys: ${Object.keys(session).join(", ")}`
-                    );
-                    return {
-                        kind: "trip",
-                        bookingId: booking.id,
-                        sessionId: booking.sessionId,
-                        numberOfPeople: booking.numberOfPeople,
-                        date: session.date ?? session.startDate ?? session.scheduledAt ?? "",
-                        location:
-                            session.location ??
-                            session.meetingPoint ??
-                            session.address ??
-                            "Location TBD",
-                        title: "Adventure",
-                        coverImageUrl: undefined,
-                        activitySlug: undefined,
-                    };
-                }
-
-                const template =
-                    await ActivityApi.getPublicTemplateById(templateId);
-                console.log("TEMPLATE", template);
-
-                return {
-                    kind: "trip",
-                    bookingId: booking.id,
-                    sessionId: booking.sessionId,
-                    numberOfPeople: booking.numberOfPeople,
-                    date: session.date ?? session.startDate ?? session.scheduledAt ?? "",
-                    location:
-                        session.location ??
-                        session.meetingPoint ??
-                        session.address ??
-                        "",
-                    title: template.title ?? "Adventure",
-                    coverImageUrl: template.coverImageUrl ?? undefined,
-                    thumbnail:
-                        template.images?.[0]?.url ??
-                        template.coverImageUrl ??
-                        undefined,
-                    activitySlug: template.id,
-                };
-            } catch (err) {
-                console.error(
-                    `[ActivityTab] Failed to enrich booking ${booking.id}:`,
-                    err
-                );
-                return null;
-            }
-        })
-    );
-    return enriched.filter(Boolean) as EnrichedTrip[];
-}
-
-async function enrichReviews(reviews: any[]): Promise<EnrichedReview[]> {
-    const enriched = await Promise.all(
-        reviews.map(async (review): Promise<EnrichedReview> => {
-            try {
-                const template = await ActivityApi.getPublicTemplateById(
-                    review.activityTemplateId
-                );
-                return {
-                    kind: "review",
-                    id: review.id,
-                    rating: review.rating,
-                    comment: review.comment,
-                    createdAt: review.createdAt,
-                    activityTemplateId: review.activityTemplateId,
-                    activityTitle: template.title ?? "Adventure",
-                    coverImageUrl:
-                        template.coverImageUrl ??
-                        template.images?.[0]?.url ??
-                        undefined,
-                    governorate: template.governorate ?? "",
-                };
-            } catch {
-                return {
-                    kind: "review",
-                    id: review.id,
-                    rating: review.rating,
-                    comment: review.comment,
-                    createdAt: review.createdAt,
-                    activityTemplateId: review.activityTemplateId,
-                    activityTitle: "Adventure",
-                    coverImageUrl: undefined,
-                    governorate: "",
-                };
-            }
-        })
-    );
-    return enriched;
-}
-
-// ── Skeleton loader ───────────────────────────────────────────────────────────
-
-function SkeletonCard() {
-    return (
-        <div className={styles.skeletonCard}>
-            <div className={styles.skeletonImage} />
-            <div className={styles.skeletonBody}>
-                <div className={styles.skeletonLine} style={{ width: "65%", height: 20 }} />
-                <div className={styles.skeletonLine} style={{ width: "40%", height: 14 }} />
-                <div className={styles.skeletonLine} style={{ width: "55%", height: 14 }} />
-            </div>
-        </div>
-    );
-}
-
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-function EmptyState({ filter }: { filter: ActivityFilter }) {
-    const content = {
-        all: {
-            title: "No activity yet",
-            text: "Your trips and reviews will appear here once you start exploring.",
-        },
-        trips: {
-            title: "No trips yet",
-            text: "Complete an adventure and it'll show up here — your personal trail log.",
-        },
-        reviews: {
-            title: "No reviews yet",
-            text: "Once you review an adventure, it will appear here.",
-        },
-    }[filter];
-
-    return (
-        <div className={styles.emptyState}>
-            <div className={styles.emptyIllustration}>
-                <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle
-                        cx="40"
-                        cy="40"
-                        r="38"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 3"
-                    />
-                    <path
-                        d="M24 52 L32 38 L38 46 L46 32 L56 52 Z"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                    />
-                    <circle cx="28" cy="30" r="4" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-            </div>
-            <h3 className={styles.emptyTitle}>{content.title}</h3>
-            <p className={styles.emptyText}>{content.text}</p>
-        </div>
-    );
-}
-
-// ── Segmented control ─────────────────────────────────────────────────────────
-
-type SegmentedControlProps = {
-    filter: ActivityFilter;
-    onChange: (f: ActivityFilter) => void;
-    counts: { all: number; trips: number; reviews: number };
+type ActivityTabProps = {
+  trips: PaginatedResponse<ProfileCompletedTrip> | null;
+  reviews: PaginatedResponse<ProfileReview> | null;
+  loading?: boolean;
+  error?: string | null;
+  loadingMoreTrips?: boolean;
+  loadingMoreReviews?: boolean;
+  onLoadMoreTrips?: () => void;
+  onLoadMoreReviews?: () => void;
 };
 
-function SegmentedControl({ filter, onChange, counts }: SegmentedControlProps) {
-    const options: { key: ActivityFilter; label: string; count: number }[] = [
-        { key: "all", label: "All", count: counts.all },
-        { key: "trips", label: "Trips", count: counts.trips },
-        { key: "reviews", label: "Reviews", count: counts.reviews },
-    ];
+function Icon({ name }: { name: "mountain" | "star" | "compass" | "chevron" }) {
+  const paths = {
+    mountain: <path d="m3 19 6-10 4 6 3-4 5 8H3Z" />,
+    star: <path d="m12 2 2.9 6 6.6.9-4.8 4.6 1.1 6.5-5.8-3.1L6.2 20l1.1-6.5L2.5 8.9 9.1 8 12 2Z" />,
+    compass: <path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3 6.3-2.1ZM12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />,
+    chevron: <path d="m9 18 6-6-6-6" />,
+  };
 
-    return (
-        <div className={styles.segmentedControl} role="tablist" aria-label="Activity filter">
-            {options.map((o) => (
-                <button
-                    key={o.key}
-                    role="tab"
-                    aria-selected={filter === o.key}
-                    className={`${styles.segment} ${filter === o.key ? styles.segmentActive : ""}`}
-                    onClick={() => onChange(o.key)}
-                >
-                    {o.label}
-                    <span className={`${styles.segmentCount} ${filter === o.key ? styles.segmentCountActive : ""}`}>
-                        {o.count}
-                    </span>
-                </button>
-            ))}
-        </div>
-    );
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {paths[name]}
+    </svg>
+  );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function formatDate(value?: string) {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
-export function ActivityTab() {
-    const [trips, setTrips] = useState<EnrichedTrip[]>([]);
-    const [reviews, setReviews] = useState<EnrichedReview[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<ActivityFilter>("all");
-    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+function toTrip(trip: ProfileCompletedTrip): EnrichedTrip {
+  return {
+    kind: "trip",
+    bookingId: trip.bookingId,
+    sessionId: trip.sessionId,
+    numberOfPeople: trip.numberOfPeople,
+    date: trip.sessionStartAt ?? "",
+    location: trip.addressDisplayName || trip.governorate || "Location TBD",
+    title: trip.activityTitle || "Adventure",
+    coverImageUrl: trip.activityImageUrl ?? undefined,
+    activitySlug: trip.templateId ?? undefined,
+  };
+}
 
-    useEffect(() => {
-        let alive = true;
+function toReview(review: ProfileReview): EnrichedReview {
+  return {
+    kind: "review",
+    id: review.reviewId,
+    rating: review.rating,
+    comment: review.comment,
+    createdAt: review.createdAt ?? undefined,
+    activityTemplateId: review.templateId,
+    activityTitle: review.activityTitle || "Adventure",
+    coverImageUrl: review.activityImageUrl ?? undefined,
+    governorate: review.governorate ?? undefined,
+  };
+}
 
-        async function load() {
-            setLoading(true);
-            setError(null);
-            try {
-                // Load bookings and reviews in parallel
-                const [bookings, rawReviews] = await Promise.all([
-                    BookingApi.listMyBookings(),
-                    ReviewApi.getMyReviews(),
-                ]);
+function Rating({ value }: { value: number }) {
+  return (
+    <span className={styles.rating} aria-label={`${value} out of 5 stars`}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <i key={index} className={index < value ? styles.starOn : ""}>
+          *
+        </i>
+      ))}
+    </span>
+  );
+}
 
-                const [enrichedTrips, enrichedReviews] = await Promise.all([
-                    enrichBookings(bookings),
-                    enrichReviews(rawReviews),
-                ]);
+function FeedImage({ src, alt }: { src?: string; alt: string }) {
+  return (
+    <div className={styles.feedImage}>
+      {src ? <img src={src} alt={alt} loading="lazy" /> : <Icon name="mountain" />}
+    </div>
+  );
+}
 
-                if (alive) {
-                    setTrips(
-                        enrichedTrips.sort(
-                            (a, b) =>
-                                new Date(b.date).getTime() - new Date(a.date).getTime()
-                        )
-                    );
-                    setReviews(
-                        enrichedReviews.sort((a, b) => {
-                            const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                            const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                            return db - da;
-                        })
-                    );
-                }
-            } catch (e: any) {
-                if (alive) setError(e?.message ?? "Failed to load activity");
-            } finally {
-                if (alive) setLoading(false);
-            }
-        }
-
-        load();
-        return () => {
-            alive = false;
-        };
-    }, []);
-
-    // Merged + sorted feed for "all" view
-    const allItems = useMemo((): ActivityItem[] => {
-        const merged: ActivityItem[] = [...trips, ...reviews];
-        merged.sort((a, b) => {
-            const dateA = a.kind === "trip" ? a.date : a.createdAt ?? "";
-            const dateB = b.kind === "trip" ? b.date : b.createdAt ?? "";
-            return new Date(dateB).getTime() - new Date(dateA).getTime();
-        });
-        return merged;
-    }, [trips, reviews]);
-
-    const filteredItems = useMemo((): ActivityItem[] => {
-        if (filter === "trips") return trips;
-        if (filter === "reviews") return reviews;
-        return allItems;
-    }, [filter, trips, reviews, allItems]);
-
-    const handleFilterChange = (f: ActivityFilter) => {
-        setFilter(f);
-        setVisibleCount(PAGE_SIZE);
-    };
-
-    const visibleItems = filteredItems.slice(0, visibleCount);
-    const remaining = filteredItems.length - visibleCount;
-    const hasMore = remaining > 0;
-
-    // ── Loading state ────────────────────────────────────────────────────────
-
-    if (loading) {
-        return (
-            <div className={styles.wrapper}>
-                <div className={styles.feedHeader}>
-                    <div className={styles.segmentedControlSkeleton}>
-                        {[80, 72, 96].map((w, i) => (
-                            <div key={i} className={styles.segmentSkeleton} style={{ width: w }} />
-                        ))}
-                    </div>
-                </div>
-                <div className={styles.grid}>
-                    {Array.from({ length: 6 }).map((_, i) => (
-                        <SkeletonCard key={i} />
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
-    // ── Error state ──────────────────────────────────────────────────────────
-
-    if (error) {
-        return (
-            <div className={styles.errorState}>
-                <span>⚠</span> {error}
-            </div>
-        );
-    }
-
-    // ── Render ───────────────────────────────────────────────────────────────
-
-    return (
-        <div className={styles.wrapper}>
-            <div className={styles.feedHeader}>
-                <SegmentedControl
-                    filter={filter}
-                    onChange={handleFilterChange}
-                    counts={{
-                        all: allItems.length,
-                        trips: trips.length,
-                        reviews: reviews.length,
-                    }}
-                />
-            </div>
-
-            {filteredItems.length === 0 ? (
-                <EmptyState filter={filter} />
-            ) : (
-                <>
-                    <div className={styles.grid}>
-                        {visibleItems.map((item, i) =>
-                            item.kind === "trip" ? (
-                                <TripCard key={item.bookingId} trip={item} index={i} />
-                            ) : (
-                                <ReviewCard key={item.id} review={item} index={i} />
-                            )
-                        )}
-                    </div>
-
-                    {hasMore && (
-                        <div className={styles.loadMoreWrapper}>
-                            <button
-                                className={styles.loadMoreButton}
-                                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                            >
-                                Show {Math.min(remaining, PAGE_SIZE)} more
-                                <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </button>
-                            <span className={styles.remainingCount}>
-                                {remaining} item{remaining !== 1 ? "s" : ""} remaining
-                            </span>
-                        </div>
-                    )}
-                </>
-            )}
+function TripFeedCard({ trip }: { trip: EnrichedTrip }) {
+  return (
+    <article className={styles.feedCard}>
+      <FeedImage src={trip.coverImageUrl} alt={trip.title} />
+      <div className={styles.feedBody}>
+        <div className={styles.feedTopline}>
+          <span className={styles.statusPill}>Completed</span>
+          <span>{formatDate(trip.date)}</span>
         </div>
-    );
+        <h3>{trip.title}</h3>
+        <p>{trip.location}</p>
+        <div className={styles.feedMeta}>
+          <span>{trip.numberOfPeople} {trip.numberOfPeople === 1 ? "traveller" : "travellers"}</span>
+          {trip.activitySlug && (
+            <Link to={`/activities/${trip.activitySlug}`} className={styles.feedLink}>
+              View activity <Icon name="chevron" />
+            </Link>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ReviewFeedCard({ review }: { review: EnrichedReview }) {
+  return (
+    <article className={`${styles.feedCard} ${styles.reviewFeedCard}`}>
+      <FeedImage src={review.coverImageUrl} alt={review.activityTitle} />
+      <div className={styles.feedBody}>
+        <div className={styles.feedTopline}>
+          <Rating value={review.rating} />
+          <span>{formatDate(review.createdAt)}</span>
+        </div>
+        <h3>{review.activityTitle}</h3>
+        <p className={styles.reviewComment}>{review.comment}</p>
+        <div className={styles.feedMeta}>
+          <span>{review.governorate || "Adventure review"}</span>
+          <Link to={`/activities/${review.activityTemplateId}`} className={styles.feedLink}>
+            View activity <Icon name="chevron" />
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function SkeletonList() {
+  return (
+    <div className={styles.feedList} aria-hidden="true">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className={styles.skeletonRow}>
+          <span />
+          <div>
+            <i />
+            <i />
+            <i />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className={styles.emptyState}>
+      <Icon name="compass" />
+      <h3>No adventures logged yet.</h3>
+      <p>Time to get out there.</p>
+      <Link to="/activities">Browse activities</Link>
+    </div>
+  );
+}
+
+export function ActivityTab({
+  trips,
+  reviews,
+  loading = false,
+  error = null,
+  loadingMoreTrips = false,
+  loadingMoreReviews = false,
+  onLoadMoreTrips,
+  onLoadMoreReviews,
+}: ActivityTabProps) {
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+
+  const tripItems = useMemo(
+    () => (trips?.content ?? []).map(toTrip),
+    [trips]
+  );
+  const reviewItems = useMemo(
+    () => (reviews?.content ?? []).map(toReview),
+    [reviews]
+  );
+
+  const allItems = useMemo((): ActivityItem[] => {
+    return [...tripItems, ...reviewItems].sort((a, b) => {
+      const dateA = a.kind === "trip" ? a.date : a.createdAt ?? "";
+      const dateB = b.kind === "trip" ? b.date : b.createdAt ?? "";
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
+  }, [tripItems, reviewItems]);
+
+  const filteredItems = filter === "trips" ? tripItems : filter === "reviews" ? reviewItems : allItems;
+  const canLoadTrips = Boolean(trips && !trips.last && onLoadMoreTrips);
+  const canLoadReviews = Boolean(reviews && !reviews.last && onLoadMoreReviews);
+
+  if (loading) return <SkeletonList />;
+  if (error) return <div className={styles.errorState}>{error}</div>;
+
+  return (
+    <div className={styles.wrapper}>
+      <div className={styles.filterStrip} role="tablist" aria-label="Activity filter">
+        {[
+          ["all", "All", (trips?.totalElements ?? tripItems.length) + (reviews?.totalElements ?? reviewItems.length)],
+          ["trips", "Trips", trips?.totalElements ?? tripItems.length],
+          ["reviews", "Reviews", reviews?.totalElements ?? reviewItems.length],
+        ].map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={filter === key}
+            className={filter === key ? styles.filterActive : ""}
+            onClick={() => setFilter(key as ActivityFilter)}
+          >
+            {label}
+            <span>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {filteredItems.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className={styles.feedList}>
+          {filteredItems.map((item) =>
+            item.kind === "trip" ? (
+              <TripFeedCard key={item.bookingId} trip={item} />
+            ) : (
+              <ReviewFeedCard key={item.id} review={item} />
+            )
+          )}
+        </div>
+      )}
+
+      {(filter !== "reviews" && canLoadTrips) || (filter !== "trips" && canLoadReviews) ? (
+        <div className={styles.loadMoreWrapper}>
+          {filter !== "reviews" && canLoadTrips && (
+            <button type="button" onClick={onLoadMoreTrips} disabled={loadingMoreTrips}>
+              {loadingMoreTrips ? "Loading adventures..." : "Load more adventures"}
+            </button>
+          )}
+          {filter !== "trips" && canLoadReviews && (
+            <button type="button" onClick={onLoadMoreReviews} disabled={loadingMoreReviews}>
+              {loadingMoreReviews ? "Loading reviews..." : "Load more reviews"}
+            </button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }

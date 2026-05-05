@@ -23,7 +23,11 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -865,6 +869,58 @@ public class BookingService {
     public List<BookingWithDetailsDto> listMineWithDetails(String userId) {
         List<Booking> bookings = bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
+        Map<String, ActivitySession> sessionsById = activitySessionRepository
+                .findAllById(bookings.stream().map(Booking::getSessionId).collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(ActivitySession::getId, Function.identity()));
+
+        Set<String> templateIds = sessionsById.values()
+                .stream()
+                .map(ActivitySession::getTemplateId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<String, ActivityTemplate> templatesById = activityTemplateRepository
+                .findAllById(templateIds)
+                .stream()
+                .collect(Collectors.toMap(ActivityTemplate::getId, Function.identity()));
+
+        Set<String> addressIds = templatesById.values()
+                .stream()
+                .map(ActivityTemplate::getAddressId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<String, Address> addressesById = addressRepository
+                .findAllById(addressIds)
+                .stream()
+                .collect(Collectors.toMap(Address::getId, Function.identity()));
+
+        List<String> completedBookingIds = bookings.stream()
+                .filter(booking -> booking.getStatus() == BookingStatus.COMPLETED)
+                .map(Booking::getId)
+                .toList();
+
+        List<Review> existingReviews = completedBookingIds.isEmpty()
+                ? List.of()
+                : reviewRepository.findByReviewerIdAndBookingIdIn(userId, completedBookingIds);
+
+        if (!templateIds.isEmpty()) {
+            existingReviews = new java.util.ArrayList<>(existingReviews);
+            existingReviews.addAll(reviewRepository.findByReviewerIdAndActivityTemplateIdIn(userId, List.copyOf(templateIds)));
+        }
+
+        Map<String, Review> reviewsByTemplateId = existingReviews.isEmpty()
+                ? Map.of()
+                : existingReviews.stream()
+                .collect(Collectors.toMap(
+                        Review::getActivityTemplateId,
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
+
+        Instant now = Instant.now();
+
         return bookings.stream().map(b -> {
             String activityTitle = null;
             String activityTemplateId = null;
@@ -877,18 +933,18 @@ public class BookingService {
             Double longitude = null;
             BigDecimal pricePerPerson = null;
             BigDecimal totalPrice = null;
+            boolean reviewEligible = false;
+            boolean alreadyReviewed = false;
+            String reviewId = null;
+            String reviewReason = null;
 
-            ActivitySession session = activitySessionRepository
-                    .findById(b.getSessionId())
-                    .orElse(null);
+            ActivitySession session = sessionsById.get(b.getSessionId());
 
             if (session != null) {
                 sessionStartAt = session.getStartAt();
                 activityTemplateId = session.getTemplateId();
 
-                ActivityTemplate template = activityTemplateRepository
-                        .findById(activityTemplateId)
-                        .orElse(null);
+                ActivityTemplate template = templatesById.get(activityTemplateId);
 
                 if (template != null) {
                     activityTitle = template.getTitle();
@@ -908,9 +964,7 @@ public class BookingService {
                     }
 
                     if (template.getAddressId() != null) {
-                        Address address = addressRepository
-                                .findById(template.getAddressId())
-                                .orElse(null);
+                        Address address = addressesById.get(template.getAddressId());
 
                         if (address != null) {
                             displayName = address.getDisplayName();
@@ -920,7 +974,22 @@ public class BookingService {
                             longitude = address.getLongitude();
                         }
                     }
+
+                    ReviewEligibilitySnapshot eligibility = reviewEligibilityForDetails(
+                            b,
+                            session,
+                            template,
+                            reviewsByTemplateId.get(template.getId()),
+                            userId,
+                            now
+                    );
+                    reviewEligible = eligibility.reviewEligible();
+                    alreadyReviewed = eligibility.alreadyReviewed();
+                    reviewId = eligibility.reviewId();
+                    reviewReason = eligibility.reviewReason();
                 }
+            } else if (b.getStatus() == BookingStatus.COMPLETED) {
+                reviewReason = "Session not found.";
             }
 
             return new BookingWithDetailsDto(
@@ -943,10 +1012,52 @@ public class BookingService {
                     latitude,
                     longitude,
                     pricePerPerson,
-                    totalPrice
+                    totalPrice,
+                    reviewEligible,
+                    alreadyReviewed,
+                    reviewId,
+                    reviewReason
             );
         }).toList();
     }
+
+    private ReviewEligibilitySnapshot reviewEligibilityForDetails(
+            Booking booking,
+            ActivitySession session,
+            ActivityTemplate template,
+            Review existingReview,
+            String userId,
+            Instant now
+    ) {
+        if (template.getGuideId() != null && template.getGuideId().equals(userId)) {
+            return new ReviewEligibilitySnapshot(false, false, null, "Guide cannot review their own activity.");
+        }
+
+        if (booking.getStatus() != BookingStatus.COMPLETED) {
+            return new ReviewEligibilitySnapshot(false, false, null, null);
+        }
+
+        if (booking.isAttendanceMarkedAbsent()) {
+            return new ReviewEligibilitySnapshot(false, false, null, "Absent participants cannot leave reviews.");
+        }
+
+        if (session.getStartAt() == null || !session.getStartAt().isBefore(now)) {
+            return new ReviewEligibilitySnapshot(false, false, null, "You can review only after the session date has passed.");
+        }
+
+        if (existingReview != null) {
+            return new ReviewEligibilitySnapshot(false, true, existingReview.getId(), "You already reviewed this activity.");
+        }
+
+        return new ReviewEligibilitySnapshot(true, false, null, "Eligible to review.");
+    }
+
+    private record ReviewEligibilitySnapshot(
+            boolean reviewEligible,
+            boolean alreadyReviewed,
+            String reviewId,
+            String reviewReason
+    ) {}
 
     public RefundPreviewResponse previewCancelBooking(String bookingId, String userId) {
         Booking b = bookingRepository.findById(bookingId)

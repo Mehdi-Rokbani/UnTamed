@@ -8,16 +8,17 @@ import { useAuth } from "../auth/auth.store";
 import styles from "../style/home.module.css";
 import {
   type AddressSuggestion,
-  listPublicTemplates,
-  searchPublicTemplates,
+  listPublicTemplatesPage,
+  searchPublicTemplatesPage,
 } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
 import { SmartDiscoveryBar } from "../components/search/Smartdiscoverybar";
-import { semanticSearch } from "../api/search.api";
+import { semanticSearchPage, type SemanticSearchItem } from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";
+const PAGE_SIZE = 12;
 
 const QUICK_SUGGESTIONS = [
   "Hiking",
@@ -30,11 +31,57 @@ const QUICK_SUGGESTIONS = [
   "Trekking",
 ];
 
+function semanticItemToTemplateCard(item: SemanticSearchItem): PublicTemplateCard {
+  return {
+    id: item.templateId,
+    title: item.title,
+    description: item.description,
+    difficulty: ((item.difficulty ?? "EASY").toUpperCase() as Difficulty),
+    price: item.price ?? 0,
+    tags: [],
+    coverImageUrl: item.coverImageUrl ?? null,
+    rating: {
+      average: item.ratingAverage ?? 0,
+      count: item.ratingCount ?? 0,
+    },
+    nextSession: item.nextSessionDate
+      ? {
+          sessionId: `next-${item.templateId}`,
+          date: item.nextSessionDate,
+          capacity: 0,
+          bookedCount: 0,
+        }
+      : null,
+    upcomingSessionsCount: item.nextSessionDate ? 1 : 0,
+    images: item.coverImageUrl
+      ? [
+          {
+            url: item.coverImageUrl,
+            publicId: null,
+            alt: item.title,
+            cover: true,
+            order: 0,
+          },
+        ]
+      : [],
+    addressDisplayName: null,
+    governorate: null,
+    latitude: null,
+    longitude: null,
+    totalBookedCount: 0,
+    guide: null,
+  };
+}
+
 export default function HomePage() {
   const { user } = useAuth();
 
   const [state, setState] = useState<LoadState>("idle");
   const [templates, setTemplates] = useState<PublicTemplateCard[]>([]);
+  const [page, setPage] = useState(0);
+  const [lastPage, setLastPage] = useState(true);
+  const [totalElements, setTotalElements] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [queryInput, setQueryInput] = useState("");
@@ -53,6 +100,7 @@ export default function HomePage() {
   const [heroVisible, setHeroVisible] = useState(true);
   const resultsRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -119,25 +167,33 @@ export default function HomePage() {
     ]
   );
 
-  const hasLocationFilter = Boolean(selectedAddressId);
   const isAiSearch = queryInput.trim().length > 0;
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchTemplatesPage = async (
+    pageToLoad: number,
+    mode: "replace" | "append",
+    requestSeq: number
+  ) => {
+    const trimmedQuery = queryInput.trim();
 
-    const handle = window.setTimeout(async () => {
+    if (mode === "replace") {
       setState("loading");
+    } else {
+      setLoadingMore(true);
+    }
 
-      try {
-        const trimmedQuery = queryInput.trim();
+    try {
+      let content: PublicTemplateCard[] = [];
+      let responsePage = pageToLoad;
+      let responseLast = true;
+      let responseTotal = 0;
 
-        let data: PublicTemplateCard[] = [];
-
-        if (trimmedQuery) {
-          const results = await semanticSearch({
+      if (trimmedQuery) {
+        const results = await semanticSearchPage(
+          {
             query: trimmedQuery,
             addressId: selectedAddressId || undefined,
-            limit: 12,
+            limit: PAGE_SIZE,
             difficulty: difficulty === "All" ? undefined : difficulty,
             categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
             minPrice: minPrice ? Number(minPrice) : undefined,
@@ -145,55 +201,25 @@ export default function HomePage() {
             dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
             dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
             sort,
-          });
+          },
+          pageToLoad,
+          PAGE_SIZE
+        );
 
-          const filteredResults =
-            categoryIds.length > 1
-              ? results.filter((r) =>
-                  categoryIds.every((id) => (r.categoryIds ?? []).includes(id))
-                )
-              : results;
+        const filteredResults =
+          categoryIds.length > 1
+            ? results.content.filter((r) =>
+                categoryIds.every((id) => (r.categoryIds ?? []).includes(id))
+              )
+            : results.content;
 
-          data = filteredResults.map((r) => ({
-            id: r.templateId,
-            title: r.title,
-            description: r.description,
-            difficulty: ((r.difficulty ?? "EASY").toUpperCase() as Difficulty),
-            price: r.price ?? 0,
-            tags: [],
-            coverImageUrl: r.coverImageUrl ?? null,
-            rating: {
-              average: r.ratingAverage ?? 0,
-              count: r.ratingCount ?? 0,
-            },
-            nextSession: r.nextSessionDate
-              ? {
-                  sessionId: `next-${r.templateId}`,
-                  date: r.nextSessionDate,
-                  capacity: 0,
-                  bookedCount: 0,
-                }
-              : null,
-            upcomingSessionsCount: r.nextSessionDate ? 1 : 0,
-            images: r.coverImageUrl
-              ? [
-                  {
-                    url: r.coverImageUrl,
-                    thumbnailUrl: r.coverImageUrl,
-                    cover: true,
-                    order: 0,
-                  },
-                ]
-              : [],
-            addressDisplayName: null,
-            governorate: null,
-            latitude: null,
-            longitude: null,
-            totalBookedCount: 0,
-            guide: null,
-          }));
-        } else if (hasActiveFilters) {
-          data = await searchPublicTemplates({
+        content = filteredResults.map(semanticItemToTemplateCard);
+        responsePage = results.page;
+        responseLast = results.last;
+        responseTotal = results.totalElements;
+      } else if (hasActiveFilters) {
+        const results = await searchPublicTemplatesPage(
+          {
             addressId: selectedAddressId || undefined,
             categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
             minPrice: minPrice ? Number(minPrice) : undefined,
@@ -202,26 +228,68 @@ export default function HomePage() {
             dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
             dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
             sort,
-          });
-        } else {
-          data = await listPublicTemplates();
+          },
+          pageToLoad,
+          PAGE_SIZE
+        );
+
+        content = results.content;
+        responsePage = results.page;
+        responseLast = results.last;
+        responseTotal = results.totalElements;
+      } else {
+        const results = await listPublicTemplatesPage(pageToLoad, PAGE_SIZE);
+        content = results.content;
+        responsePage = results.page;
+        responseLast = results.last;
+        responseTotal = results.totalElements;
+      }
+
+      if (requestSeqRef.current !== requestSeq) {
+        return;
+      }
+
+      setTemplates((prev) => {
+        if (mode === "replace") {
+          return content;
         }
 
-        if (!cancelled) {
-          setTemplates(data);
-          setState("done");
-        }
-      } catch (err) {
-        console.error("Failed to search templates", err);
-        if (!cancelled) {
+        const existingIds = new Set(prev.map((item) => item.id));
+        return [...prev, ...content.filter((item) => !existingIds.has(item.id))];
+      });
+      setPage(responsePage);
+      setLastPage(responseLast);
+      setTotalElements(responseTotal);
+      setState("done");
+    } catch (err) {
+      console.error("Failed to search templates", err);
+      if (requestSeqRef.current === requestSeq) {
+        if (mode === "replace") {
           setTemplates([]);
           setState("error");
+        } else {
+          setState("done");
         }
       }
+    } finally {
+      if (requestSeqRef.current === requestSeq) {
+        setLoadingMore(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+    setPage(0);
+    setLastPage(true);
+    setTotalElements(0);
+
+    const handle = window.setTimeout(() => {
+      void fetchTemplatesPage(0, "replace", requestSeq);
     }, 260);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(handle);
     };
   }, [
@@ -236,6 +304,15 @@ export default function HomePage() {
     sort,
     hasActiveFilters,
   ]);
+
+  const handleLoadMore = () => {
+    if (loadingMore || state === "loading" || lastPage) {
+      return;
+    }
+
+    const requestSeq = requestSeqRef.current;
+    void fetchTemplatesPage(page + 1, "append", requestSeq);
+  };
 
   const handleLocationSelect = (address: AddressSuggestion) => {
     setLocationInput(address.displayName);
@@ -373,6 +450,7 @@ export default function HomePage() {
                 <span className={styles.resultsPillDot} />
                 <span>
                   <strong>{templates.length}</strong>{" "}
+                  of {totalElements || templates.length}{" "}
                   {templates.length === 1 ? "experience" : "experiences"} found
                 </span>
                 {templates.length > 0 && (
@@ -425,7 +503,7 @@ export default function HomePage() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           categories={categoryOptions}
-          resultCount={state === "done" ? templates.length : undefined}
+          resultCount={state === "done" ? totalElements || templates.length : undefined}
           hasActiveFilters={hasActiveFilters}
           searchQuery={queryInput.trim()}
           isLoggedIn={!!user}
@@ -487,8 +565,8 @@ export default function HomePage() {
                     <p className={styles.sectionSubtitle}>
                       {isAiSearch
                         ? "Results based on meaning, with filters like location and price applied"
-                        : `${templates.length} ${
-                            templates.length === 1 ? "experience" : "experiences"
+                        : `${totalElements || templates.length} ${
+                            (totalElements || templates.length) === 1 ? "experience" : "experiences"
                           } waiting for you`}
                     </p>
                   </div>
@@ -517,6 +595,19 @@ export default function HomePage() {
                     <ActivityCard key={t.id} activity={t} index={index} />
                   ))}
                 </div>
+
+                {!lastPage && (
+                  <div className={styles.loadMoreWrap}>
+                    <button
+                      type="button"
+                      className={styles.btnSecondary}
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                    >
+                      {loadingMore ? "Loading..." : "Load more"}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

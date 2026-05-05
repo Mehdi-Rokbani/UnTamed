@@ -8,15 +8,16 @@ import type {
   BookingStatus,
   GuideParticipantDto,
   GuideSessionDetailsResponse,
+  GuideTemplateSessionsDashboardResponse,
+  GuideTemplateSessionsSummary,
   RefundStatus,
 } from "../types/activity";
 import {
-  listMyTemplates,
-  listMySessions,
   createSession,
   updateSession,
   deleteOrCancelSession,
   getGuideSessionDetails,
+  getGuideTemplateSessionsDashboard,
   restoreSession,
   permanentlyDeleteSession,
 } from "../api/activity.api";
@@ -144,6 +145,7 @@ type ConfirmAction =
     };
 
 let toastId = 0;
+const DASHBOARD_PAGE_SIZE = 20;
 
 function toLocalDateTimeInputValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
@@ -315,12 +317,59 @@ function isHistorySession(session: ActivitySessionResponse) {
   );
 }
 
+function dashboardTemplateToActivityTemplate(
+  data: GuideTemplateSessionsDashboardResponse["template"]
+): ActivityTemplateResponse {
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    price: data.price,
+    guideId: "",
+    addressId: data.addressId ?? "",
+    tags: [],
+    safetyNotes: [],
+    rating: { average: 0, count: 0 },
+    images: data.images ?? [],
+    categoryIds: data.categoryIds ?? [],
+    archived: data.archived,
+    archivedAt: data.archivedAt ?? null,
+    createdAt: data.createdAt ?? null,
+    updatedAt: data.updatedAt ?? null,
+  };
+}
+
+function dashboardSessionToActivitySession(
+  session: GuideTemplateSessionsDashboardResponse["sessions"]["content"][number]
+): ActivitySessionResponse {
+  return {
+    id: session.sessionId,
+    templateId: session.templateId,
+    guideId: "",
+    startAt: session.startAt,
+    endAt: session.endAt,
+    capacity: session.capacity,
+    bookedCount: session.bookedCount,
+    status: session.status,
+    meetingPoint: session.meetingPoint ?? null,
+    sessionNote: session.sessionNote ?? null,
+    template: null,
+    rating: null,
+  };
+}
+
 export default function TemplateSessionsPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
 
   const [template, setTemplate] = useState<ActivityTemplateResponse | null>(null);
   const [sessions, setSessions] = useState<ActivitySessionResponse[]>([]);
+  const [dashboardSummary, setDashboardSummary] =
+    useState<GuideTemplateSessionsSummary | null>(null);
+  const [sessionPage, setSessionPage] =
+    useState<GuideTemplateSessionsDashboardResponse["sessions"] | null>(null);
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -375,37 +424,41 @@ export default function TemplateSessionsPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function refresh() {
+  async function refresh(options?: { page?: number; append?: boolean; silent?: boolean }) {
     if (!id) return;
 
-    setLoading(true);
-    setErr(null);
+    const page = options?.page ?? 0;
+    const append = options?.append ?? false;
+    const silent = options?.silent ?? false;
+
+    if (append) setLoadingMoreSessions(true);
+    else if (!silent) setLoading(true);
+
+    if (!append) setErr(null);
 
     try {
-      const [templates, allSessions] = await Promise.all([
-        listMyTemplates(),
-        listMySessions(),
-      ]);
+      const dashboard = await getGuideTemplateSessionsDashboard(id, page, DASHBOARD_PAGE_SIZE);
+      const nextSessions = dashboard.sessions.content
+        .map(dashboardSessionToActivitySession)
+        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
-      const foundTemplate = templates.find((t) => t.id === id) ?? null;
+      setTemplate(dashboardTemplateToActivityTemplate(dashboard.template));
+      setDashboardSummary(dashboard.summary);
+      setSessionPage(dashboard.sessions);
+      setSessions((prev) => {
+        if (!append) return nextSessions;
 
-      const templateSessions = allSessions
-        .filter((s) => s.templateId === id)
-        .sort(
-          (a, b) =>
-            new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+        const byId = new Map(prev.map((session) => [session.id, session]));
+        nextSessions.forEach((session) => byId.set(session.id, session));
+        return Array.from(byId.values()).sort(
+          (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
         );
-
-      setTemplate(foundTemplate);
-      setSessions(templateSessions);
-
-      if (!foundTemplate) {
-        setErr("Activity template not found.");
-      }
+      });
     } catch (e) {
       setErr(getApiErrorMessage(e));
     } finally {
-      setLoading(false);
+      if (append) setLoadingMoreSessions(false);
+      else if (!silent) setLoading(false);
     }
   }
 
@@ -430,6 +483,13 @@ export default function TemplateSessionsPage() {
   const totalBooked = useMemo(() => {
     return sessions.reduce((sum, s) => sum + (s.bookedCount ?? 0), 0);
   }, [sessions]);
+
+  const hasMoreSessions = Boolean(sessionPage && !sessionPage.last);
+
+  async function handleLoadMoreSessions() {
+    if (!sessionPage || sessionPage.last || loadingMoreSessions) return;
+    await refresh({ page: sessionPage.page + 1, append: true, silent: true });
+  }
 
   const filteredParticipants = useMemo(() => {
     if (!participantsModal) return [];
@@ -570,7 +630,7 @@ export default function TemplateSessionsPage() {
       const startAt = new Date(formStartAt);
       const endAt = new Date(formEndAt);
 
-      const created = await createSession(id, {
+      await createSession(id, {
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         capacity: formCapacity,
@@ -578,13 +638,7 @@ export default function TemplateSessionsPage() {
         sessionNote: formSessionNote.trim() || null,
       });
 
-      setSessions((prev) =>
-        [...prev, created].sort(
-          (a, b) =>
-            new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
-        )
-      );
-
+      await refresh({ silent: true });
       closeModal();
       setTab("active");
       showToast("success", "Session added successfully.");
@@ -611,7 +665,7 @@ export default function TemplateSessionsPage() {
       const startAt = new Date(formStartAt);
       const endAt = new Date(formEndAt);
 
-      const updated = await updateSession(session.id, {
+      await updateSession(session.id, {
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         capacity: formCapacity,
@@ -619,15 +673,7 @@ export default function TemplateSessionsPage() {
         sessionNote: formSessionNote.trim(),
       });
 
-      setSessions((prev) =>
-        prev
-          .map((s) => (s.id === updated.id ? updated : s))
-          .sort(
-            (a, b) =>
-              new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
-          )
-      );
-
+      await refresh({ silent: true });
       closeModal();
       showToast("success", "Session updated successfully.");
     } catch (e) {
@@ -642,14 +688,11 @@ export default function TemplateSessionsPage() {
     setErr(null);
 
     try {
-      const updated = await updateSession(sessionId, {
+      await updateSession(sessionId, {
         status: published ? "PUBLISHED" : "DRAFT",
       });
 
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? updated : s))
-      );
-
+      await refresh({ silent: true });
       showToast(
         "success",
         published ? "Session published." : "Session moved to draft."
@@ -714,16 +757,8 @@ export default function TemplateSessionsPage() {
     setErr(null);
 
     try {
-      const restored = await restoreSession(session.id);
-
-      setSessions((prev) =>
-        prev
-          .map((s) => (s.id === restored.id ? restored : s))
-          .sort(
-            (a, b) =>
-              new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
-          )
-      );
+      await restoreSession(session.id);
+      await refresh({ silent: true });
 
       setTab("active");
       showToast("success", "Session restored as draft.");
@@ -748,7 +783,7 @@ export default function TemplateSessionsPage() {
       if (kind === "session-permanent-delete") {
         const res = await permanentlyDeleteSession(session.id);
 
-        setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        await refresh({ silent: true });
 
         showToast(
           "success",
@@ -761,12 +796,12 @@ export default function TemplateSessionsPage() {
       const res = await deleteOrCancelSession(session.id);
 
       if (res.action === "DELETED") {
-        setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        await refresh({ silent: true });
         showToast("success", res.message || "Session deleted successfully.");
         return;
       }
 
-      await refresh();
+      await refresh({ silent: true });
 
       if (res.action === "CANCELLED") {
         setTab("history");
@@ -828,7 +863,7 @@ export default function TemplateSessionsPage() {
       await removeGuideBooking(moderationTarget.bookingId, reason);
       const details = await getGuideSessionDetails(participantsModal.session.id);
       setParticipantsModal(details);
-      await refresh();
+      await refresh({ silent: true });
       showToast("success", "Booking removed.");
       setModerationTarget(null);
       setModerationReason("");
@@ -865,7 +900,7 @@ export default function TemplateSessionsPage() {
           </div>
 
           <div className={styles.headerActions}>
-            <button type="button" className={styles.btnGhost} onClick={refresh}>
+            <button type="button" className={styles.btnGhost} onClick={() => refresh()}>
               <Icon.RefreshCw />
               Refresh
             </button>
@@ -897,7 +932,9 @@ export default function TemplateSessionsPage() {
 
       <section className={styles.metricsBar}>
         <div className={styles.metric}>
-          <span className={styles.metricVal}>{sessions.length}</span>
+          <span className={styles.metricVal}>
+            {dashboardSummary?.totalSessions ?? sessions.length}
+          </span>
           <span className={styles.metricLabel}>Total sessions</span>
         </div>
 
@@ -910,18 +947,24 @@ export default function TemplateSessionsPage() {
 
         <div className={styles.metric}>
           <span className={`${styles.metricVal} ${styles.metricBlue}`}>
-            {activeSessions.length}
+            {dashboardSummary?.upcomingSessions ?? activeSessions.length}
           </span>
           <span className={styles.metricLabel}>Active</span>
         </div>
 
         <div className={styles.metric}>
-          <span className={styles.metricVal}>{historySessions.length}</span>
+          <span className={styles.metricVal}>
+            {dashboardSummary
+              ? dashboardSummary.completedSessions + dashboardSummary.cancelledSessions
+              : historySessions.length}
+          </span>
           <span className={styles.metricLabel}>Past</span>
         </div>
 
         <div className={styles.metric}>
-          <span className={styles.metricVal}>{totalBooked}</span>
+          <span className={styles.metricVal}>
+            {dashboardSummary?.totalParticipants ?? totalBooked}
+          </span>
           <span className={styles.metricLabel}>Booked seats</span>
         </div>
       </section>
@@ -1188,6 +1231,19 @@ export default function TemplateSessionsPage() {
               )}
             </div>
           </section>
+
+          {hasMoreSessions && (
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.btnGhost}
+                onClick={handleLoadMoreSessions}
+                disabled={loadingMoreSessions}
+              >
+                {loadingMoreSessions ? "Loading..." : "Load more sessions"}
+              </button>
+            </div>
+          )}
         </>
       )}
 

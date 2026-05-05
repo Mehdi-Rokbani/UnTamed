@@ -1,4 +1,5 @@
 import type { AddressResponse } from "./geo";
+import type { PaginatedResponse } from "./pagination";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
@@ -237,6 +238,78 @@ export type GuideSessionDetailsResponse = {
   cancelledCount: number;
   expiredCount: number;
   attendanceSummary?: GuideAttendanceSummaryDto;
+};
+
+export type GuideTemplateDashboardTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: Difficulty;
+  price: number;
+  images: ActivityImageDto[];
+  coverImageUrl?: string | null;
+  categoryIds: string[];
+  categoryNames: string[];
+  addressId?: string | null;
+  addressDisplayName?: string | null;
+  governorate?: string | null;
+  locality?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type GuideTemplateSessionBookingSummary = {
+  totalBookings: number;
+  completedBookings: number;
+  pendingBookings: number;
+  payingBookings: number;
+  cancelledBookings: number;
+  expiredBookings: number;
+  paidParticipants: number;
+  totalParticipants: number;
+};
+
+export type GuideTemplateSessionAttendanceSummary = {
+  totalPasses: number;
+  presentCount: number;
+  absentCount: number;
+  pendingAttendanceCount: number;
+};
+
+export type GuideTemplateSessionDashboard = {
+  sessionId: string;
+  templateId: string;
+  startAt: string;
+  endAt: string;
+  capacity: number;
+  bookedCount: number;
+  availableSpots: number;
+  status: ActivityStatus;
+  meetingPoint?: string | null;
+  sessionNote?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  bookingSummary: GuideTemplateSessionBookingSummary;
+  attendanceSummary: GuideTemplateSessionAttendanceSummary;
+};
+
+export type GuideTemplateSessionsSummary = {
+  totalSessions: number;
+  upcomingSessions: number;
+  completedSessions: number;
+  cancelledSessions: number;
+  totalBookings: number;
+  totalParticipants: number;
+  totalRevenue: number;
+  averageFillRate: number;
+};
+
+export type GuideTemplateSessionsDashboardResponse = {
+  template: GuideTemplateDashboardTemplate;
+  sessions: PaginatedResponse<GuideTemplateSessionDashboard>;
+  summary: GuideTemplateSessionsSummary;
 };
 
 /** ---------------------------

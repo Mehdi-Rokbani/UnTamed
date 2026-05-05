@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuideGuestPassAttendance } from "../api/guestPass.api";
 import styles from "../style/guide-attendance.module.css";
 
 type StatusFilter = "ALL" | "UPCOMING" | "PAST" | "CANCELLED";
 type SessionStatus = Exclude<StatusFilter, "ALL">;
+const HISTORY_PAGE_SIZE = 10;
 
 type AttendanceSession = {
   key: string;
@@ -120,27 +121,65 @@ function buildSessions(rows: GuideGuestPassAttendance[]): AttendanceSession[] {
 export default function GuideAttendanceHistoryPage() {
   const [rows, setRows] = useState<GuideGuestPassAttendance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(0);
+  const [lastPage, setLastPage] = useState(true);
+  const [totalRows, setTotalRows] = useState(0);
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [query, setQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (pageToLoad = 0, mode: "replace" | "append" = "replace") => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+
+    if (mode === "replace") {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError("");
     try {
-      setRows(await GuestPassApi.getGuideAttendanceHistory());
+      const data = await GuestPassApi.getGuideAttendanceHistoryPage(
+        pageToLoad,
+        HISTORY_PAGE_SIZE
+      );
+
+      if (requestSeqRef.current !== requestSeq) return;
+
+      setRows((prev) => {
+        if (mode === "replace") return data.content;
+
+        const existingIds = new Set(prev.map((row) => row.id));
+        return [...prev, ...data.content.filter((row) => !existingIds.has(row.id))];
+      });
+      setPage(data.page);
+      setLastPage(data.last);
+      setTotalRows(data.totalElements);
     } catch (err) {
-      setError(formatError(err));
+      if (requestSeqRef.current === requestSeq) {
+        setError(formatError(err));
+      }
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === requestSeq) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    setExpandedKey(null);
+    void load(0, "replace");
+  }, [load, filter, query, dateFilter]);
+
+  const handleLoadMore = () => {
+    if (loading || loadingMore || lastPage) return;
+    void load(page + 1, "append");
+  };
 
   const sessions = useMemo(() => buildSessions(rows), [rows]);
 
@@ -193,7 +232,7 @@ export default function GuideAttendanceHistoryPage() {
           <h1 className={styles.title}>Guide attendance</h1>
           <p className={styles.subtitle}>Scan past sessions, guest presence, and upcoming check-in work.</p>
         </div>
-        <button className={styles.refreshBtn} type="button" onClick={load}>
+        <button className={styles.refreshBtn} type="button" onClick={() => load(0, "replace")}>
           Refresh
         </button>
       </header>
@@ -272,7 +311,7 @@ export default function GuideAttendanceHistoryPage() {
         <div className={`${styles.stateCard} ${styles.error}`}>
           <h2>Could not load attendance</h2>
           <p>{error}</p>
-          <button className={styles.refreshBtn} type="button" onClick={load}>
+          <button className={styles.refreshBtn} type="button" onClick={() => load(0, "replace")}>
             Try again
           </button>
         </div>
@@ -283,7 +322,7 @@ export default function GuideAttendanceHistoryPage() {
           <div className={styles.emptyIllustration} aria-hidden="true">UT</div>
           <h2>No attendance history yet</h2>
           <p>Once guests start checking in, your completed sessions will appear here in a clean timeline.</p>
-          <button className={styles.refreshBtn} type="button" onClick={load}>
+          <button className={styles.refreshBtn} type="button" onClick={() => load(0, "replace")}>
             Refresh
           </button>
         </div>
@@ -310,9 +349,13 @@ export default function GuideAttendanceHistoryPage() {
       )}
 
       {!loading && !error && monthGroups.length > 0 && (
-        <div className={styles.timeline}>
-          {monthGroups.map((group) => (
-            <section className={styles.monthGroup} key={group.month}>
+        <>
+          <div className={styles.historyMeta}>
+            Showing {rows.length} of {totalRows || rows.length} attendance records
+          </div>
+          <div className={styles.timeline}>
+            {monthGroups.map((group) => (
+              <section className={styles.monthGroup} key={group.month}>
               <h2 className={styles.monthTitle}>{group.month}</h2>
               <div className={styles.sessionList}>
                 {group.sessions.map((session) => {
@@ -387,9 +430,23 @@ export default function GuideAttendanceHistoryPage() {
                   );
                 })}
               </div>
-            </section>
-          ))}
-        </div>
+              </section>
+            ))}
+          </div>
+
+          {!lastPage && (
+            <div className={styles.loadMoreWrap}>
+              <button
+                className={styles.refreshBtn}
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : "Load more"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
