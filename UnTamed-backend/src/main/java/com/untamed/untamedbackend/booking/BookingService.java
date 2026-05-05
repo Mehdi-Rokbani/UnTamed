@@ -924,6 +924,7 @@ public class BookingService {
         return bookings.stream().map(b -> {
             String activityTitle = null;
             String activityTemplateId = null;
+            String guideId = null;
             String activityImageUrl = null;
             Instant sessionStartAt = null;
             String displayName = null;
@@ -947,6 +948,7 @@ public class BookingService {
                 ActivityTemplate template = templatesById.get(activityTemplateId);
 
                 if (template != null) {
+                    guideId = template.getGuideId();
                     activityTitle = template.getTitle();
 
                     pricePerPerson = template.getPrice();
@@ -1003,6 +1005,7 @@ public class BookingService {
                     b.getUpdatedAt(),
                     b.getExpiresAt(),
                     activityTemplateId,
+                    guideId,
                     activityTitle,
                     activityImageUrl,
                     sessionStartAt,

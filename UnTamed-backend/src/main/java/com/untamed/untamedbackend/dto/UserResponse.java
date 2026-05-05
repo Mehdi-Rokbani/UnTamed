@@ -19,5 +19,6 @@ public record UserResponse(
         String bio,
         Boolean verified,
         Boolean enabled,
-        Instant createdAt
+        Instant createdAt,
+        UserGuideProfileResponse guideProfile
 ) {}

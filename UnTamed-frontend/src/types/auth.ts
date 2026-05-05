@@ -1,5 +1,28 @@
-export type Role = "USER" | "GUIDE" | "ADMIN";
+export type Role = "ADVENTURER" | "USER" | "GUIDE" | "ADMIN";
 export type Level = "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT";
+
+export type Certificate = {
+  id?: string;
+  title?: string;
+  issuer?: string | null;
+  credentialId?: string | null;
+  issuedAt?: string | null;
+  expiresAt?: string | null;
+  verificationUrl?: string | null;
+  fileUrl?: string | null;
+  fileType?: string | null;
+  fileSizeBytes?: number | null;
+};
+
+export type AuthGuideProfile = {
+  verifiedBadge?: boolean;
+  certificates?: Certificate[];
+  ratingSummary?: {
+    average?: number;
+    count?: number;
+  };
+  experienceYears?: number;
+};
 
 export type AuthUser = {
   id: string;
@@ -19,7 +42,8 @@ export type AuthUser = {
 
   profileImageUrl: string | null;
 
-  verified: boolean; // show badge (esp for guides)
+  verified: boolean; // account/email verification only
+  guideProfile?: AuthGuideProfile | null;
 
   // keep suspended optional (only if backend returns it)
   suspended?: boolean;

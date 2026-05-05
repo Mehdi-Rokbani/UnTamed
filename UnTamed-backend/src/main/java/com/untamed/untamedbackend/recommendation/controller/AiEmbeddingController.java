@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.recommendation.controller;
 
 import com.untamed.untamedbackend.model.ActivityTemplate;
+import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.model.UserInsight;
 import com.untamed.untamedbackend.recommendation.dto.TemplateEmbeddingPayload;
@@ -145,7 +146,7 @@ public class AiEmbeddingController {
                 continue;
             }
 
-            if (user.getRole() == null || !"USER".equals(user.getRole().name())) {
+            if (!isCustomerRole(user.getRole())) {
                 skipped++;
                 continue;
             }
@@ -160,5 +161,9 @@ public class AiEmbeddingController {
         response.put("skippedCount", skipped);
 
         return ResponseEntity.ok(response);
+    }
+
+    private boolean isCustomerRole(Role role) {
+        return role == Role.ADVENTURER || role == Role.USER;
     }
 }

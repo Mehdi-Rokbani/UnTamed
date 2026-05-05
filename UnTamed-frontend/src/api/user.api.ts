@@ -7,7 +7,7 @@ export type UpdateProfilePayload = {
   phoneNumber?: string | null;
   bio?: string | null;
   preferences?: string[];
-  level?: string | null; // USER only (backend rejects for GUIDE)
+  level?: string | null; // Adventurer only (backend rejects for GUIDE)
 };
 
 export type ProfileTripAttendanceSummary = {

@@ -11,10 +11,13 @@ export function RequireRole({
   children: JSX.Element;
 }) {
   const { user, loading } = useAuth();
+  const allowed = allow.includes("ADVENTURER") && user?.role === "USER"
+    ? true
+    : !!user && allow.includes(user.role);
 
   if (loading) return <div style={{ padding: 24 }}>Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!allow.includes(user.role)) return <Navigate to="/403" replace />;
+  if (!allowed) return <Navigate to="/403" replace />;
 
   return children;
 }

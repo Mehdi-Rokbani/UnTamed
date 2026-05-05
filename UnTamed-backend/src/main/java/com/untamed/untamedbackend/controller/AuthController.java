@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -78,6 +79,16 @@ public class AuthController {
                 .body(toUserResponse(user));
 
     }
+
+    @GetMapping("/me")
+    public UserResponse me(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Not authenticated");
+        }
+        User user = userRepo.findByEmail(auth.getName()).orElseThrow();
+        return toUserResponse(user);
+    }
+
     private UserResponse toUserResponse(User user) {
         return new UserResponse(
                 user.getId(),
@@ -93,7 +104,33 @@ public class AuthController {
                 user.getBio(),
                 user.isVerified(),
                 user.isEnabled(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                toGuideProfileResponse(user)
+        );
+    }
+
+    private UserGuideProfileResponse toGuideProfileResponse(User user) {
+        if (user.getRole() != com.untamed.untamedbackend.model.Role.GUIDE || user.getGuideProfile() == null) {
+            return null;
+        }
+
+        User.RatingSummary ratingSummary = user.getGuideProfile().getRatingSummary();
+        UserGuideProfileResponse.RatingSummaryResponse ratingResponse = ratingSummary == null
+                ? null
+                : new UserGuideProfileResponse.RatingSummaryResponse(
+                ratingSummary.getAverage(),
+                ratingSummary.getCount()
+        );
+
+        int certificateCount = user.getGuideProfile().getCertificates() == null
+                ? 0
+                : user.getGuideProfile().getCertificates().size();
+
+        return new UserGuideProfileResponse(
+                Boolean.TRUE.equals(user.getGuideProfile().getVerifiedBadge()),
+                user.getGuideProfile().getExperienceYears(),
+                ratingResponse,
+                certificateCount
         );
     }
 

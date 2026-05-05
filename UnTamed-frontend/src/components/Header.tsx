@@ -63,11 +63,18 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   };
 
   const profileImageUrl = user?.profileImageUrl ?? null;
+  const showGuideVerifiedBadge = user?.role === "GUIDE" && user.guideProfile?.verifiedBadge === true;
 
   const displayName = useMemo(() => {
     if (!user) return "";
     return user.username?.trim() || user.email || "User";
   }, [user]);
+
+  const roleLabel = user?.role === "GUIDE"
+    ? "Guide"
+    : user?.role === "ADMIN"
+      ? "Admin"
+      : "Adventurer";
 
   /* ── Computed class strings ── */
   const headerClass = [
@@ -138,7 +145,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                     </div>
                   )}
                   <span className={styles.profileName}>{displayName}</span>
-                  {user.role === "GUIDE" && user.verified && (
+                  {showGuideVerifiedBadge && (
                     <svg className={styles.verifiedBadge} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -165,7 +172,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                       </div>
                       <div>
                         <div className={styles.dropdownName}>{displayName}</div>
-                        <div className={styles.dropdownRole}>{user.role}</div>
+                        <div className={styles.dropdownRole}>{roleLabel}</div>
                       </div>
                     </div>
 

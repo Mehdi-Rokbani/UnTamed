@@ -2,6 +2,7 @@ package com.untamed.untamedbackend.service;
 
 import com.untamed.untamedbackend.dto.RegisterRequest;
 import com.untamed.untamedbackend.dto.UpdateProfileRequest;
+import com.untamed.untamedbackend.dto.UserGuideProfileResponse;
 import com.untamed.untamedbackend.dto.UserResponse;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
@@ -51,7 +52,7 @@ public class UserService {
         if (repo.existsByEmail(email)) throw new IllegalArgumentException("Email already used");
         if (repo.existsByUsername(username)) throw new IllegalArgumentException("Username already used");
 
-        Role safeRole = (req.role() == Role.GUIDE) ? Role.GUIDE : Role.USER;
+        Role safeRole = (req.role() == Role.GUIDE) ? Role.GUIDE : Role.ADVENTURER;
 
         User.UserBuilder builder = User.builder()
                 .email(email)
@@ -63,7 +64,7 @@ public class UserService {
                 .bio(null)
                 .preferences(List.of());
 
-        builder.level(safeRole == Role.USER ? req.level() : null);
+        builder.level(isCustomerRole(safeRole) ? req.level() : null);
 
         if (safeRole == Role.GUIDE) {
             builder.guideProfile(
@@ -114,8 +115,8 @@ public class UserService {
         }
 
         if (req.getLevel() != null) {
-            if (user.getRole() != Role.USER) {
-                throw new IllegalArgumentException("Level is only allowed for USER");
+            if (!isCustomerRole(user.getRole())) {
+                throw new IllegalArgumentException("Level is only allowed for ADVENTURER");
             }
             user.setLevel(req.getLevel());
         }
@@ -165,7 +166,33 @@ public class UserService {
                 u.getBio(),
                 u.isVerified(),
                 u.isEnabled(),
-                u.getCreatedAt()
+                u.getCreatedAt(),
+                toGuideProfileResponse(u)
+        );
+    }
+
+    private UserGuideProfileResponse toGuideProfileResponse(User u) {
+        if (u.getRole() != Role.GUIDE || u.getGuideProfile() == null) {
+            return null;
+        }
+
+        User.RatingSummary ratingSummary = u.getGuideProfile().getRatingSummary();
+        UserGuideProfileResponse.RatingSummaryResponse ratingResponse = ratingSummary == null
+                ? null
+                : new UserGuideProfileResponse.RatingSummaryResponse(
+                ratingSummary.getAverage(),
+                ratingSummary.getCount()
+        );
+
+        int certificateCount = u.getGuideProfile().getCertificates() == null
+                ? 0
+                : u.getGuideProfile().getCertificates().size();
+
+        return new UserGuideProfileResponse(
+                Boolean.TRUE.equals(u.getGuideProfile().getVerifiedBadge()),
+                u.getGuideProfile().getExperienceYears(),
+                ratingResponse,
+                certificateCount
         );
     }
 
@@ -218,5 +245,9 @@ public class UserService {
     public User getUserByEmail(String email) {
         return repo.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    }
+
+    private boolean isCustomerRole(Role role) {
+        return role == Role.ADVENTURER || role == Role.USER;
     }
 }

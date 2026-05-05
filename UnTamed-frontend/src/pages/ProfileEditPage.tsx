@@ -56,7 +56,7 @@ export function ProfileEditPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const isUserRole = user?.role === "USER";
+  const isAdventurerRole = user?.role === "ADVENTURER" || user?.role === "USER";
 
   // ── Populate form ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -93,7 +93,7 @@ export function ProfileEditPage() {
         phoneNumber: phoneNumber.trim() ? phoneNumber.trim() : null,
         bio: bio.trim() ? bio.trim() : null,
         preferences: prefs,
-        level: isUserRole ? (level ? level : null) : undefined,
+        level: isAdventurerRole ? (level ? level : null) : undefined,
       });
       if (file) await UserApi.uploadProfilePicture(file);
       await refreshMe();
@@ -215,8 +215,8 @@ export function ProfileEditPage() {
                   />
                 </div>
 
-                {/* Level — USER only, full width */}
-                {isUserRole && (
+                {/* Level - adventurers only, full width */}
+                {isAdventurerRole && (
                   <div className={`${styles.field} ${styles.fieldFull}`}>
                     <label className={styles.label} htmlFor="level">Experience level</label>
                     <select

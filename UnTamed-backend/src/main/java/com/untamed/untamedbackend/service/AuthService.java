@@ -2,7 +2,9 @@ package com.untamed.untamedbackend.service;
 
 import com.untamed.untamedbackend.dto.LoginRequest;
 import com.untamed.untamedbackend.dto.LoginResponse;
+import com.untamed.untamedbackend.dto.UserGuideProfileResponse;
 import com.untamed.untamedbackend.dto.UserResponse;
+import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.security.JwtService;
@@ -41,8 +43,11 @@ public class AuthService {
         }
 
         String token = jwtService.generateToken(user);
-        return new LoginResponse(token,
-                new UserResponse(
+        return new LoginResponse(token, toUserResponse(user));
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return new UserResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getRole().name(),
@@ -52,12 +57,37 @@ public class AuthService {
                 user.getPhoneNumber(),
                 user.getPreferences(),
                 user.getConfirmedTripsCount(),
-                        user.getReviewsWrittenCount(),
+                user.getReviewsWrittenCount(),
                 user.getBio(),
                 user.isVerified(),
                 user.isEnabled(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                toGuideProfileResponse(user)
+        );
+    }
 
-        ));
+    private UserGuideProfileResponse toGuideProfileResponse(User user) {
+        if (user.getRole() != Role.GUIDE || user.getGuideProfile() == null) {
+            return null;
+        }
+
+        User.RatingSummary ratingSummary = user.getGuideProfile().getRatingSummary();
+        UserGuideProfileResponse.RatingSummaryResponse ratingResponse = ratingSummary == null
+                ? null
+                : new UserGuideProfileResponse.RatingSummaryResponse(
+                ratingSummary.getAverage(),
+                ratingSummary.getCount()
+        );
+
+        int certificateCount = user.getGuideProfile().getCertificates() == null
+                ? 0
+                : user.getGuideProfile().getCertificates().size();
+
+        return new UserGuideProfileResponse(
+                Boolean.TRUE.equals(user.getGuideProfile().getVerifiedBadge()),
+                user.getGuideProfile().getExperienceYears(),
+                ratingResponse,
+                certificateCount
+        );
     }
 }

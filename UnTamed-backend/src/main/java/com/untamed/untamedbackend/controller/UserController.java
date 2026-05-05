@@ -2,7 +2,9 @@ package com.untamed.untamedbackend.controller;
 
 import com.untamed.untamedbackend.dto.ProfileActivityFeedResponse;
 import com.untamed.untamedbackend.dto.UpdateProfileRequest;
+import com.untamed.untamedbackend.dto.UserGuideProfileResponse;
 import com.untamed.untamedbackend.dto.UserResponse;
+import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.model.UserInsight;
 import com.untamed.untamedbackend.service.ProfileActivityFeedService;
@@ -124,7 +126,33 @@ public class UserController {
                 u.getBio(),
                 u.isVerified(),
                 u.isEnabled(),
-                u.getCreatedAt()
+                u.getCreatedAt(),
+                toGuideProfileResponse(u)
+        );
+    }
+
+    private UserGuideProfileResponse toGuideProfileResponse(User u) {
+        if (u.getRole() != Role.GUIDE || u.getGuideProfile() == null) {
+            return null;
+        }
+
+        User.RatingSummary ratingSummary = u.getGuideProfile().getRatingSummary();
+        UserGuideProfileResponse.RatingSummaryResponse ratingResponse = ratingSummary == null
+                ? null
+                : new UserGuideProfileResponse.RatingSummaryResponse(
+                ratingSummary.getAverage(),
+                ratingSummary.getCount()
+        );
+
+        int certificateCount = u.getGuideProfile().getCertificates() == null
+                ? 0
+                : u.getGuideProfile().getCertificates().size();
+
+        return new UserGuideProfileResponse(
+                Boolean.TRUE.equals(u.getGuideProfile().getVerifiedBadge()),
+                u.getGuideProfile().getExperienceYears(),
+                ratingResponse,
+                certificateCount
         );
     }
 }

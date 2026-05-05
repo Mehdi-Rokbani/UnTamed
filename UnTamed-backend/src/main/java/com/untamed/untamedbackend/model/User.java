@@ -47,7 +47,7 @@ public class User {
     private String password;
 
     @Builder.Default
-    private Role role = Role.USER; // USER or GUIDE or ADMIN...
+    private Role role = Role.ADVENTURER; // ADVENTURER or GUIDE or ADMIN. USER is legacy during migration.
 
     @Builder.Default
     private boolean enabled = true;

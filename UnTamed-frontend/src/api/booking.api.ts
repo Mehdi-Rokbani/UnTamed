@@ -46,6 +46,7 @@ export type RefundPreviewResponse = {
 export type BookingWithDetails = Booking & {
   // Activity template info
   activityTemplateId?: string | null;
+  guideId?: string | null;
   activityTitle: string | null;
   activityImageUrl: string | null;
 
@@ -112,6 +113,7 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
     return basic.map((b) => ({
       ...b,
       activityTemplateId: null,
+      guideId:            null,
       activityTitle:    null,
       activityImageUrl: null,
       pricePerPerson:   null,

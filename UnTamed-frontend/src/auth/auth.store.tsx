@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasRole = (...roles: Role[]) => {
     if (!user) return false;
+    if (user.role === "USER" && roles.includes("ADVENTURER")) return true;
     return roles.includes(user.role);
   };
 

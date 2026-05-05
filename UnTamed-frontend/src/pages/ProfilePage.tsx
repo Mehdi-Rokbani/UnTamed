@@ -3,12 +3,15 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/auth.store";
 import * as GuideApi from "../api/guide.api";
 import type { GuideProfileResponse } from "../api/guide.api";
+import * as GuideReviewApi from "../api/guideReview.api";
+import type { GuideReview } from "../api/guideReview.api";
 import * as UserApi from "../api/user.api";
 import type { ProfileActivityFeed } from "../api/user.api";
 import { ActivityTab } from "../components/ActivityTab";
 import { Header } from "../components/Header";
 import { ReviewTab } from "../components/ReviewTab";
 import type { AuthUser } from "../types/auth";
+import type { PaginatedResponse } from "../types/pagination";
 import styles from "../style/Profilepage.module.css";
 
 type TabType = "about" | "guide" | "activity" | "reviews";
@@ -21,6 +24,7 @@ type TasteCategory = {
 
 const PROFILE_TRIPS_PAGE_SIZE = 10;
 const PROFILE_REVIEWS_PAGE_SIZE = 10;
+const GUIDE_REVIEWS_PAGE_SIZE = 10;
 const MONGO_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 function displayCategoryName(categoryName?: string | null) {
@@ -54,6 +58,13 @@ function formatMemberSince(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function yearsAsMember(value?: string | null) {
@@ -102,7 +113,7 @@ function ProfileCard({
 }) {
   const avatarInitial = displayName.slice(0, 1).toUpperCase() || "U";
   const roleLabel = isGuide ? "Guide" : "Adventure Seeker";
-  const verifiedGuide = isGuide && (user.verified || guide?.verifiedBadge);
+  const verifiedGuide = isGuide && user.guideProfile?.verifiedBadge === true;
   const stats = isGuide
     ? [
         { value: guide?.ratingSummary?.average ?? "-", label: "Rating" },
@@ -132,11 +143,6 @@ function ProfileCard({
             <span className={styles.avatarFallback}>{avatarInitial}</span>
           )}
         </div>
-        {verifiedGuide && (
-          <span className={styles.verifiedBadge} aria-label="Verified guide">
-            <Icon name="shield" />
-          </span>
-        )}
       </div>
 
       <div className={styles.identity}>
@@ -147,7 +153,7 @@ function ProfileCard({
             {isGuide && <Icon name="shield" />}
             {roleLabel}
           </span>
-          {verifiedGuide && <span className={styles.goldPill}>Verified</span>}
+          {verifiedGuide && <span className={styles.verifiedTextPill}>Professional guide verified</span>}
         </div>
       </div>
 
@@ -318,10 +324,22 @@ function AboutTab({
 
 function GuideExperienceTab({
   guide,
+  verifiedGuide,
+  guideReviews,
+  guideReviewsLoading,
+  guideReviewsLoadingMore,
+  guideReviewsError,
+  onLoadMoreGuideReviews,
   loading,
   error,
 }: {
   guide: GuideProfileResponse | null;
+  verifiedGuide: boolean;
+  guideReviews: PaginatedResponse<GuideReview> | null;
+  guideReviewsLoading: boolean;
+  guideReviewsLoadingMore: boolean;
+  guideReviewsError: string | null;
+  onLoadMoreGuideReviews: () => void;
   loading: boolean;
   error: string | null;
 }) {
@@ -346,7 +364,7 @@ function GuideExperienceTab({
         </div>
         <div>
           <span className={styles.eyebrow}>Guide credibility</span>
-          <h2>{guide?.verifiedBadge ? "Verified Professional Guide" : "Guide profile"}</h2>
+          <h2>{verifiedGuide ? "Verified Professional Guide" : "Guide profile"}</h2>
           <p>
             {guide?.ratingSummary?.count
               ? `${guide.ratingSummary.average} average rating across ${guide.ratingSummary.count} reviews.`
@@ -397,9 +415,153 @@ function GuideExperienceTab({
         </section>
       )}
 
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <span className={styles.eyebrow}>Guide reviews</span>
+          <h2>What adventurers say</h2>
+        </div>
+
+        <div className={styles.guideReviewSummary}>
+          <strong>{guide?.ratingSummary?.average ?? "-"}</strong>
+          <span>{guide?.ratingSummary?.count ?? 0} guide review{guide?.ratingSummary?.count === 1 ? "" : "s"}</span>
+        </div>
+
+        {guideReviewsLoading ? (
+          <div className={styles.guideReviewSkeleton} aria-hidden="true" />
+        ) : guideReviewsError ? (
+          <div className={styles.errorState}>{guideReviewsError}</div>
+        ) : !guideReviews?.content.length ? (
+          <p className={styles.softEmpty}>No guide reviews yet. They will appear after adventurers complete trips with this guide.</p>
+        ) : (
+          <div className={styles.guideReviewList}>
+            {guideReviews.content.map((review) => (
+              <article key={review.id} className={styles.guideReviewCard}>
+                <div className={styles.guideReviewAvatar}>
+                  {review.reviewer?.profileImageUrl ? (
+                    <img src={review.reviewer.profileImageUrl} alt={review.reviewer.username} />
+                  ) : (
+                    <span>{review.reviewer?.username?.slice(0, 1).toUpperCase() || "A"}</span>
+                  )}
+                </div>
+                <div>
+                  <div className={styles.guideReviewTopline}>
+                    <strong>{review.reviewer?.username || "Adventurer"}</strong>
+                    <span aria-label={`${review.rating} out of 5 stars`}>
+                      {"★".repeat(review.rating)}{"☆".repeat(Math.max(0, 5 - review.rating))}
+                    </span>
+                  </div>
+                  <p>{review.comment}</p>
+                  <small>{formatShortDate(review.createdAt)}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {guideReviews && !guideReviews.last && (
+          <button
+            type="button"
+            className={styles.loadMoreReviewsButton}
+            onClick={onLoadMoreGuideReviews}
+            disabled={guideReviewsLoadingMore}
+          >
+            {guideReviewsLoadingMore ? "Loading guide reviews..." : "Load more guide reviews"}
+          </button>
+        )}
+      </section>
+
       <Link to="/profile/guide/edit" className={styles.secondaryAction}>
         Edit guide profile
       </Link>
+    </div>
+  );
+}
+
+
+function GuideReviewsTab({
+  guideReviews,
+  guideReviewsLoading,
+  guideReviewsLoadingMore,
+  guideReviewsError,
+  onLoadMoreGuideReviews,
+}: {
+  guideReviews: PaginatedResponse<GuideReview> | null;
+  guideReviewsLoading: boolean;
+  guideReviewsLoadingMore: boolean;
+  guideReviewsError: string | null;
+  onLoadMoreGuideReviews: () => void;
+}) {
+  if (guideReviewsLoading) {
+    return (
+      <div className={styles.tabPanel}>
+        <div className={styles.panelSkeleton} aria-hidden="true" />
+        <div className={styles.panelSkeleton} aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (guideReviewsError) {
+    return <div className={styles.errorState}>{guideReviewsError}</div>;
+  }
+
+  if (!guideReviews?.content.length) {
+    return (
+      <div className={styles.tabPanel}>
+        <section className={styles.panel}>
+          <div className={styles.emptyFingerprint}>
+            <Icon name="star" />
+            <p>No guide reviews yet. They will appear after adventurers complete trips with you.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.tabPanel}>
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <span className={styles.eyebrow}>Guide reviews</span>
+          <h2>Reviews you received</h2>
+        </div>
+
+        <div className={styles.guideReviewList}>
+          {guideReviews.content.map((review) => (
+            <article key={review.id} className={styles.guideReviewCard}>
+              <div className={styles.guideReviewAvatar}>
+                {review.reviewer?.profileImageUrl ? (
+                  <img src={review.reviewer.profileImageUrl} alt={review.reviewer.username} />
+                ) : (
+                  <span>{review.reviewer?.username?.slice(0, 1).toUpperCase() || "A"}</span>
+                )}
+              </div>
+
+              <div>
+                <div className={styles.guideReviewTopline}>
+                  <strong>{review.reviewer?.username || "Adventurer"}</strong>
+                  <span aria-label={`${review.rating} out of 5 stars`}>
+                    {"★".repeat(review.rating)}{"☆".repeat(Math.max(0, 5 - review.rating))}
+                  </span>
+                </div>
+
+                <p>{review.comment}</p>
+                <small>{formatShortDate(review.createdAt)}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {!guideReviews.last && (
+          <button
+            type="button"
+            className={styles.loadMoreReviewsButton}
+            onClick={onLoadMoreGuideReviews}
+            disabled={guideReviewsLoadingMore}
+          >
+            {guideReviewsLoadingMore ? "Loading guide reviews..." : "↓ Load more guide reviews"}
+          </button>
+        )}
+      </section>
     </div>
   );
 }
@@ -419,8 +581,13 @@ export function ProfilePage() {
   const [activityFeedError, setActivityFeedError] = useState<string | null>(null);
   const [loadingMoreTrips, setLoadingMoreTrips] = useState(false);
   const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const [guideReviews, setGuideReviews] = useState<PaginatedResponse<GuideReview> | null>(null);
+  const [guideReviewsLoading, setGuideReviewsLoading] = useState(false);
+  const [guideReviewsLoadingMore, setGuideReviewsLoadingMore] = useState(false);
+  const [guideReviewsError, setGuideReviewsError] = useState<string | null>(null);
 
   const isGuide = user?.role === "GUIDE";
+  const verifiedGuide = isGuide && user?.guideProfile?.verifiedBadge === true;
   const tabs = useMemo<{ id: TabType; label: string }[]>(
     () => [
       { id: "about", label: "About" },
@@ -503,6 +670,40 @@ export function ProfilePage() {
     };
   }, [isGuide]);
 
+  useEffect(() => {
+  if (!isGuide || !user?.id || (activeTab !== "guide" && activeTab !== "reviews")) return;
+  if (guideReviews) return;
+
+  let alive = true;
+
+  async function loadGuideReviews() {
+    setGuideReviewsLoading(true);
+    setGuideReviewsError(null);
+
+    try {
+      const reviews = await GuideReviewApi.listGuideReviews(
+        user!.id,
+        0,
+        GUIDE_REVIEWS_PAGE_SIZE
+      );
+
+      if (!alive) return;
+      setGuideReviews(reviews);
+    } catch (e: any) {
+      if (!alive) return;
+      setGuideReviewsError(e?.message ?? "Failed to load guide reviews");
+    } finally {
+      if (alive) setGuideReviewsLoading(false);
+    }
+  }
+
+  loadGuideReviews();
+
+  return () => {
+    alive = false;
+  };
+}, [activeTab, guideReviews, isGuide, user?.id]);
+
   const handleLoadMoreTrips = async () => {
     if (!activityFeed || activityFeed.completedTrips.last || loadingMoreTrips) return;
 
@@ -569,6 +770,32 @@ export function ProfilePage() {
     }
   };
 
+  const handleLoadMoreGuideReviews = async () => {
+    if (!user?.id || !guideReviews || guideReviews.last || guideReviewsLoadingMore) return;
+
+    setGuideReviewsLoadingMore(true);
+    setGuideReviewsError(null);
+    try {
+      const next = await GuideReviewApi.listGuideReviews(
+        user.id,
+        guideReviews.page + 1,
+        GUIDE_REVIEWS_PAGE_SIZE
+      );
+
+      setGuideReviews((prev) => {
+        if (!prev) return next;
+        return {
+          ...next,
+          content: [...prev.content, ...next.content],
+        };
+      });
+    } catch (e: any) {
+      setGuideReviewsError(e?.message ?? "Failed to load more guide reviews");
+    } finally {
+      setGuideReviewsLoadingMore(false);
+    }
+  };
+
   const displayName = useMemo(() => {
     if (!user) return "";
     return user.username || user.email || "Explorer";
@@ -618,7 +845,17 @@ export function ProfilePage() {
               {activeTab === "about" && <AboutTab user={user} topCategories={topCategories} />}
 
               {activeTab === "guide" && isGuide && (
-                <GuideExperienceTab guide={guide} loading={guideLoading} error={guideErr} />
+                <GuideExperienceTab
+                  guide={guide}
+                  verifiedGuide={Boolean(verifiedGuide)}
+                  guideReviews={guideReviews}
+                  guideReviewsLoading={guideReviewsLoading}
+                  guideReviewsLoadingMore={guideReviewsLoadingMore}
+                  guideReviewsError={guideReviewsError}
+                  onLoadMoreGuideReviews={handleLoadMoreGuideReviews}
+                  loading={guideLoading}
+                  error={guideErr}
+                />
               )}
 
               {activeTab === "activity" && (
@@ -634,15 +871,24 @@ export function ProfilePage() {
                 />
               )}
 
-              {activeTab === "reviews" && (
-                <ReviewTab
-                  reviews={activityFeed?.reviews ?? null}
-                  loading={activityFeedLoading}
-                  loadingMore={loadingMoreReviews}
-                  error={activityFeedError}
-                  onLoadMore={handleLoadMoreReviews}
-                />
-              )}
+              {activeTab === "reviews" &&
+                (isGuide ? (
+                  <GuideReviewsTab
+                    guideReviews={guideReviews}
+                    guideReviewsLoading={guideReviewsLoading}
+                    guideReviewsLoadingMore={guideReviewsLoadingMore}
+                    guideReviewsError={guideReviewsError}
+                    onLoadMoreGuideReviews={handleLoadMoreGuideReviews}
+                  />
+                ) : (
+                  <ReviewTab
+                    reviews={activityFeed?.reviews ?? null}
+                    loading={activityFeedLoading}
+                    loadingMore={loadingMoreReviews}
+                    error={activityFeedError}
+                    onLoadMore={handleLoadMoreReviews}
+                  />
+                ))}
             </div>
           </section>
         </div>

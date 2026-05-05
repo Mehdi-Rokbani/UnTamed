@@ -16,6 +16,10 @@ import type { Role, Level } from "../types/auth";
 const LEVELS: Level[] = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"];
 type Step = 1 | 2 | 3;
 
+function isAdventurerRole(role: Role) {
+  return role === "ADVENTURER" || role === "USER";
+}
+
 function isValidEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
@@ -31,7 +35,7 @@ export function RegisterPage() {
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
 
   // Step 1
-  const [role, setRole] = useState<Role>("USER");
+  const [role, setRole] = useState<Role>("ADVENTURER");
   const [username, setUsername] = useState("");
 
   // Step 2
@@ -39,7 +43,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Step 3 (USER only)
+  // Step 3 (adventurers only)
   const [level, setLevel] = useState<Level>("BEGINNER");
 
   const pw = passwordRules(password, username, email);
@@ -47,7 +51,7 @@ export function RegisterPage() {
   const title = useMemo(() => {
     if (step === 1) return "Profile & Role";
     if (step === 2) return "Account Credentials";
-    return role === "USER" ? "Experience Level" : "Almost There";
+    return isAdventurerRole(role) ? "Experience Level" : "Almost There";
   }, [step, role]);
 
   async function nextFromStep1() {
@@ -90,7 +94,7 @@ export function RegisterPage() {
     try {
       const e = email.trim().toLowerCase();
       const base = { email: e, password, username: username.trim(), role };
-      const payload = role === "USER" ? { ...base, level } : base;
+      const payload = isAdventurerRole(role) ? { ...base, role: "ADVENTURER" as Role, level } : base;
       const user = await registerApi(payload as any);
       setRegisteredEmail(user.email);
       setErr(null);
@@ -219,7 +223,7 @@ export function RegisterPage() {
                 <div className={styles.stepBullet}>3</div>
                 <div className={styles.stepContent}>
                   <div className={styles.stepTitle}>Finish</div>
-                  <div className={styles.stepDesc}>{role === "USER" ? "Set experience level" : "Complete setup"}</div>
+                  <div className={styles.stepDesc}>{isAdventurerRole(role) ? "Set experience level" : "Complete setup"}</div>
                 </div>
               </div>
             </div>
@@ -318,8 +322,8 @@ export function RegisterPage() {
                   <p className={styles.regSubtitle}>
                     {step === 1 && "Tell us a bit about yourself"}
                     {step === 2 && "Create secure login credentials"}
-                    {step === 3 && role === "USER" && "What's your adventure experience?"}
-                    {step === 3 && role !== "USER" && "You're all set!"}
+                    {step === 3 && isAdventurerRole(role) && "What's your adventure experience?"}
+                    {step === 3 && !isAdventurerRole(role) && "You're all set!"}
                   </p>
                 </div>
 
@@ -331,8 +335,8 @@ export function RegisterPage() {
                       <div className={styles.roleSelector}>
                         <button
                           type="button"
-                          className={`${styles['roleCard']} ${role === "USER" ? styles.selected : ""}`}
-                          onClick={() => setRole("USER")}
+                          className={`${styles['roleCard']} ${isAdventurerRole(role) ? styles.selected : ""}`}
+                          onClick={() => setRole("ADVENTURER")}
                         >
                           <div className={styles.roleIcon}>
                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -540,7 +544,7 @@ export function RegisterPage() {
                 {/* STEP 3 */}
                 {step === 3 && (
                   <>
-                    {role === "USER" ? (
+                    {isAdventurerRole(role) ? (
                       <div className={styles.fieldGroup}>
                         <label className={styles.fieldLabel}>Select your experience level</label>
                         <div className={styles.levelSelector}>

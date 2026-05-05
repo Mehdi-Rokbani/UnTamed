@@ -76,6 +76,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/guest-passes/present/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/guest-passes/absent/**").authenticated()
 
+                        // Guide reviews: anyone can read, authenticated adventurers can create/check eligibility.
+                        // The service enforces ADVENTURER-only creation and booking ownership.
+                        .requestMatchers(HttpMethod.GET, "/api/guides/*/reviews").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/guides/*/reviews/eligibility").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/guides/*/reviews").authenticated()
+
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/guides/**").hasRole("GUIDE")
 

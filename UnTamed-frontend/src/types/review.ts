@@ -1,7 +1,7 @@
 export type ReviewUser = {
   id: string;
   username: string;
-  role: string; // "USER" | "GUIDE"
+  role: string; // "ADVENTURER" | legacy "USER" | "GUIDE"
   profileImageUrl?: string | null;
 };
 

@@ -40,6 +40,13 @@ function Avatar({ url, name }: { url?: string | null; name: string }) {
 
 const TRUNCATE_LIMIT = 240;
 
+function formatRoleLabel(role?: string | null) {
+  if (role === "GUIDE") return "Guide";
+  if (role === "ADMIN") return "Admin";
+  if (role === "ADVENTURER" || role === "USER") return "Adventurer";
+  return null;
+}
+
 export default function ReviewCard({
   review,
   currentUserId,
@@ -130,9 +137,9 @@ export default function ReviewCard({
             )}
           </div>
           <div className={styles.metaRow}>
-            {user?.role && (
+            {formatRoleLabel(user?.role) && (
               <span className={styles.roleBadge}>
-                {user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()}
+                {formatRoleLabel(user?.role)}
               </span>
             )}
             <span className={styles.metaDate}>{formatDate(review.createdAt)}</span>

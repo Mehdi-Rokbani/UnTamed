@@ -17,6 +17,7 @@ public record BookingWithDetailsDto(
 
         // Template
         String activityTemplateId,
+        String guideId,
         String activityTitle,
         String activityImageUrl,
 

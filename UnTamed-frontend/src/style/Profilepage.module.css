@@ -55,7 +55,6 @@
 
 .backButton svg,
 .rolePill svg,
-.verifiedBadge svg,
 .infoIcon svg,
 .credIcon svg,
 .certificateCard svg,
@@ -119,20 +118,6 @@
   font-weight: 800;
 }
 
-.verifiedBadge {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 3px solid #fff;
-  border-radius: 50%;
-  background: #e07b39;
-  color: #fff;
-}
-
 .identity {
   padding: 18px 24px 8px;
   text-align: center;
@@ -161,7 +146,7 @@
 }
 
 .rolePill,
-.goldPill {
+.verifiedTextPill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -179,9 +164,9 @@
   color: #2d6a4f;
 }
 
-.goldPill {
+.verifiedTextPill {
   background: #fff3d6;
-  color: #95601b;
+  color: #8a5516;
 }
 
 .levelBlock {
@@ -577,6 +562,120 @@
   margin: 0;
   color: #777068;
   font-size: 13px;
+}
+
+.guideReviewSummary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #eee7dd;
+  border-radius: 16px;
+  background: #fbfaf6;
+}
+
+.guideReviewSummary strong {
+  color: #2d6a4f;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.guideReviewSummary span {
+  color: #746c62;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guideReviewList {
+  display: grid;
+  gap: 10px;
+}
+
+.guideReviewCard {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #eee7dd;
+  border-radius: 18px;
+  background: #fffdf8;
+}
+
+.guideReviewAvatar {
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2d6a4f, #e07b39);
+  color: #fff;
+  font-weight: 900;
+}
+
+.guideReviewAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.guideReviewTopline {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.guideReviewTopline strong {
+  color: #17231c;
+  font-size: 14px;
+}
+
+.guideReviewTopline span {
+  color: #e07b39;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.guideReviewCard p {
+  margin: 6px 0;
+  color: #5e574f;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.guideReviewCard small {
+  color: #8b8378;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.guideReviewSkeleton {
+  height: 96px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, #eee8df 0%, #f8f5ef 45%, #eee8df 100%);
+  background-size: 220% 100%;
+  animation: shimmer 1.35s ease-in-out infinite;
+}
+
+.loadMoreReviewsButton {
+  min-height: 42px;
+  margin-top: 14px;
+  padding: 0 16px;
+  border: 1px solid #d8d0c4;
+  border-radius: 999px;
+  background: #fff;
+  color: #2d6a4f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.loadMoreReviewsButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .secondaryAction {

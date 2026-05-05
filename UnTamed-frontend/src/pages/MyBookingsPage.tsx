@@ -14,6 +14,8 @@ import type { RefundPreviewResponse, RefundStatus } from "../api/booking.api";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuestPass } from "../api/guestPass.api";
 import * as ReviewApi from "../api/review.api";
+import * as GuideReviewApi from "../api/guideReview.api";
+import type { GuideReviewEligibility } from "../api/guideReview.api";
 import styles from "../style/my-bookings.module.css";
 
 import "leaflet/dist/leaflet.css";
@@ -629,6 +631,9 @@ function PreviewBookingCard({
   passesLoading,
   passesError,
   onReview,
+  guideReviewEligibility,
+  guideReviewLoading,
+  onGuideReview,
 }: {
   b: BookingWithDetails;
   selected: boolean;
@@ -644,6 +649,9 @@ function PreviewBookingCard({
   passesLoading: boolean;
   passesError?: string;
   onReview: (b: BookingWithDetails) => void;
+  guideReviewEligibility?: GuideReviewEligibility;
+  guideReviewLoading: boolean;
+  onGuideReview: (b: BookingWithDetails) => void;
 }) {
   const ds = getDisplayStatus(b);
   const cfg = getDisplayCfg(ds);
@@ -658,6 +666,7 @@ function PreviewBookingCard({
   const canAdjust = ds === "PENDING_PAYMENT";
   const showGuestEditor = canPay || ds === "PAYING";
   const canReview = ds === "COMPLETED";
+  const canReviewGuide = canReview && Boolean(b.guideId) && Boolean(guideReviewEligibility?.eligible);
   const canViewPasses = b.status === "COMPLETED";
   const coverStyle = b.activityImageUrl ? ({ backgroundImage: `url(${b.activityImageUrl})` } as CSSProperties) : undefined;
   const detailsPath = activityDetailsPath(b);
@@ -766,10 +775,19 @@ function PreviewBookingCard({
               )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
               {canReview && b.alreadyReviewed && (
-                <button type="button" disabled>Reviewed</button>
+                <button type="button" disabled>Activity reviewed</button>
               )}
               {canReview && !b.alreadyReviewed && b.reviewEligible && (
-                <button type="button" onClick={() => onReview(b)}>Review</button>
+                <button type="button" onClick={() => onReview(b)}>Review activity</button>
+              )}
+              {canReview && guideReviewEligibility?.alreadyReviewed && (
+                <button type="button" disabled>Guide reviewed</button>
+              )}
+              {canReview && guideReviewLoading && (
+                <button type="button" disabled>Checking guide...</button>
+              )}
+              {canReviewGuide && (
+                <button type="button" onClick={() => onGuideReview(b)}>Review guide</button>
               )}
             </div>
           </div>
@@ -950,6 +968,35 @@ function ReviewBookingModal({
         </p>
         <ReviewForm
           submitLabel="Post review"
+          onCancel={onDismiss}
+          onSubmit={onSubmit}
+        />
+      </div>
+    </div>
+  );
+}
+
+function GuideReviewModal({
+  booking,
+  busy,
+  onDismiss,
+  onSubmit,
+}: {
+  booking: BookingWithDetails;
+  busy: boolean;
+  onDismiss: () => void;
+  onSubmit: (data: { rating: number; comment: string }) => Promise<void>;
+}) {
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="guide-review-title">
+      <div className={`${styles.bookingModal} ${styles.reviewModal}`}>
+        <h3 id="guide-review-title" className={styles.modalTitle}>Review guide</h3>
+        <p className={styles.modalBody}>
+          This review is about the guide for {booking.activityTitle ?? "this trip"}, not the activity itself.
+        </p>
+        {busy && <div className={styles.guideReviewNotice}>Posting your guide review...</div>}
+        <ReviewForm
+          submitLabel={busy ? "Posting..." : "Post guide review"}
           onCancel={onDismiss}
           onSubmit={onSubmit}
         />
@@ -1687,10 +1734,14 @@ export default function MyBookingsPage() {
   const [guestNamesByBooking, setGuestNamesByBooking] = useState<Record<string, string[]>>({});
   const [guestNameErrors, setGuestNameErrors] = useState<Record<string, string>>({});
   const [reviewTarget, setReviewTarget] = useState<BookingWithDetails | null>(null);
+  const [guideReviewTarget, setGuideReviewTarget] = useState<BookingWithDetails | null>(null);
+  const [guideReviewEligibilityByBooking, setGuideReviewEligibilityByBooking] = useState<Record<string, GuideReviewEligibility>>({});
+  const [guideReviewEligibilityLoading, setGuideReviewEligibilityLoading] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const mainGuestName = user?.username?.trim() || user?.email || "";
+  const isAdventurer = user?.role === "ADVENTURER" || user?.role === "USER";
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const totalCount     = bookings.length;
@@ -1843,6 +1894,55 @@ export default function MyBookingsPage() {
       return next;
     });
   }, [bookings, mainGuestName]);
+
+  useEffect(() => {
+    if (!isAdventurer || !user?.id) {
+      setGuideReviewEligibilityByBooking({});
+      setGuideReviewEligibilityLoading(new Set());
+      return;
+    }
+
+    const candidates = bookings.filter((b) => {
+      const ds = getDisplayStatus(b);
+      return ds === "COMPLETED" && Boolean(b.guideId) && b.guideId !== user.id;
+    });
+
+    if (!candidates.length) {
+      setGuideReviewEligibilityByBooking({});
+      setGuideReviewEligibilityLoading(new Set());
+      return;
+    }
+
+    let alive = true;
+    setGuideReviewEligibilityLoading(new Set(candidates.map((b) => b.id)));
+
+    async function loadGuideReviewEligibility() {
+      const entries = await Promise.all(
+        candidates.map(async (b) => {
+          try {
+            const eligibility = await GuideReviewApi.getGuideReviewEligibility(b.guideId!, b.id);
+            return [b.id, eligibility] as const;
+          } catch (e: unknown) {
+            return [b.id, {
+              eligible: false,
+              alreadyReviewed: false,
+              reason: e instanceof Error ? e.message : "Guide review is not available.",
+            } satisfies GuideReviewEligibility] as const;
+          }
+        })
+      );
+
+      if (!alive) return;
+      setGuideReviewEligibilityByBooking(Object.fromEntries(entries));
+      setGuideReviewEligibilityLoading(new Set());
+    }
+
+    void loadGuideReviewEligibility();
+
+    return () => {
+      alive = false;
+    };
+  }, [bookings, isAdventurer, user?.id]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   function selectBooking(b: BookingWithDetails) {
@@ -2048,6 +2148,34 @@ export default function MyBookingsPage() {
     setReviewTarget(b);
   }
 
+  function openGuideReviewModal(b: BookingWithDetails) {
+    if (!isAdventurer) {
+      setToast({ tone: "error", message: "Only adventurers can review guides." });
+      return;
+    }
+
+    if (!b.guideId) {
+      setToast({ tone: "error", message: "Guide information is not available for this booking." });
+      return;
+    }
+
+    if (b.guideId === user?.id) {
+      setToast({ tone: "error", message: "You cannot review yourself as a guide." });
+      return;
+    }
+
+    const eligibility = guideReviewEligibilityByBooking[b.id];
+    if (!eligibility?.eligible) {
+      setToast({
+        tone: eligibility?.alreadyReviewed ? "info" : "error",
+        message: eligibility?.reason || "This booking is not eligible for a guide review.",
+      });
+      return;
+    }
+
+    setGuideReviewTarget(b);
+  }
+
   async function submitReview(data: { rating: number; comment: string }) {
     if (!reviewTarget) return;
     const booking = reviewTarget;
@@ -2078,6 +2206,41 @@ export default function MyBookingsPage() {
         message: e instanceof Error ? e.message : "Could not submit review.",
       });
       throw e;
+    }
+  }
+
+  async function submitGuideReview(data: { rating: number; comment: string }) {
+    if (!guideReviewTarget?.guideId) return;
+    const booking = guideReviewTarget;
+    const guideId = guideReviewTarget.guideId;
+
+    setBusyId(booking.id);
+    try {
+      const review = await GuideReviewApi.createGuideReview(guideId, {
+        bookingId: booking.id,
+        rating: data.rating,
+        comment: data.comment,
+      });
+
+      setGuideReviewEligibilityByBooking((prev) => ({
+        ...prev,
+        [booking.id]: {
+          eligible: false,
+          alreadyReviewed: true,
+          existingReviewId: review.id,
+          reason: "You already reviewed this guide for this booking.",
+        },
+      }));
+      setGuideReviewTarget(null);
+      setToast({ tone: "success", message: "Guide review posted. Thanks for recognizing great guiding." });
+    } catch (e: unknown) {
+      setToast({
+        tone: "error",
+        message: e instanceof Error ? e.message : "Could not submit guide review.",
+      });
+      throw e;
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -2145,6 +2308,15 @@ export default function MyBookingsPage() {
           booking={reviewTarget}
           onDismiss={() => setReviewTarget(null)}
           onSubmit={submitReview}
+        />
+      )}
+
+      {guideReviewTarget && (
+        <GuideReviewModal
+          booking={guideReviewTarget}
+          busy={busyId === guideReviewTarget.id}
+          onDismiss={() => setGuideReviewTarget(null)}
+          onSubmit={submitGuideReview}
         />
       )}
 
@@ -2269,6 +2441,9 @@ export default function MyBookingsPage() {
                           passesLoading={passLoadingId === booking.id}
                           passesError={passErrors[booking.id]}
                           onReview={openReviewModal}
+                          guideReviewEligibility={guideReviewEligibilityByBooking[booking.id]}
+                          guideReviewLoading={guideReviewEligibilityLoading.has(booking.id)}
+                          onGuideReview={openGuideReviewModal}
                         />
                       ))}
                     </div>
