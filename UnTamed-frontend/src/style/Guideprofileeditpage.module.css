@@ -533,13 +533,23 @@
 
 .certContent {
   flex: 1;
+  min-width: 0;
+}
+
+.certTopline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
 }
 
 .certTitle {
   font-size: 14px;
   font-weight: 700;
   color: #222;
-  margin: 0 0 3px 0;
+  margin: 0;
+  min-width: 0;
 }
 
 .certIssuer {
@@ -553,6 +563,38 @@
   color: #b0b0b0;
   margin: 0;
   font-family: monospace;
+}
+
+.certDates {
+  font-size: 12px;
+  color: #717171;
+  margin: 4px 0 0;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.statusvalid {
+  background: #e8f6ee;
+  color: #16724a;
+}
+
+.statusexpiring {
+  background: #fff4db;
+  color: #9a5b00;
+}
+
+.statusexpired {
+  background: #fff0ee;
+  color: #b02611;
 }
 
 .certLink {
@@ -728,6 +770,11 @@
 
   .certActions {
     align-self: flex-end;
+  }
+
+  .certTopline {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .experienceInput {

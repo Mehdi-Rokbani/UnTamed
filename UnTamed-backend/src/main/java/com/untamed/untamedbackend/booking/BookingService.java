@@ -4,6 +4,9 @@ import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.guestpass.GuestPass;
 import com.untamed.untamedbackend.guestpass.GuestPassRepository;
 import com.untamed.untamedbackend.model.*;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.payment.PaymentAttempt;
 import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
 import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
@@ -24,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -49,6 +53,7 @@ public class BookingService {
     private final GuestPassRepository guestPassRepository;
     private final StripeRefundService stripeRefundService;
     private final LevelingService levelingService;
+    private final NotificationService notificationService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -288,6 +293,7 @@ public class BookingService {
                 b.setRefundStatus(RefundStatus.REFUND_FAILED);
                 b.setUpdatedAt(Instant.now());
                 bookingRepository.save(b);
+                notifyRefundOutcome(b, CancelledBy.USER);
                 throw e;
             }
         }
@@ -303,7 +309,7 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(b);
         cancelGuestPasses(savedBooking.getId());
         levelingService.recalculateUserLevel(savedBooking.getUserId());
-
+        notifyRefundOutcome(savedBooking, CancelledBy.USER);
         userInsightService.onBookingCancelled(savedBooking);
 
         if (wasCompletedAndPresent) {
@@ -388,6 +394,8 @@ public class BookingService {
             return b;
         }
 
+        BookingStatus oldStatus = b.getStatus();
+
         b.setStatus(BookingStatus.COMPLETED);
         b.setExpiresAt(null);
         b.setUpdatedAt(Instant.now());
@@ -396,6 +404,7 @@ public class BookingService {
         userInsightService.onBookingCompleted(savedBooking);
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
+        notifyBookingConfirmedIfFirstTransition(savedBooking, oldStatus);
 
         return savedBooking;
     }
@@ -547,6 +556,8 @@ public class BookingService {
         ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
         validateSessionChangeAllowed(session);
 
+        BookingStatus oldStatus = b.getStatus();
+
         b.setStatus(BookingStatus.COMPLETED);
         b.setExpiresAt(null);
         b.setUpdatedAt(Instant.now());
@@ -555,6 +566,7 @@ public class BookingService {
         userInsightService.onBookingCompleted(savedBooking);
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
+        notifyBookingConfirmedIfFirstTransition(savedBooking, oldStatus);
 
         return savedBooking;
     }
@@ -694,6 +706,7 @@ public class BookingService {
                 b.setRefundStatus(RefundStatus.REFUND_FAILED);
                 b.setUpdatedAt(Instant.now());
                 bookingRepository.save(b);
+                notifyRefundOutcome(b, CancelledBy.GUIDE);
                 throw e;
             }
         }
@@ -709,7 +722,7 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(b);
         cancelGuestPasses(savedBooking.getId());
         levelingService.recalculateUserLevel(savedBooking.getUserId());
-
+        notifyRefundOutcome(savedBooking, CancelledBy.GUIDE);
         userInsightService.onBookingCancelled(savedBooking);
 
         if (wasCompletedAndPresent) {
@@ -720,6 +733,137 @@ public class BookingService {
                 .bookingId(savedBooking.getId())
                 .status(savedBooking.getStatus())
                 .build();
+    }
+    private void notifyRefundOutcome(Booking booking, CancelledBy cancelledBy) {
+        if (booking == null || isBlank(booking.getUserId())) {
+            return;
+        }
+
+        try {
+            BookingNotificationContext context = buildBookingNotificationContext(booking);
+            String activityTitle = context.activityTitle();
+
+            RefundStatus refundStatus = booking.getRefundStatus();
+            boolean guideCancelled = cancelledBy == CancelledBy.GUIDE;
+
+            if (refundStatus == RefundStatus.REFUNDED || refundStatus == RefundStatus.PARTIALLY_REFUNDED) {
+                boolean partial = refundStatus == RefundStatus.PARTIALLY_REFUNDED;
+                String title = guideCancelled
+                        ? "Booking cancelled by guide"
+                        : partial ? "Partial refund approved" : "Refund approved";
+                String message = buildRefundApprovedMessage(booking, activityTitle, partial, guideCancelled);
+
+                notificationService.createAndSendIfAbsent(
+                        booking.getUserId(),
+                        NotificationType.REFUND_APPROVED,
+                        title,
+                        message,
+                        NotificationSeverity.SUCCESS,
+                        "/my-bookings",
+                        "BOOKING",
+                        booking.getId()
+                );
+
+                return;
+            }
+
+            if (refundStatus == RefundStatus.NOT_REFUNDABLE) {
+                notificationService.createAndSendIfAbsent(
+                        booking.getUserId(),
+                        NotificationType.REFUND_REJECTED,
+                        guideCancelled ? "Booking cancelled by guide" : "Booking cancelled",
+                        guideCancelled
+                                ? "Your booking for " + activityTitle + " was cancelled by the guide. No refund was issued."
+                                : "Your booking for " + activityTitle + " was cancelled. This booking is not refundable under the cancellation policy.",
+                        NotificationSeverity.WARNING,
+                        "/my-bookings",
+                        "BOOKING",
+                        booking.getId()
+                );
+
+                return;
+            }
+
+            if (refundStatus == RefundStatus.REFUND_FAILED) {
+                notificationService.createAndSendIfAbsent(
+                        booking.getUserId(),
+                        NotificationType.REFUND_REJECTED,
+                        "Refund failed",
+                        guideCancelled
+                                ? "Your booking for " + activityTitle + " was cancelled by the guide, but the refund could not be processed. Please contact support."
+                                : "Your booking for " + activityTitle + " was cancelled, but the refund could not be processed. Please contact support.",
+                        NotificationSeverity.ERROR,
+                        "/my-bookings",
+                        "BOOKING",
+                        booking.getId()
+                );
+
+                return;
+            }
+
+            if (refundStatus == RefundStatus.NONE) {
+                notificationService.createAndSendIfAbsent(
+                        booking.getUserId(),
+                        NotificationType.SESSION_CANCELLED,
+                        guideCancelled ? "Booking cancelled by guide" : "Booking cancelled",
+                        guideCancelled
+                                ? "Your booking for " + activityTitle + " was cancelled by the guide."
+                                : "Your booking for " + activityTitle + " was cancelled.",
+                        NotificationSeverity.INFO,
+                        "/my-bookings",
+                        "BOOKING",
+                        booking.getId()
+                );
+            }
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create refund/cancellation notification for booking "
+                    + booking.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private String buildRefundApprovedMessage(
+            Booking booking,
+            String activityTitle,
+            boolean partial,
+            boolean guideCancelled
+    ) {
+        String amountText = formatRefundAmount(booking);
+
+        String cancellationText = guideCancelled
+                ? "Your booking for " + activityTitle + " was cancelled by the guide."
+                : "Your booking for " + activityTitle + " was cancelled.";
+
+        if (partial) {
+            return amountText == null
+                    ? cancellationText + " A partial refund was approved."
+                    : cancellationText + " A partial refund of " + amountText + " was approved.";
+        }
+
+        return amountText == null
+                ? cancellationText + " A refund was approved."
+                : cancellationText + " A refund of " + amountText + " was approved.";
+    }
+
+    private String formatRefundAmount(Booking booking) {
+        if (booking.getRefundAmount() <= 0) {
+            return null;
+        }
+
+        return formatMinorAmount(booking.getRefundAmount(), booking.getRefundCurrency());
+    }
+
+    private String formatMinorAmount(int amountMinor, String currency) {
+        if (amountMinor <= 0) {
+            return null;
+        }
+
+        // Stripe stores amounts in minor units; UnTamed displays booking prices in TND.
+        double amountMajor = amountMinor / 100.0;
+        return String.format(Locale.US, "%s %.2f", displayCurrency(currency), amountMajor);
+    }
+
+    private String displayCurrency(String currency) {
+        return "TND";
     }
 
     public Booking markAttendanceAbsent(String bookingId, String guideId, boolean absent) {
@@ -842,6 +986,87 @@ public class BookingService {
         user.setConfirmedTripsCount(Math.max(0, user.getConfirmedTripsCount() - 1));
         userRepository.save(user);
     }
+
+    private void notifyBookingConfirmedIfFirstTransition(Booking booking, BookingStatus oldStatus) {
+        if (oldStatus == BookingStatus.COMPLETED || booking.getStatus() != BookingStatus.COMPLETED) {
+            return;
+        }
+
+        try {
+            BookingNotificationContext context = buildBookingNotificationContext(booking);
+            String activityTitle = context.activityTitle();
+            String userId = booking.getUserId();
+
+            if (!isBlank(userId)) {
+                notificationService.createAndSend(
+                        userId,
+                        NotificationType.BOOKING_CONFIRMED,
+                        "Booking confirmed",
+                        "Your booking for " + activityTitle + " is confirmed.",
+                        NotificationSeverity.SUCCESS,
+                        "/my-bookings",
+                        "BOOKING",
+                        booking.getId()
+                );
+            }
+
+            if (!isBlank(context.guideId())) {
+                notificationService.createAndSend(
+                        context.guideId(),
+                        NotificationType.BOOKING_CREATED,
+                        "New booking received",
+                        context.username() + " booked " + booking.getNumberOfPeople()
+                                + " spot(s) for " + activityTitle + ".",
+                        NotificationSeverity.SUCCESS,
+                        !isBlank(context.templateId())
+                                ? "/guide/templates/" + context.templateId() + "/sessions"
+                                : "/guide",
+                        "BOOKING",
+                        booking.getId()
+                );
+            }
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create booking confirmation notifications for booking "
+                    + booking.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private BookingNotificationContext buildBookingNotificationContext(Booking booking) {
+        ActivitySession session = activitySessionRepository.findById(booking.getSessionId()).orElse(null);
+        ActivityTemplate template = null;
+
+        if (session != null && !isBlank(session.getTemplateId())) {
+            template = activityTemplateRepository.findById(session.getTemplateId()).orElse(null);
+        }
+
+        User bookingUser = isBlank(booking.getUserId())
+                ? null
+                : userRepository.findById(booking.getUserId()).orElse(null);
+
+        String activityTitle = template != null && !isBlank(template.getTitle())
+                ? template.getTitle()
+                : "this activity";
+        String templateId = template != null ? template.getId() : session != null ? session.getTemplateId() : null;
+        String guideId = session != null && !isBlank(session.getGuideId())
+                ? session.getGuideId()
+                : template != null ? template.getGuideId() : null;
+        String username = bookingUser != null && !isBlank(bookingUser.getUsername())
+                ? bookingUser.getUsername()
+                : "A traveler";
+
+        return new BookingNotificationContext(activityTitle, templateId, guideId, username);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private record BookingNotificationContext(
+            String activityTitle,
+            String templateId,
+            String guideId,
+            String username
+    ) {}
 
     public ParticipantsPreviewResponse getParticipantsPreview(String sessionId) {
         ActivitySession session = activitySessionRepository.findById(sessionId)

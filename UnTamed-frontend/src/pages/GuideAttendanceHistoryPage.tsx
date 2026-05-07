@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuideGuestPassAttendance } from "../api/guestPass.api";
+import { BackButton } from "../components/BackButton";
 import styles from "../style/guide-attendance.module.css";
 
 type StatusFilter = "ALL" | "UPCOMING" | "PAST" | "CANCELLED";
@@ -232,9 +233,17 @@ export default function GuideAttendanceHistoryPage() {
           <h1 className={styles.title}>Guide attendance</h1>
           <p className={styles.subtitle}>Scan past sessions, guest presence, and upcoming check-in work.</p>
         </div>
-        <button className={styles.refreshBtn} type="button" onClick={() => load(0, "replace")}>
-          Refresh
-        </button>
+        <div className={styles.headerActions}>
+          <BackButton
+            fallbackTo="/guide/activities"
+            label="Back"
+            className={styles.actionLink}
+            variant="plain"
+          />
+          <button className={styles.refreshBtn} type="button" onClick={() => load(0, "replace")}>
+            Refresh
+          </button>
+        </div>
       </header>
 
       <div className={styles.statsGrid} aria-label="Attendance summary">

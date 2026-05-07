@@ -27,6 +27,9 @@ import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.RatingSummary;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
@@ -39,14 +42,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ActivitySessionService {
+
+    private static final List<BookingStatus> ACTIVE_NOTIFICATION_BOOKING_STATUSES = List.of(
+            BookingStatus.PENDING,
+            BookingStatus.PAYING,
+            BookingStatus.COMPLETED
+    );
+    private static final DateTimeFormatter NOTIFICATION_DATE_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("MMM d, yyyy 'at' h:mm a 'UTC'").withZone(ZoneOffset.UTC);
 
     private final ActivitySessionRepository sessionRepo;
     private final ActivityTemplateRepository templateRepo;
@@ -54,6 +69,7 @@ public class ActivitySessionService {
     private final BookingRepository bookingRepo;
     private final SessionSeatOps sessionSeatOps;
     private final GuestPassRepository guestPassRepo;
+    private final NotificationService notificationService;
 
     // -------- Guide dashboard lists --------
 
@@ -334,6 +350,10 @@ public class ActivitySessionService {
             ensureTemplateIsPublishable(s.getTemplateId());
         }
 
+        Instant oldStartAt = s.getStartAt();
+        Instant oldEndAt = s.getEndAt();
+        ActivityStatus oldStatus = s.getStatus();
+
         if (req.startAt() != null) {
             s.setStartAt(req.startAt());
         }
@@ -358,7 +378,10 @@ public class ActivitySessionService {
             s.setStatus(req.status());
         }
 
-        return toSessionResponse(sessionRepo.save(s));
+        ActivitySession savedSession = sessionRepo.save(s);
+        notifySessionChangeIfNeeded(savedSession, oldStartAt, oldEndAt, oldStatus);
+
+        return toSessionResponse(savedSession);
     }
 
     public ActivitySessionResponse setStatus(String sessionId, ActivityStatus status, String authEmail) {
@@ -491,9 +514,14 @@ public class ActivitySessionService {
 
         bookingRepo.saveAll(pendingBookings);
 
+        Instant oldStartAt = session.getStartAt();
+        Instant oldEndAt = session.getEndAt();
+        ActivityStatus oldStatus = session.getStatus();
+
         session.setStatus(ActivityStatus.CANCELLED);
         session.setBookedCount(0);
-        sessionRepo.save(session);
+        ActivitySession savedSession = sessionRepo.save(session);
+        notifySessionChangeIfNeeded(savedSession, oldStartAt, oldEndAt, oldStatus);
 
         return new ActivitySessionDeleteResponse(
                 sessionId,
@@ -740,6 +768,86 @@ public class ActivitySessionService {
                     "Template must have at least one category before publishing sessions."
             );
         }
+    }
+
+    private void notifySessionChangeIfNeeded(
+            ActivitySession session,
+            Instant oldStartAt,
+            Instant oldEndAt,
+            ActivityStatus oldStatus
+    ) {
+        boolean cancelled = oldStatus != ActivityStatus.CANCELLED
+                && session.getStatus() == ActivityStatus.CANCELLED;
+        boolean rescheduled = !cancelled
+                && (!Objects.equals(oldStartAt, session.getStartAt())
+                || !Objects.equals(oldEndAt, session.getEndAt()));
+
+        if (!cancelled && !rescheduled) {
+            return;
+        }
+
+        try {
+            String title = activityTitle(session);
+            Collection<String> recipientIds = affectedBookingUserIds(session);
+            if (recipientIds.isEmpty()) {
+                return;
+            }
+
+            if (cancelled) {
+                notificationService.notifyUsers(
+                        recipientIds,
+                        NotificationType.SESSION_CANCELLED,
+                        "Session cancelled",
+                        "Your " + title + " session was cancelled.",
+                        NotificationSeverity.ERROR,
+                        "/my-bookings",
+                        "SESSION",
+                        session.getId()
+                );
+                return;
+            }
+
+            notificationService.notifyUsers(
+                    recipientIds,
+                    NotificationType.SESSION_RESCHEDULED,
+                    "Session time changed",
+                    "Your " + title + " session was moved to " + formatNotificationDateTime(session.getStartAt()) + ".",
+                    NotificationSeverity.WARNING,
+                    "/my-bookings",
+                    "SESSION",
+                    session.getId()
+            );
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create session change notifications for session "
+                    + session.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private Collection<String> affectedBookingUserIds(ActivitySession session) {
+        return bookingRepo.findBySessionIdAndStatusInOrderByCreatedAtAsc(
+                        session.getId(),
+                        ACTIVE_NOTIFICATION_BOOKING_STATUSES
+                )
+                .stream()
+                .map(Booking::getUserId)
+                .filter(userId -> userId != null && !userId.isBlank())
+                .filter(userId -> !userId.equals(session.getGuideId()))
+                .distinct()
+                .toList();
+    }
+
+    private String activityTitle(ActivitySession session) {
+        return templateRepo.findById(session.getTemplateId())
+                .map(ActivityTemplate::getTitle)
+                .filter(title -> !title.isBlank())
+                .orElse("activity");
+    }
+
+    private String formatNotificationDateTime(Instant value) {
+        if (value == null) {
+            return "the new time";
+        }
+        return NOTIFICATION_DATE_TIME_FORMAT.format(value);
     }
 
     // -------- Small helpers --------

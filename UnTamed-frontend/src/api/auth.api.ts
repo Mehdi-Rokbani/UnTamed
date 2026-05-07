@@ -1,6 +1,7 @@
 // src/api/auth.api.ts  (cookie-only)
 import { http } from "./http";
-import type { AuthUser, LoginRequest, RegisterRequest, RegisterResponse } from "../types/auth";
+import type { AuthUser, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse } from "../types/auth";
+import { clearAccessToken, setAccessToken } from "../auth/accessToken";
 
 /**
  * Cookie-only contract:
@@ -11,7 +12,12 @@ import type { AuthUser, LoginRequest, RegisterRequest, RegisterResponse } from "
  */
 
 export async function login(body: LoginRequest): Promise<AuthUser> {
-  const { data } = await http.post<AuthUser>("/api/auth/login", body);
+  const { data } = await http.post<LoginResponse>("/api/auth/login", body);
+  if ("accessToken" in data) {
+    setAccessToken(data.accessToken);
+    return data.user;
+  }
+  clearAccessToken();
   return data;
 }
 
@@ -40,7 +46,11 @@ export async function updateMe(body: any): Promise<AuthUser> {
 }
 
 export async function logout(): Promise<void> {
-  await http.post("/api/auth/logout");
+  try {
+    await http.post("/api/auth/logout");
+  } finally {
+    clearAccessToken();
+  }
 }
 export async function usernameAvailable(username: string): Promise<boolean> {
   const { data } = await http.get<{ available: boolean }>(

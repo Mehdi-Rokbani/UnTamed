@@ -9,6 +9,9 @@ import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.ReviewStatus;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
@@ -36,6 +39,7 @@ public class GuideReviewService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
     private final LevelingService levelingService;
+    private final NotificationService notificationService;
 
     @Transactional
     public GuideReviewResponse createGuideReview(String reviewerId, String guideId, GuideReviewCreateRequest request) {
@@ -70,6 +74,7 @@ public class GuideReviewService {
         }
 
         recomputeGuideRatingSummary(guide.getId());
+        notifyGuideReviewReceived(saved, reviewer);
         return toResponse(saved);
     }
 
@@ -202,6 +207,32 @@ public class GuideReviewService {
         );
 
         userRepository.save(guide);
+    }
+
+    private void notifyGuideReviewReceived(GuideReview review, User reviewer) {
+        if (review == null || review.getGuideId() == null || review.getGuideId().equals(review.getReviewerId())) {
+            return;
+        }
+
+        try {
+            String reviewerUsername = reviewer != null && reviewer.getUsername() != null && !reviewer.getUsername().isBlank()
+                    ? reviewer.getUsername()
+                    : "An adventurer";
+
+            notificationService.createAndSend(
+                    review.getGuideId(),
+                    NotificationType.GUIDE_REVIEW_RECEIVED,
+                    "New guide review",
+                    reviewerUsername + " left you a " + review.getRating() + "-star review.",
+                    NotificationSeverity.INFO,
+                    "/profile#reviews",
+                    "GUIDE_REVIEW",
+                    review.getId()
+            );
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create guide review notification for review "
+                    + review.getId() + ": " + e.getMessage());
+        }
     }
 
     private GuideReviewResponse toResponse(GuideReview review) {

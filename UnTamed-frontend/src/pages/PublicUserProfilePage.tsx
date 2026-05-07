@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BackButton } from "../components/BackButton";
 import { Header } from "../components/Header";
 import { getPublicUserProfile } from "../api/user.api";
 import { listGuideReviews } from "../api/guideReview.api";
@@ -19,6 +20,14 @@ function roleLabel(role?: string | null) {
   if (role === "GUIDE") return "Guide";
   if (role === "ADMIN") return "Admin";
   return "Adventurer";
+}
+
+function isGuideProfile(profile: PublicUserProfile) {
+  return profile.role === "GUIDE";
+}
+
+function isAdventurerProfile(profile: PublicUserProfile) {
+  return profile.role === "ADVENTURER" || profile.role === "USER";
 }
 
 function initial(name?: string | null) {
@@ -179,7 +188,7 @@ function CredibilityCard({ profile }: { profile: PublicUserProfile }) {
           <span>Years experience</span>
         </div>
         <div className={styles.statBox}>
-          <strong>{guide?.certificateCount ?? 0}</strong>
+          <strong>{guide?.certificateCount ?? guide?.certificates?.length ?? 0}</strong>
           <span>Certificates</span>
         </div>
       </div>
@@ -189,12 +198,14 @@ function CredibilityCard({ profile }: { profile: PublicUserProfile }) {
 
 function Certificates({ profile }: { profile: PublicUserProfile }) {
   const certificates = profile.guideProfile?.certificates ?? [];
-  if (!certificates.length) return null;
 
   return (
     <section className={styles.panel}>
       <span className={styles.eyebrow}>Credentials</span>
       <h2>Certificates</h2>
+      {!certificates.length && (
+        <p className={styles.emptyText}>No public certificates are listed yet.</p>
+      )}
       <div className={styles.certificateGrid}>
         {certificates.map((certificate, index) => (
           <article key={certificate.id ?? `${certificate.title}-${index}`} className={styles.certificateCard}>
@@ -376,7 +387,7 @@ function RecentReviews({ profile }: { profile: PublicUserProfile }) {
 }
 
 function Hero({ profile }: { profile: PublicUserProfile }) {
-  const isGuide = profile.role === "GUIDE";
+  const isGuide = isGuideProfile(profile);
   const stats = isGuide
     ? [
         { value: profile.guideStats?.activitiesCount ?? 0, label: "Activities" },
@@ -482,18 +493,21 @@ export default function PublicUserProfilePage() {
     );
   }
 
-  const isGuide = profile.role === "GUIDE";
-  const isAdventurer = profile.role === "ADVENTURER" || profile.role === "USER";
+  const isGuide = isGuideProfile(profile);
+  const isAdventurer = isAdventurerProfile(profile);
 
   return (
     <div className={styles.page}>
       <Header />
       <main className={styles.shell}>
+        <div className={styles.topNav}>
+          <BackButton fallbackTo="/" label="Back" variant="ghost" />
+        </div>
         <Hero profile={profile} />
 
         <div className={styles.layout}>
           <aside className={styles.sideColumn}>
-            <LevelPassport profile={profile} />
+            {isAdventurer && <LevelPassport profile={profile} />}
             {isGuide && <CredibilityCard profile={profile} />}
             {isAdventurer && <TasteProfile categories={profile.topCategories} />}
           </aside>

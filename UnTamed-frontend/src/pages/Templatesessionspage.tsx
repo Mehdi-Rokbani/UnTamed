@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import type {
   ActivitySessionResponse,
   ActivityStatus,
@@ -22,15 +22,10 @@ import {
   permanentlyDeleteSession,
 } from "../api/activity.api";
 import { removeGuideBooking } from "../api/guide.api";
+import { BackButton } from "../components/BackButton";
 import styles from "../style/templateSessions.module.css";
 
 const Icon = {
-  ArrowLeft: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5M5 12l7 7M5 12l7-7" />
-    </svg>
-  ),
-
   RefreshCw: () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
@@ -361,7 +356,6 @@ function dashboardSessionToActivitySession(
 
 export default function TemplateSessionsPage() {
   const { id } = useParams<{ id: string }>();
-  const nav = useNavigate();
 
   const [template, setTemplate] = useState<ActivityTemplateResponse | null>(null);
   const [sessions, setSessions] = useState<ActivitySessionResponse[]>([]);
@@ -877,16 +871,12 @@ export default function TemplateSessionsPage() {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <button
-          type="button"
+        <BackButton
+          fallbackTo="/guide/activities"
+          label="Activities"
           className={styles.backBtn}
-          onClick={() => nav("/guide/activities")}
-        >
-          <span className={styles.backArrow}>
-            <Icon.ArrowLeft />
-          </span>
-          Activities
-        </button>
+          variant="plain"
+        />
 
         <div className={styles.headerTop}>
           <div className={styles.headerLeft}>

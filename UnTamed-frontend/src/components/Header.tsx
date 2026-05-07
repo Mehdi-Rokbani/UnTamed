@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "../style/header.module.css";
 import { useAuth } from "../auth/auth.store";
+import { useNotifications } from "../hooks/useNotifications";
+import type { Notification } from "../types/notification";
+import {
+  getNotificationMeta,
+  NotificationGlyph,
+  relativeNotificationTime,
+} from "../utils/notificationUi";
 
 type HeaderProps = {
   /** Compact search bar node rendered in the center slot. */
@@ -23,10 +30,14 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   const [scrolled, setScrolled]             = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen]     = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [bellPulse, setBellPulse] = useState(false);
 
   const { user, signOut } = useAuth();
+  const notifications = useNotifications();
   const navigate          = useNavigate();
   const dropdownRef       = useRef<HTMLDivElement>(null);
+  const notificationRef   = useRef<HTMLDivElement>(null);
 
   /* ── Scroll listener ── */
   useEffect(() => {
@@ -38,13 +49,36 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   /* ── Close dropdown on outside click ── */
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setDropdownOpen(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(target)) {
+        setNotificationsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNotificationsOpen(false);
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (notifications.realtimeEventId === 0) return;
+
+    setBellPulse(true);
+    const timer = window.setTimeout(() => setBellPulse(false), 420);
+    return () => window.clearTimeout(timer);
+  }, [notifications.realtimeEventId]);
 
   /* ── Prevent body scroll when mobile menu is open ── */
   useEffect(() => {
@@ -58,9 +92,40 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   const handleLogout = async () => {
     await signOut();
     setDropdownOpen(false);
+    setNotificationsOpen(false);
     closeMobileMenu();
     navigate("/login");
   };
+
+  const openNotifications = async () => {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      navigate("/notifications");
+      return;
+    }
+
+    const willOpen = !notificationsOpen;
+    setDropdownOpen(false);
+    setNotificationsOpen(willOpen);
+    if (willOpen) {
+      await notifications.loadLatest().catch(() => undefined);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    await notifications.markRead(notification).catch(() => undefined);
+    setNotificationsOpen(false);
+    if (notification.actionUrl?.startsWith("/")) {
+      navigate(notification.actionUrl);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    await notifications.markAllRead().catch(() => undefined);
+  };
+
+  const bellAriaLabel = notifications.unreadCount > 0
+    ? `Notifications, ${notifications.unreadCount} unread`
+    : "Notifications";
 
   const profileImageUrl = user?.profileImageUrl ?? null;
   const showGuideVerifiedBadge = user?.role === "GUIDE" && user.guideProfile?.verifiedBadge === true;
@@ -130,10 +195,142 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                 </Link>
               </div>
             ) : (
+              <>
+              <div className={styles.notificationWrapper} ref={notificationRef}>
+                <span className={styles.srOnly} aria-live="polite">
+                  {notifications.realtimeAnnouncement ?? ""}
+                </span>
+                <button
+                  type="button"
+                  className={[
+                    styles.notificationButton,
+                    notificationsOpen ? styles.notificationButtonActive : "",
+                    bellPulse ? styles.notificationButtonPulse : "",
+                  ].filter(Boolean).join(" ")}
+                  onClick={openNotifications}
+                  aria-label={bellAriaLabel}
+                  aria-expanded={notificationsOpen}
+                  aria-haspopup="true"
+                >
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 01-3.46 0" />
+                  </svg>
+                  {notifications.unreadCount > 0 && notifications.unreadCount <= 3 && (
+                    <span className={styles.notificationDotBadge} aria-hidden="true" />
+                  )}
+                  {notifications.unreadCount > 3 && (
+                    <span className={styles.notificationBadge} aria-hidden="true">
+                      {notifications.unreadCount > 9 ? "9+" : notifications.unreadCount}
+                    </span>
+                  )}
+                  {notifications.unreadCount > 0 && (
+                    <span className={styles.srOnly}>
+                      {notifications.unreadCount} unread notifications
+                    </span>
+                  )}
+                </button>
+
+                {notificationsOpen && (
+                  <div
+                    className={styles.notificationDropdown}
+                    role="dialog"
+                    aria-labelledby="notification-dropdown-title"
+                  >
+                    <div className={styles.notificationDropdownHeader}>
+                      <div>
+                        <div className={styles.notificationTitle} id="notification-dropdown-title">Notifications</div>
+                        {notifications.unreadCount > 0 && (
+                          <div className={styles.notificationNewChip}>
+                            {notifications.unreadCount} new
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.notificationTextButton}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAllRead();
+                        }}
+                        disabled={notifications.unreadCount === 0}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+
+                    <div className={styles.notificationList}>
+                      {notifications.latestLoading && (
+                        Array.from({ length: 3 }).map((_, index) => (
+                          <div className={styles.notificationSkeleton} key={index}>
+                            <span />
+                            <div>
+                              <strong />
+                              <em />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {!notifications.latestLoading && notifications.latestError && (
+                        <div className={styles.notificationState}>
+                          <strong>Could not load notifications</strong>
+                          <button type="button" onClick={() => notifications.loadLatest().catch(() => undefined)}>
+                            Retry
+                          </button>
+                        </div>
+                      )}
+                      {!notifications.latestLoading && !notifications.latestError && notifications.latest.length === 0 && (
+                        <div className={styles.notificationEmptyState}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 01-3.46 0" />
+                          </svg>
+                          <strong>All caught up</strong>
+                          <span>No new notifications</span>
+                        </div>
+                      )}
+                      {!notifications.latestLoading && !notifications.latestError && notifications.latest.map((notification) => {
+                        const meta = getNotificationMeta(notification);
+                        return (
+                          <button
+                            type="button"
+                            key={notification.id}
+                            className={`${styles.notificationItem} ${!notification.read ? styles.notificationItemUnread : ""}`}
+                            onClick={() => handleNotificationClick(notification)}
+                          >
+                            <span className={`${styles.notificationIconTile} ${styles[`tone${meta.tone}`]}`}>
+                              <NotificationGlyph icon={meta.icon} />
+                            </span>
+                            <span className={styles.notificationItemBody}>
+                              <span className={styles.notificationMicroLabel}>{meta.categoryLabel}</span>
+                              <span className={styles.notificationItemTitle}>{notification.title}</span>
+                              <span className={styles.notificationItemMessage}>{notification.message}</span>
+                              <span className={styles.notificationItemTime}>{relativeNotificationTime(notification.createdAt)}</span>
+                            </span>
+                            {!notification.read && <span className={styles.notificationUnreadDot} aria-hidden="true" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <Link
+                      to="/notifications"
+                      className={styles.notificationViewAll}
+                      onClick={() => setNotificationsOpen(false)}
+                    >
+                      View all notifications
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <div className={styles.profileWrapper} ref={dropdownRef}>
                 <button
                   className={`${styles.profileButton} ${dropdownOpen ? styles.profileButtonActive : ""}`}
-                  onClick={() => setDropdownOpen((v) => !v)}
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    setDropdownOpen((v) => !v);
+                  }}
                   aria-expanded={dropdownOpen}
                   aria-haspopup="true"
                 >
@@ -220,6 +417,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                   </div>
                 )}
               </div>
+              </>
             )}
           </div>
 

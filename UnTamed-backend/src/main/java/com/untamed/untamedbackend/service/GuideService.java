@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -32,6 +33,7 @@ public class GuideService {
                 .experienceYears(gp.getExperienceYears())
                 .certificates(mapCertificates(gp.getCertificates()))
                 .ratingSummary(mapRating(gp.getRatingSummary()))
+                .verifiedBadge(Boolean.TRUE.equals(gp.getVerifiedBadge()))
                 .build();
     }
 
@@ -41,14 +43,14 @@ public class GuideService {
 
         User.Certificate cert = User.Certificate.builder()
                 .id(UUID.randomUUID().toString())
-                .title(req.getTitle())
-                .issuer(req.getIssuer())
-                .credentialId(req.getCredentialId())
+                .title(normalizeRequired(req.getTitle()))
+                .issuer(normalizeRequired(req.getIssuer()))
+                .credentialId(normalizeOptional(req.getCredentialId()))
                 .issuedAt(req.getIssuedAt())
                 .expiresAt(req.getExpiresAt())
-                .verificationUrl(req.getVerificationUrl())
-                .fileUrl(req.getFileUrl())
-                .fileType(req.getFileType())
+                .verificationUrl(normalizeOptional(req.getVerificationUrl()))
+                .fileUrl(normalizeOptional(req.getFileUrl()))
+                .fileType(normalizeOptional(req.getFileType()))
                 .fileSizeBytes(req.getFileSizeBytes())
                 .build();
 
@@ -67,15 +69,19 @@ public class GuideService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Certificate not found"));
 
-        if (req.getTitle() != null) cert.setTitle(req.getTitle());
-        if (req.getIssuer() != null) cert.setIssuer(req.getIssuer());
-        if (req.getCredentialId() != null) cert.setCredentialId(req.getCredentialId());
+        if (req.getTitle() != null) cert.setTitle(normalizeRequired(req.getTitle()));
+        if (req.getIssuer() != null) cert.setIssuer(normalizeRequired(req.getIssuer()));
+        if (req.getCredentialId() != null) cert.setCredentialId(normalizeOptional(req.getCredentialId()));
         if (req.getIssuedAt() != null) cert.setIssuedAt(req.getIssuedAt());
         if (req.getExpiresAt() != null) cert.setExpiresAt(req.getExpiresAt());
-        if (req.getVerificationUrl() != null) cert.setVerificationUrl(req.getVerificationUrl());
-        if (req.getFileUrl() != null) cert.setFileUrl(req.getFileUrl());
-        if (req.getFileType() != null) cert.setFileType(req.getFileType());
+        if (req.getVerificationUrl() != null) cert.setVerificationUrl(normalizeOptional(req.getVerificationUrl()));
+        if (req.getFileUrl() != null) cert.setFileUrl(normalizeOptional(req.getFileUrl()));
+        if (req.getFileType() != null) cert.setFileType(normalizeOptional(req.getFileType()));
         if (req.getFileSizeBytes() != null) cert.setFileSizeBytes(req.getFileSizeBytes());
+
+        if (cert.getIssuedAt() != null && cert.getExpiresAt() != null && cert.getExpiresAt().isBefore(cert.getIssuedAt())) {
+            throw new IllegalArgumentException("expiresAt must not be before issuedAt");
+        }
 
         repo.save(u);
         return getMe(authEmail);
@@ -155,5 +161,15 @@ public class GuideService {
                 .average(rs.getAverage())
                 .count(rs.getCount())
                 .build();
+    }
+
+    private String normalizeRequired(String value) {
+        return Objects.requireNonNull(value).trim();
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

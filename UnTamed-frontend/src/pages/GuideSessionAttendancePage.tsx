@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuideGuestPassAttendance } from "../api/guestPass.api";
+import { BackButton } from "../components/BackButton";
 import styles from "../style/guide-attendance.module.css";
 
 function formatDateTime(iso?: string | null): string {
@@ -95,9 +96,12 @@ export default function GuideSessionAttendancePage() {
           </p>
         </div>
         <div className={styles.headerActions}>
-          <Link className={styles.actionLink} to="/guide/attendance-history">
-            History
-          </Link>
+          <BackButton
+            fallbackTo="/guide/attendance-history"
+            label="Back to history"
+            className={styles.actionLink}
+            variant="plain"
+          />
           <button className={styles.refreshBtn} type="button" onClick={load}>
             Refresh
           </button>

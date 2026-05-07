@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import type {
   ActivityTemplateResponse,
   Difficulty,
@@ -23,6 +23,7 @@ import { listTags } from "../api/tag.api";
 import type { Tag } from "../types/tag";
 
 import LocationPicker from "../components/LocationPicker";
+import { BackButton } from "../components/BackButton";
 import type { AddressResponse } from "../types/geo";
 import styles from "../style/editActivity.module.css";
 
@@ -113,7 +114,6 @@ function normalizePrice(value: string) {
 
 export default function EditActivityPage() {
   const { id } = useParams<{ id: string }>();
-  const nav = useNavigate();
 
   const [tab, setTab] = useState<Tab>("DETAILS");
   const [loading, setLoading] = useState(true);
@@ -489,9 +489,12 @@ export default function EditActivityPage() {
         </div>
 
         <div className={styles.heroActions}>
-          <button className={styles.secondaryBtn} type="button" onClick={() => nav("/guide/activities")}>
-            ← Back
-          </button>
+          <BackButton
+            fallbackTo="/guide/activities"
+            label="Back"
+            className={styles.secondaryBtn}
+            variant="plain"
+          />
           <button className={styles.primaryBtn} type="button" onClick={onSave} disabled={saving || uploading}>
             {saving ? "Saving…" : "Save changes"}
           </button>

@@ -19,6 +19,7 @@ import ReviewList from "../components/review/ReviewList";
 import { getParticipantsPreview } from "../api/session.api";
 import type { ParticipantsPreviewResponse } from "../types/participants";
 import { WeatherWidget } from "../components/Weatherwidget";
+import { BackButton } from "../components/BackButton";
 
 type LoadState = "loading" | "error" | "done" | "notfound";
 type BookingStep = "idle" | "selecting" | "confirming" | "success";
@@ -340,12 +341,6 @@ function SuggestionCarousel({
     </section>
   );
 }
-
-const IcoArrowLeft = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-);
 
 const IcoCheck = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
@@ -1156,9 +1151,12 @@ export default function ActivityDetailsPage() {
 
       <main className={styles.detailsRoot}>
         <div className={styles.topBar}>
-          <Link to="/home" className={styles.backBtn}>
-            <IcoArrowLeft /> Back to adventures
-          </Link>
+          <BackButton
+            fallbackTo="/home"
+            label="Back to adventures"
+            className={styles.backBtn}
+            variant="plain"
+          />
         </div>
 
         <div className={styles.pageWrapper}>

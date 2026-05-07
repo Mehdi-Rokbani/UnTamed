@@ -9,6 +9,9 @@ import com.untamed.untamedbackend.model.RatingSummary;
 import com.untamed.untamedbackend.model.Review;
 import com.untamed.untamedbackend.model.ReviewStatus;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.ReviewRepository;
@@ -42,6 +45,7 @@ public class ReviewService {
     private final UserRepository userRepository;
     private final UserInsightService userInsightService;
     private final LevelingService levelingService;
+    private final NotificationService notificationService;
 
     @Transactional
     public ReviewResponse createReview(String currentUserId, CreateReviewRequest req) {
@@ -101,6 +105,7 @@ public class ReviewService {
         }
 
         recomputeTemplateRating(template.getId());
+        notifyActivityReviewReceived(saved, template);
         return toResponse(saved);
     }
 
@@ -291,6 +296,7 @@ public class ReviewService {
         }
 
         recomputeTemplateRating(templateId);
+        notifyActivityReviewReceived(saved, template);
         return toResponse(saved);
     }
 
@@ -320,5 +326,40 @@ public class ReviewService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         user.setReviewsWrittenCount(user.getReviewsWrittenCount() + 1);
         userRepository.save(user);
+    }
+
+    private void notifyActivityReviewReceived(Review review, ActivityTemplate template) {
+        if (review == null || template == null) {
+            return;
+        }
+
+        String guideId = template.getGuideId();
+        if (guideId == null || guideId.isBlank() || guideId.equals(review.getReviewerId())) {
+            return;
+        }
+
+        try {
+            User reviewer = userRepository.findById(review.getReviewerId()).orElse(null);
+            String reviewerUsername = reviewer != null && reviewer.getUsername() != null && !reviewer.getUsername().isBlank()
+                    ? reviewer.getUsername()
+                    : "An adventurer";
+            String activityTitle = template.getTitle() != null && !template.getTitle().isBlank()
+                    ? template.getTitle()
+                    : "your activity";
+
+            notificationService.createAndSend(
+                    guideId,
+                    NotificationType.REVIEW_AVAILABLE,
+                    "New activity review",
+                    reviewerUsername + " reviewed " + activityTitle + ".",
+                    NotificationSeverity.INFO,
+                    "/activity/" + template.getId(),
+                    "REVIEW",
+                    review.getId()
+            );
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create activity review notification for review "
+                    + review.getId() + ": " + e.getMessage());
+        }
     }
 }

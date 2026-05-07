@@ -67,7 +67,7 @@ public class GuideController {
 
     @PatchMapping("/me/certificates/{certificateId}")
     public GuideProfileResponse updateCertificate(@PathVariable String certificateId,
-                                                  @RequestBody UpdateCertificateRequest req,
+                                                  @Valid @RequestBody UpdateCertificateRequest req,
                                                   Authentication auth) {
         return guides.updateCertificate(auth.getName(), certificateId, req);
     }

@@ -18,6 +18,7 @@ import { listTags } from "../api/tag.api";
 
 import LocationPicker from "../components/LocationPicker";
 import { Header } from "../components/Header";
+import { BackButton } from "../components/BackButton";
 import styles from "../style/createActivity.module.css";
 import WeatherSection from "../components/Weathersection";
 import Weatherrangeselector from "../components/Weatherrangeselector";
@@ -624,6 +625,12 @@ export default function CreateActivityPage() {
           <div className={styles.orb1} /><div className={styles.orb2} />
 
           <div className={styles.aiEntryCard}>
+            <BackButton
+              fallbackTo="/guide/activities"
+              label="Back"
+              className={styles.aiBackButton}
+              variant="ghost"
+            />
             <div className={styles.aiCardHeader}>
               <div className={styles.aiIconBadge}><IconSparkles /></div>
               <div>
@@ -741,6 +748,12 @@ export default function CreateActivityPage() {
         {/* ── Left sidebar ── */}
         <aside className={styles.leftPanel}>
           <div className={styles.leftContent}>
+            <BackButton
+              fallbackTo="/guide/activities"
+              label="Back"
+              className={styles.createBackButton}
+              variant="plain"
+            />
             <div className={styles.leftBrand}>
               <div className={styles.brandIcon}><IconFlag /></div>
               <span className={styles.brandLabel}>New Adventure</span>

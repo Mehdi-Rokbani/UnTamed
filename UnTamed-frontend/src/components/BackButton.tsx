@@ -2,20 +2,39 @@ import { useLocation, useNavigate } from "react-router-dom";
 import styles from "../style/backButton.module.css";
 
 interface BackButtonProps {
+  fallbackTo?: string;
+  label?: string;
+  className?: string;
+  variant?: "plain" | "ghost" | "card" | "default" | "filled";
+  ariaLabel?: string;
   to?: string;
-  variant?: "default" | "ghost" | "filled";
 }
 
 type BackButtonLocationState = {
   from?: string;
 };
 
-export function BackButton({ to, variant = "default" }: BackButtonProps) {
+function variantClassName(variant: BackButtonProps["variant"]) {
+  if (variant === "default") return "card";
+  if (variant === "filled") return "ghost";
+  return variant ?? "card";
+}
+
+export function BackButton({
+  fallbackTo,
+  label,
+  className,
+  variant = "card",
+  ariaLabel = "Go back",
+  to,
+}: BackButtonProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
   const state = (location.state as BackButtonLocationState | null) ?? null;
   const from = state?.from;
+  const fallback = fallbackTo ?? to ?? "/";
+  const hasInAppHistory = location.key !== "default" && window.history.length > 1;
 
   const handleBack = () => {
     if (from) {
@@ -23,25 +42,20 @@ export function BackButton({ to, variant = "default" }: BackButtonProps) {
       return;
     }
 
-    if (window.history.length > 1) {
+    if (hasInAppHistory) {
       navigate(-1);
       return;
     }
 
-    if (to) {
-      navigate(to, { replace: true });
-      return;
-    }
-
-    navigate("/", { replace: true });
+    navigate(fallback, { replace: true });
   };
 
   return (
     <button
       type="button"
-      className={`${styles.btn} ${styles[variant]}`}
+      className={`${styles.btn} ${styles[variantClassName(variant)]} ${label ? styles.withLabel : ""} ${className ?? ""}`}
       onClick={handleBack}
-      aria-label="Go back"
+      aria-label={ariaLabel}
     >
       <svg
         width="16"
@@ -55,6 +69,7 @@ export function BackButton({ to, variant = "default" }: BackButtonProps) {
       >
         <path d="M19 12H5M12 5l-7 7 7 7" />
       </svg>
+      {label && <span>{label}</span>}
     </button>
   );
 }

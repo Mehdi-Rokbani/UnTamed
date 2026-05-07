@@ -2,7 +2,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -10,43 +10,61 @@
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
 }
 
-/* default — thin border ring */
-.default {
+.withLabel {
+  width: auto;
+  min-width: 36px;
+  padding: 0 12px;
+  gap: 7px;
+  border-radius: 999px;
+  font: inherit;
+}
+
+.withLabel span {
+  line-height: 1;
+}
+
+.plain {
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+.plain:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: translateX(-2px);
+}
+
+.card {
   background: #fff;
   border: 1.5px solid #e0e0e0;
   color: #444;
 }
-.default:hover {
+
+.card:hover {
   background: #f5f5f5;
   border-color: #bbb;
   color: #111;
   transform: translateX(-2px);
 }
 
-/* ghost — no border */
 .ghost {
-  background: transparent;
-  border: none;
-  color: #888;
-}
-.ghost:hover {
-  background: #f5f5f5;
-  color: #111;
-  transform: translateX(-2px);
-}
-
-/* filled — subtle bg */
-.filled {
   background: #f5f5f5;
   border: 1px solid #ebebeb;
   color: #444;
 }
-.filled:hover {
+
+.ghost:hover {
   background: #ececec;
   border-color: #ccc;
   color: #111;
   transform: translateX(-2px);
 }
 
-.btn:active { transform: translateX(-4px) scale(0.95); }
-.btn:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+.btn:active {
+  transform: translateX(-4px) scale(0.95);
+}
+
+.btn:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}

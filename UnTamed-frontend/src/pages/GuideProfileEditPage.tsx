@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/auth.store";
 import * as GuideApi from "../api/guide.api";
 import type { Certificate, GuideProfileResponse } from "../api/guide.api";
@@ -8,6 +7,7 @@ import { Header } from "../components/Header";
 import { BackButton } from "../components/BackButton";
 
 type CertDraft = Omit<Certificate, "id">;
+type CertificateStatus = "valid" | "expiring" | "expired";
 
 const emptyDraft = (): CertDraft => ({
   title: "",
@@ -21,9 +21,69 @@ const emptyDraft = (): CertDraft => ({
   fileSizeBytes: null,
 });
 
+function toInputDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function toPayloadInstant(value?: string | null) {
+  if (!value) return null;
+  return `${value}T00:00:00.000Z`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function certificateStatus(expiresAt?: string | null): { label: string; status: CertificateStatus } {
+  if (!expiresAt) return { label: "Valid", status: "valid" };
+
+  const expires = new Date(expiresAt);
+  if (Number.isNaN(expires.getTime())) return { label: "Valid", status: "valid" };
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  expires.setHours(0, 0, 0, 0);
+
+  if (expires < now) return { label: "Expired", status: "expired" };
+
+  const daysUntilExpiry = Math.ceil((expires.getTime() - now.getTime()) / 86_400_000);
+  if (daysUntilExpiry <= 90) return { label: "Expiring soon", status: "expiring" };
+
+  return { label: "Valid", status: "valid" };
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validateCertificateDraft(payload: CertDraft) {
+  if (!payload.title) return "Certificate title is required.";
+  if (!payload.issuer) return "Issuing organization is required.";
+  if (payload.title.length > 120) return "Certificate title must be 120 characters or fewer.";
+  if (payload.issuer.length > 120) return "Issuing organization must be 120 characters or fewer.";
+  if (payload.credentialId && payload.credentialId.length > 120) return "Credential ID must be 120 characters or fewer.";
+  if (payload.verificationUrl && !isValidHttpUrl(payload.verificationUrl)) {
+    return "Verification URL must start with http:// or https://.";
+  }
+  if (payload.issuedAt && payload.expiresAt && new Date(payload.expiresAt) < new Date(payload.issuedAt)) {
+    return "Expiration date cannot be before the issue date.";
+  }
+  return null;
+}
+
 export function GuideProfileEditPage() {
   const { user } = useAuth();
-  const nav = useNavigate();
 
   const [experienceYears, setExperienceYears] = useState<string>("");
 
@@ -104,8 +164,8 @@ export function GuideProfileEditPage() {
       title: String(p.title ?? "").trim(),
       issuer: String(p.issuer ?? "").trim(),
       credentialId: norm(p.credentialId),
-      issuedAt: norm(p.issuedAt),
-      expiresAt: norm(p.expiresAt),
+      issuedAt: toPayloadInstant(norm(p.issuedAt)),
+      expiresAt: toPayloadInstant(norm(p.expiresAt)),
       verificationUrl: norm(p.verificationUrl),
       fileUrl: norm(p.fileUrl),
       fileType: norm(p.fileType),
@@ -117,8 +177,9 @@ export function GuideProfileEditPage() {
     if (!isGuide) return;
 
     const payload = normalizeCertPayload(draft);
-    if (!payload.title || !payload.issuer) {
-      setErr("Certificate title and issuer are required");
+    const validationError = validateCertificateDraft(payload);
+    if (validationError) {
+      setErr(validationError);
       return;
     }
 
@@ -143,8 +204,8 @@ export function GuideProfileEditPage() {
       title: c.title ?? "",
       issuer: c.issuer ?? "",
       credentialId: c.credentialId ?? null,
-      issuedAt: c.issuedAt ?? null,
-      expiresAt: c.expiresAt ?? null,
+      issuedAt: toInputDate(c.issuedAt),
+      expiresAt: toInputDate(c.expiresAt),
       verificationUrl: c.verificationUrl ?? null,
       fileUrl: c.fileUrl ?? null,
       fileType: c.fileType ?? null,
@@ -161,8 +222,9 @@ export function GuideProfileEditPage() {
     if (!isGuide || !editingId) return;
 
     const payload = normalizeCertPayload(editingDraft);
-    if (!payload.title || !payload.issuer) {
-      setErr("Certificate title and issuer are required");
+    const validationError = validateCertificateDraft(payload);
+    if (validationError) {
+      setErr(validationError);
       return;
     }
 
@@ -203,7 +265,7 @@ export function GuideProfileEditPage() {
     <><Header></Header>
     <div className={styles.container}>
       <div className={styles.header}>
-        <BackButton to="/profile" />
+        <BackButton fallbackTo="/profile" />
         <h1 className={styles.title}>Edit guide profile</h1>
       </div>
 
@@ -337,6 +399,7 @@ export function GuideProfileEditPage() {
                     </label>
                     <input
                       className={styles.formInput}
+                      maxLength={120}
                       value={draft.title}
                       onChange={(e) => setDraftField("title", e.target.value)}
                       placeholder="e.g., Wilderness First Responder"
@@ -349,6 +412,7 @@ export function GuideProfileEditPage() {
                     </label>
                     <input
                       className={styles.formInput}
+                      maxLength={120}
                       value={draft.issuer}
                       onChange={(e) => setDraftField("issuer", e.target.value)}
                       placeholder="e.g., NOLS Wilderness Medicine"
@@ -359,6 +423,7 @@ export function GuideProfileEditPage() {
                     <label className={styles.formLabel}>Credential ID</label>
                     <input
                       className={styles.formInput}
+                      maxLength={120}
                       value={draft.credentialId ?? ""}
                       onChange={(e) => setDraftField("credentialId", e.target.value)}
                       placeholder="ABC-123-XYZ"
@@ -366,9 +431,30 @@ export function GuideProfileEditPage() {
                   </div>
 
                   <div className={styles.formField}>
+                    <label className={styles.formLabel}>Issued date</label>
+                    <input
+                      className={styles.formInput}
+                      type="date"
+                      value={draft.issuedAt ?? ""}
+                      onChange={(e) => setDraftField("issuedAt", e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>Expiration date</label>
+                    <input
+                      className={styles.formInput}
+                      type="date"
+                      value={draft.expiresAt ?? ""}
+                      onChange={(e) => setDraftField("expiresAt", e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
                     <label className={styles.formLabel}>Verification URL</label>
                     <input
                       className={styles.formInput}
+                      type="url"
                       value={draft.verificationUrl ?? ""}
                       onChange={(e) => setDraftField("verificationUrl", e.target.value)}
                       placeholder="https://verify.example.com/..."
@@ -402,7 +488,7 @@ export function GuideProfileEditPage() {
                 </svg>
                 <h3 className={styles.emptyTitle}>No certificates yet</h3>
                 <p className={styles.emptyText}>
-                  Add your professional certifications to showcase your expertise and build trust with travelers.
+                  Add certificates to build trust with adventurers.
                 </p>
                 {!showAddForm && (
                   <button onClick={() => setShowAddForm(true)} className={styles.emptyButton}>
@@ -414,6 +500,7 @@ export function GuideProfileEditPage() {
               <div className={styles.certList}>
                 {certificates.map((c) => {
                   const isEditing = editingId === c.id;
+                  const status = certificateStatus(c.expiresAt);
                   return (
                     <div key={c.id} className={styles.certCard}>
                       {!isEditing ? (
@@ -425,10 +512,22 @@ export function GuideProfileEditPage() {
                           </div>
 
                           <div className={styles.certContent}>
-                            <h4 className={styles.certTitle}>{c.title}</h4>
+                            <div className={styles.certTopline}>
+                              <h4 className={styles.certTitle}>{c.title}</h4>
+                              <span className={`${styles.statusPill} ${styles[`status${status.status}`]}`}>
+                                {status.label}
+                              </span>
+                            </div>
                             <p className={styles.certIssuer}>{c.issuer}</p>
                             {c.credentialId && (
                               <p className={styles.certCredential}>ID: {c.credentialId}</p>
+                            )}
+                            {(c.issuedAt || c.expiresAt) && (
+                              <p className={styles.certDates}>
+                                {[c.issuedAt ? `Issued ${formatDate(c.issuedAt)}` : null, c.expiresAt ? `Expires ${formatDate(c.expiresAt)}` : null]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
                             )}
                             {c.verificationUrl && (
                               <a 
@@ -475,6 +574,7 @@ export function GuideProfileEditPage() {
                               <label className={styles.formLabel}>Certificate title</label>
                               <input
                                 className={styles.formInput}
+                                maxLength={120}
                                 value={editingDraft.title}
                                 onChange={(e) => setEditField("title", e.target.value)}
                               />
@@ -484,6 +584,7 @@ export function GuideProfileEditPage() {
                               <label className={styles.formLabel}>Issuing organization</label>
                               <input
                                 className={styles.formInput}
+                                maxLength={120}
                                 value={editingDraft.issuer}
                                 onChange={(e) => setEditField("issuer", e.target.value)}
                               />
@@ -493,8 +594,29 @@ export function GuideProfileEditPage() {
                               <label className={styles.formLabel}>Credential ID</label>
                               <input
                                 className={styles.formInput}
+                                maxLength={120}
                                 value={editingDraft.credentialId ?? ""}
                                 onChange={(e) => setEditField("credentialId", e.target.value)}
+                              />
+                            </div>
+
+                            <div className={styles.formField}>
+                              <label className={styles.formLabel}>Issued date</label>
+                              <input
+                                className={styles.formInput}
+                                type="date"
+                                value={editingDraft.issuedAt ?? ""}
+                                onChange={(e) => setEditField("issuedAt", e.target.value)}
+                              />
+                            </div>
+
+                            <div className={styles.formField}>
+                              <label className={styles.formLabel}>Expiration date</label>
+                              <input
+                                className={styles.formInput}
+                                type="date"
+                                value={editingDraft.expiresAt ?? ""}
+                                onChange={(e) => setEditField("expiresAt", e.target.value)}
                               />
                             </div>
 
@@ -502,6 +624,7 @@ export function GuideProfileEditPage() {
                               <label className={styles.formLabel}>Verification URL</label>
                               <input
                                 className={styles.formInput}
+                                type="url"
                                 value={editingDraft.verificationUrl ?? ""}
                                 onChange={(e) => setEditField("verificationUrl", e.target.value)}
                               />

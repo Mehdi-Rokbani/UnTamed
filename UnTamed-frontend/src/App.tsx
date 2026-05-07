@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./auth/auth.store";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireRole } from "./auth/RequireRole";
+import { NotificationsProvider } from "./hooks/useNotifications";
 
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -28,6 +29,7 @@ import GuideCheckInPage from "./pages/GuideCheckInPage";
 import GuestPassPage from "./pages/GuestPassPage";
 import GuideSessionAttendancePage from "./pages/GuideSessionAttendancePage";
 import GuideAttendanceHistoryPage from "./pages/GuideAttendanceHistoryPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -36,7 +38,8 @@ function ForbiddenFallback() {
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
+      <NotificationsProvider>
+        <Routes>
         {/* Public */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<Navigate to="/" replace />} />
@@ -71,6 +74,15 @@ export default function App() {
           element={
             <RequireAuth>
               <MyBookingsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/notifications"
+          element={
+            <RequireAuth>
+              <NotificationsPage />
             </RequireAuth>
           }
         />
@@ -158,7 +170,8 @@ export default function App() {
 
 
 
-      </Routes>
+        </Routes>
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

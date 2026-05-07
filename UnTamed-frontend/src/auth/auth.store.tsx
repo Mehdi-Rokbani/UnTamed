@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { AuthUser, Role } from "../types/auth";
 import * as AuthApi from "../api/auth.api";
+import { clearAccessToken } from "./accessToken";
 
 type AuthCtx = {
   user: AuthUser | null;
@@ -20,7 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const clear = () => setUser(null);
+  const clear = () => {
+    clearAccessToken();
+    setUser(null);
+  };
 
   const refreshMe = async () => {
     try {

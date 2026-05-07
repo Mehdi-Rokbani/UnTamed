@@ -37,6 +37,18 @@ export async function listMyTemplates() {
   return data;
 }
 
+export async function listMyTemplatesPage(page = 0, size = 10) {
+  const { data } = await http.get<ActivityTemplateResponse[] | PaginatedResponse<ActivityTemplateResponse>>(
+    "/api/templates/mine",
+    {
+      params: { page, size },
+      withCredentials: true,
+    }
+  );
+
+  return toPaginatedResponse(data, page, size);
+}
+
 export async function getMyTemplate(id: string) {
   const { data } = await http.get<ActivityTemplateResponse>(
     `/api/templates/${id}`,

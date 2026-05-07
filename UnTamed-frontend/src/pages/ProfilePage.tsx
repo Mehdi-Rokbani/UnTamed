@@ -7,9 +7,12 @@ import * as GuideReviewApi from "../api/guideReview.api";
 import type { GuideReview } from "../api/guideReview.api";
 import * as UserApi from "../api/user.api";
 import type { ProfileActivityFeed } from "../api/user.api";
+import * as ActivityApi from "../api/activity.api";
 import { ActivityTab } from "../components/ActivityTab";
+import { BackButton } from "../components/BackButton";
 import { Header } from "../components/Header";
 import { ReviewTab } from "../components/ReviewTab";
+import type { ActivitySessionResponse, ActivityTemplateResponse } from "../types/activity";
 import type { AuthUser, Level } from "../types/auth";
 import type { PaginatedResponse } from "../types/pagination";
 import styles from "../style/Profilepage.module.css";
@@ -47,6 +50,8 @@ type GuideCredibilityData = {
   experienceYears: number | null;
   certificateCount: number;
 };
+
+type CertificateStatus = "valid" | "expiring" | "expired";
 
 function getLevelData(user: AuthUser, activityFeed: ProfileActivityFeed | null): NormalizedLevelData {
   const userLevel = user as AuthUser & LevelSource;
@@ -113,44 +118,10 @@ function getGuideCredibilityData(user: AuthUser, guide: GuideProfileResponse | n
   };
 }
 
-function getGuideRankTitle(credibility: GuideCredibilityData) {
-  const average = credibility.ratingAverage ?? 0;
-
-  if (
-    credibility.verifiedBadge &&
-    average >= 4.8 &&
-    credibility.ratingCount >= 50 &&
-    credibility.certificateCount >= 3
-  ) {
-    return "Master Guide";
-  }
-
-  if (credibility.verifiedBadge && average >= 4.6 && credibility.ratingCount >= 20) {
-    return "Expert Guide";
-  }
-
-  if (credibility.verifiedBadge && credibility.ratingCount >= 10) {
-    return "Trusted Guide";
-  }
-
-  if (credibility.verifiedBadge) {
-    return "Verified Guide";
-  }
-
-  return "Guide";
-}
-
-function formatGuideRating(credibility: GuideCredibilityData) {
-  if (credibility.ratingAverage !== null && credibility.ratingCount > 0) {
-    return `${credibility.ratingAverage.toFixed(1)} \u2605 \u00b7 ${credibility.ratingCount} review${credibility.ratingCount === 1 ? "" : "s"}`;
-  }
-
-  return "Building guide reputation";
-}
-
 const PROFILE_TRIPS_PAGE_SIZE = 10;
 const PROFILE_REVIEWS_PAGE_SIZE = 10;
 const GUIDE_REVIEWS_PAGE_SIZE = 10;
+const GUIDE_TEMPLATES_PAGE_SIZE = 8;
 const MONGO_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 function displayCategoryName(categoryName?: string | null) {
@@ -192,6 +163,39 @@ function formatShortDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function certStatus(expiresAt?: string | null): CertificateStatus {
+  if (!expiresAt) return "valid";
+  const msLeft = new Date(expiresAt).getTime() - Date.now();
+  if (Number.isNaN(msLeft)) return "valid";
+  if (msLeft < 0) return "expired";
+  if (msLeft < 90 * 86_400_000) return "expiring";
+  return "valid";
+}
+
+function formatMonthYear(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function certificateStatusLine(expiresAt?: string | null) {
+  const status = certStatus(expiresAt);
+  const date = formatMonthYear(expiresAt);
+
+  if (!expiresAt || !date) {
+    return { text: "No expiry listed", status };
+  }
+
+  if (status === "expired") return { text: `Expired ${date}`, status };
+  if (status === "expiring") return { text: `Expires ${date}`, status };
+  return { text: `Active · expires ${date}`, status };
+}
+
+function activeCertificateCount(certificates?: GuideProfileResponse["certificates"] | null) {
+  return (certificates ?? []).filter((certificate) => certStatus(certificate.expiresAt) !== "expired").length;
 }
 
 function yearsAsMember(value?: string | null) {
@@ -348,30 +352,130 @@ function XpBlock({ levelData }: { levelData: NormalizedLevelData }) {
   );
 }
 
-function GuideCredibilityBlock({ credibility }: { credibility: GuideCredibilityData }) {
-  const detailParts = [
-    credibility.experienceYears != null ? `${credibility.experienceYears} years experience` : null,
-    credibility.certificateCount ? `${credibility.certificateCount} certificate${credibility.certificateCount === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
+function GuidePassportFields({
+  credibility,
+  guide,
+}: {
+  credibility: GuideCredibilityData;
+  guide: GuideProfileResponse | null;
+}) {
+  const hasReviews = credibility.ratingAverage !== null && credibility.ratingCount > 0;
+  const certificatesLoaded = Array.isArray(guide?.certificates);
+  const activeCount = certificatesLoaded ? activeCertificateCount(guide?.certificates) : credibility.certificateCount;
+  const certificateText = activeCount > 0 ? `${activeCount} active` : "No certificates yet";
 
   return (
-    <section className={styles.guideCredibilityBlock} aria-label="Guide credibility">
-      <div className={styles.guideCredibilityTop}>
-        <span className={styles.guideCredibilityIcon}>
+    <section className={styles.guidePassportFields} aria-label="Guide passport fields">
+      <div className={styles.guidePassportRow}>
+        <span>Rating</span>
+        <strong className={!hasReviews ? styles.mutedValue : ""}>
+          {hasReviews ? `${credibility.ratingAverage?.toFixed(1)} ★ · ${credibility.ratingCount} review${credibility.ratingCount === 1 ? "" : "s"}` : "No reviews yet"}
+        </strong>
+      </div>
+      <div className={styles.guidePassportRow}>
+        <span>Experience</span>
+        <strong className={credibility.experienceYears == null ? styles.mutedValue : ""}>
+          {credibility.experienceYears != null
+            ? `${credibility.experienceYears} year${credibility.experienceYears === 1 ? "" : "s"}`
+            : "Experience not listed"}
+        </strong>
+      </div>
+      <div className={styles.guidePassportRow}>
+        <span>Certificates</span>
+        <strong className={activeCount === 0 ? styles.mutedValue : ""}>{certificateText}</strong>
+      </div>
+    </section>
+  );
+}
+
+function VerificationBlock({ verified }: { verified: boolean }) {
+  if (!verified) {
+    return (
+      <section className={`${styles.panel} ${styles.verificationBlock} ${styles.verificationPending}`}>
+        <div>
+          <span className={styles.eyebrow}>Verification</span>
+          <h2>Verification in progress</h2>
+          <p>This guide's identity and credentials are currently under review by UnTamed.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={`${styles.panel} ${styles.verificationBlock}`}>
+      <div className={styles.verificationHeader}>
+        <span className={styles.verificationSeal}>
           <Icon name="shield" />
         </span>
         <div>
-          <span>Professional guide</span>
-          <strong>{getGuideRankTitle(credibility)}</strong>
+          <span className={styles.eyebrow}>Verification</span>
+          <h2>Verified guide profile</h2>
         </div>
       </div>
-
-      <div className={styles.guideCredibilityRows}>
-        <p>{credibility.verifiedBadge ? "Verified professional guide" : "Verification pending"}</p>
-        <p>{formatGuideRating(credibility)}</p>
-        {detailParts.length > 0 && <p>{detailParts.join(" · ")}</p>}
+      <div className={styles.verificationChecks}>
+        <span>Identity confirmed</span>
+        <span>Credentials reviewed</span>
+        <span>Profile active</span>
       </div>
     </section>
+  );
+}
+
+function GuideCertificateCard({ certificate }: { certificate: GuideProfileResponse["certificates"][number] }) {
+  const [open, setOpen] = useState(false);
+  const status = certificateStatusLine(certificate.expiresAt);
+  const detailsId = `certificate-details-${certificate.id}`;
+
+  return (
+    <article className={`${styles.certificateCard} ${open ? styles.certificateCardOpen : ""} ${status.status === "expired" ? styles.certificateCardExpired : ""}`}>
+      <button
+        type="button"
+        className={styles.certificateHeaderButton}
+        aria-expanded={open}
+        aria-controls={detailsId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className={styles.certificateTitleGroup}>
+          <strong>{certificate.title || "Certificate"}</strong>
+          <span>{certificate.issuer || "Issuer not provided"}</span>
+          <small className={`${styles.certificateStatusLine} ${styles[`certificateStatus${status.status}`]}`}>
+            {status.text}
+          </small>
+        </span>
+        <span className={styles.certificateChevron} aria-hidden="true">
+          +
+        </span>
+      </button>
+
+      <div id={detailsId} className={styles.certificateDetails}>
+        <div className={styles.certificateDetailsInner}>
+          {certificate.credentialId && (
+            <p>
+              <span>Credential ID</span>
+              <code>{certificate.credentialId}</code>
+            </p>
+          )}
+          {certificate.issuedAt && (
+            <p>
+              <span>Issued</span>
+              <strong>{formatShortDate(certificate.issuedAt)}</strong>
+            </p>
+          )}
+          {certificate.expiresAt && (
+            <p>
+              <span>Expires</span>
+              <strong>{formatShortDate(certificate.expiresAt)}</strong>
+            </p>
+          )}
+          {certificate.verificationUrl && (
+            <a href={certificate.verificationUrl} target="_blank" rel="noopener noreferrer">
+              Verify credential
+              <span aria-hidden="true">↗</span>
+            </a>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -432,38 +536,27 @@ function ProfileCard({
   guide,
   isGuide,
   activityFeed,
-  onBack,
 }: {
   displayName: string;
   user: AuthUser;
   guide: GuideProfileResponse | null;
   isGuide: boolean;
   activityFeed: ProfileActivityFeed | null;
-  onBack: () => void;
 }) {
   const avatarInitial = displayName.slice(0, 1).toUpperCase() || "U";
   const roleLabel = isGuide ? "Guide" : "Adventure Seeker";
   const levelData = getLevelData(user, activityFeed);
   const guideCredibility = getGuideCredibilityData(user, guide);
   const verifiedGuide = isGuide && guideCredibility.verifiedBadge;
-  const stats = isGuide
-    ? [
-        { value: guideCredibility.ratingAverage != null ? guideCredibility.ratingAverage.toFixed(1) : "-", label: "Rating" },
-        { value: guideCredibility.ratingCount, label: "Reviews" },
-        { value: guideCredibility.experienceYears ?? guideCredibility.certificateCount, label: guideCredibility.experienceYears != null ? "Years" : "Certs" },
-      ]
-    : [
+  const stats = [
         { value: activityFeed?.summary.completedTripsCount ?? user.confirmedTripsCount ?? 0, label: "Trips" },
         { value: activityFeed?.summary.reviewsCount ?? user.reviewsWrittenCount ?? 0, label: "Reviews" },
         { value: yearsAsMember(user.createdAt), label: "Member" },
       ];
 
   return (
-    <aside className={styles.profileCard}>
-      <button type="button" className={styles.backButton} onClick={onBack} aria-label="Go back">
-        <Icon name="arrow" />
-        <span>Back</span>
-      </button>
+    <aside className={`${styles.profileCard} ${isGuide ? styles.profileCardGuide : ""}`}>
+      <BackButton fallbackTo="/" label="Back" className={styles.backButton} variant="plain" />
 
       <div className={styles.coverStrip} />
 
@@ -490,19 +583,21 @@ function ProfileCard({
       </div>
 
       {isGuide ? (
-        <GuideCredibilityBlock credibility={guideCredibility} />
+        <GuidePassportFields credibility={guideCredibility} guide={guide} />
       ) : (
         <XpBlock levelData={levelData} />
       )}
 
-      <div className={styles.profileStats}>
-        {stats.map((stat) => (
-          <div key={stat.label}>
-            <strong>{stat.value}</strong>
-            <span>{stat.label}</span>
-          </div>
-        ))}
-      </div>
+      {!isGuide && (
+        <div className={styles.profileStats}>
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className={styles.profileActions}>
         <Link to="/profile/edit" className={styles.editProfileButton}>
@@ -650,27 +745,6 @@ function TasteProfileBars({ categories }: { categories: TasteCategory[] }) {
   );
 }
 
-function GuidePublicTrustCard({ credibility }: { credibility: GuideCredibilityData }) {
-  return (
-    <section className={`${styles.panel} ${styles.guideTrustCard}`}>
-      <div className={styles.guideTrustIcon}>
-        <Icon name="shield" />
-      </div>
-      <div>
-        <span className={styles.eyebrow}>Guide trust</span>
-        <h2>{getGuideRankTitle(credibility)}</h2>
-        <p>{credibility.verifiedBadge ? "Verified professional guide" : "Verification pending"}</p>
-        <div className={styles.guideTrustFacts}>
-          <span>{formatGuideRating(credibility)}</span>
-          {credibility.experienceYears != null ? <span>{credibility.experienceYears} years experience</span> : null}
-          {credibility.certificateCount ? <span>{credibility.certificateCount} certificate{credibility.certificateCount === 1 ? "" : "s"}</span> : null}
-          {credibility.verifiedBadge ? <span>Verified badge</span> : null}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function AboutTab({
   user,
   topCategories,
@@ -690,7 +764,7 @@ function AboutTab({
   return (
     <div className={styles.tabPanel}>
       {!isGuide && <ExplorerProgressCard levelData={levelData} />}
-      {isGuide && <GuidePublicTrustCard credibility={guideCredibility} />}
+      {isGuide && <VerificationBlock verified={guideCredibility.verifiedBadge} />}
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
@@ -728,9 +802,8 @@ function GuideExperienceTab({
   verifiedGuide,
   guideReviews,
   guideReviewsLoading,
-  guideReviewsLoadingMore,
   guideReviewsError,
-  onLoadMoreGuideReviews,
+  onOpenReviews,
   loading,
   error,
 }: {
@@ -738,9 +811,8 @@ function GuideExperienceTab({
   verifiedGuide: boolean;
   guideReviews: PaginatedResponse<GuideReview> | null;
   guideReviewsLoading: boolean;
-  guideReviewsLoadingMore: boolean;
   guideReviewsError: string | null;
-  onLoadMoreGuideReviews: () => void;
+  onOpenReviews: () => void;
   loading: boolean;
   error: string | null;
 }) {
@@ -759,72 +831,42 @@ function GuideExperienceTab({
 
   return (
     <div className={styles.tabPanel}>
-      <section className={`${styles.panel} ${styles.credibilityPanel}`}>
-        <div className={styles.credIcon}>
-          <Icon name="award" />
+      <VerificationBlock verified={verifiedGuide} />
+
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <span className={styles.eyebrow}>Field record</span>
+          <h2>Guide passport</h2>
         </div>
-        <div>
-          <span className={styles.eyebrow}>Guide credibility</span>
-          <h2>{verifiedGuide ? "Verified Professional Guide" : "Guide profile"}</h2>
-          <p>
-            {guide?.ratingSummary?.count
-              ? `${guide.ratingSummary.average.toFixed(1)} average rating across ${guide.ratingSummary.count} reviews.`
-              : "Building guide reputation."}
+        {guide?.experienceYears == null ? (
+          <p className={styles.softEmpty}>Experience not listed — this guide hasn't specified their years in the field yet.</p>
+        ) : (
+          <p className={styles.passportNote}>
+            {guide.experienceYears} year{guide.experienceYears === 1 ? "" : "s"} of guiding experience recorded on this profile.
           </p>
-        </div>
+        )}
       </section>
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
-          <span className={styles.eyebrow}>Experience</span>
-          <h2>Professional trail record</h2>
+          <span className={styles.eyebrow}>Credentials</span>
+          <h2>Certificates</h2>
         </div>
-        <div className={styles.guideStatsGrid}>
-          <div>
-            <strong>{guide?.experienceYears ?? "-"}</strong>
-            <span>Years experience</span>
-          </div>
-          <div>
-            <strong>{guide?.certificates?.length ?? 0}</strong>
-            <span>Certificates</span>
-          </div>
-          <div>
-            <strong>{guide?.ratingSummary?.count ?? 0}</strong>
-            <span>Guide reviews</span>
-          </div>
-        </div>
-      </section>
-
-      {guide?.certificates && guide.certificates.length > 0 && (
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <span className={styles.eyebrow}>Credentials</span>
-            <h2>Certificates</h2>
-          </div>
+        {guide?.certificates && guide.certificates.length > 0 ? (
           <div className={styles.certificateGrid}>
             {guide.certificates.map((certificate) => (
-              <article key={certificate.id} className={styles.certificateCard}>
-                <Icon name="shield" />
-                <div>
-                  <h3>{certificate.title}</h3>
-                  <p>{certificate.issuer || "Issuer not provided"}</p>
-                  {certificate.expiresAt && <span>Expires {formatMemberSince(certificate.expiresAt)}</span>}
-                </div>
-              </article>
+              <GuideCertificateCard key={certificate.id} certificate={certificate} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <p className={styles.softEmpty}>No credentials on file yet — Certificates will appear here once this guide adds them to their profile.</p>
+        )}
+      </section>
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <span className={styles.eyebrow}>Guide reviews</span>
-          <h2>What adventurers say</h2>
-        </div>
-
-        <div className={styles.guideReviewSummary}>
-          <strong>{guide?.ratingSummary?.average ?? "-"}</strong>
-          <span>{guide?.ratingSummary?.count ?? 0} guide review{guide?.ratingSummary?.count === 1 ? "" : "s"}</span>
+          <h2>Review activity</h2>
         </div>
 
         {guideReviewsLoading ? (
@@ -832,58 +874,10 @@ function GuideExperienceTab({
         ) : guideReviewsError ? (
           <div className={styles.errorState}>{guideReviewsError}</div>
         ) : !guideReviews?.content.length ? (
-          <p className={styles.softEmpty}>No guide reviews yet. They will appear after adventurers complete trips with this guide.</p>
+          <p className={styles.softEmpty}>First reviews on the horizon — Reviews from completed guided trips will appear here once this guide leads their first booking.</p>
         ) : (
-          <div className={styles.guideReviewList}>
-            {guideReviews.content.map((review) => (
-              <article key={review.id} className={styles.guideReviewCard}>
-                {review.reviewer?.id ? (
-                  <Link
-                    to={`/users/${review.reviewer.id}`}
-                    className={styles.guideReviewAvatar}
-                    aria-label={`View ${review.reviewer?.username || "adventurer"}'s public profile`}
-                  >
-                    {review.reviewer?.profileImageUrl ? (
-                      <img src={review.reviewer.profileImageUrl} alt={review.reviewer.username} />
-                    ) : (
-                      <span>{review.reviewer?.username?.slice(0, 1).toUpperCase() || "A"}</span>
-                    )}
-                  </Link>
-                ) : (
-                  <div className={styles.guideReviewAvatar} aria-hidden="true">
-                    <span>{review.reviewer?.username?.slice(0, 1).toUpperCase() || "A"}</span>
-                  </div>
-                )}
-                <div>
-                  <div className={styles.guideReviewTopline}>
-                    {review.reviewer?.id ? (
-                      <Link to={`/users/${review.reviewer.id}`} className={styles.guideReviewProfileLink}>
-                        {review.reviewer?.username || "Adventurer"}
-                      </Link>
-                    ) : (
-                      <strong>{review.reviewer?.username || "Adventurer"}</strong>
-                    )}
-                    <span aria-label={`${review.rating} out of 5 stars`}>
-                      {"\u2605".repeat(review.rating)}
-                      {"\u2606".repeat(Math.max(0, 5 - review.rating))}
-                    </span>
-                  </div>
-                  <p>{review.comment}</p>
-                  <small>{formatShortDate(review.createdAt)}</small>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-
-        {guideReviews && !guideReviews.last && (
-          <button
-            type="button"
-            className={styles.loadMoreReviewsButton}
-            onClick={onLoadMoreGuideReviews}
-            disabled={guideReviewsLoadingMore}
-          >
-            {guideReviewsLoadingMore ? "Loading guide reviews..." : "Load more guide reviews"}
+          <button type="button" className={styles.secondaryAction} onClick={onOpenReviews}>
+            View guide reviews
           </button>
         )}
       </section>
@@ -891,6 +885,205 @@ function GuideExperienceTab({
       <Link to="/profile/guide/edit" className={styles.secondaryAction}>
         Edit guide profile
       </Link>
+    </div>
+  );
+}
+
+type GuideTemplateCard = ActivityTemplateResponse & {
+  coverImageUrl?: string | null;
+  categoryNames?: string[] | null;
+  addressDisplayName?: string | null;
+  governorate?: string | null;
+  locality?: string | null;
+};
+
+type GuideTemplateSessionStats = {
+  totalSessions: number;
+  upcomingSessions: number;
+  totalBookings: number;
+};
+
+function getGuideTemplateCover(template: GuideTemplateCard) {
+  return (
+    template.coverImageUrl ??
+    (template.images ?? []).find((image) => image.cover)?.url ??
+    (template.images ?? [])[0]?.url ??
+    null
+  );
+}
+
+function getGuideTemplateLocation(template: GuideTemplateCard) {
+  return [template.locality, template.governorate].filter(Boolean).join(", ")
+    || template.addressDisplayName
+    || template.governorate
+    || null;
+}
+
+function formatDifficultyLabel(value?: string | null) {
+  if (!value) return "Difficulty TBD";
+  return value.slice(0, 1) + value.slice(1).toLowerCase();
+}
+
+function formatTemplatePrice(value?: number | null) {
+  if (value == null) return "Price TBD";
+  if (Number(value) === 0) return "Free";
+  return `${value} TND`;
+}
+
+function guideTemplateTags(template: GuideTemplateCard) {
+  const categoryNames = (template.categoryNames ?? []).filter(Boolean);
+  const tags = (template.tags ?? []).filter(Boolean);
+  return [...categoryNames, ...tags]
+    .filter((tag) => !MONGO_ID_PATTERN.test(tag))
+    .slice(0, 4);
+}
+
+function buildGuideTemplateSessionStats(sessions: ActivitySessionResponse[]) {
+  const now = Date.now();
+  const map = new Map<string, GuideTemplateSessionStats>();
+
+  for (const session of sessions) {
+    const previous = map.get(session.templateId) ?? {
+      totalSessions: 0,
+      upcomingSessions: 0,
+      totalBookings: 0,
+    };
+    const startsAt = new Date(session.startAt).getTime();
+    const isUpcoming = !Number.isNaN(startsAt) && startsAt >= now;
+
+    map.set(session.templateId, {
+      totalSessions: previous.totalSessions + 1,
+      upcomingSessions: previous.upcomingSessions + (isUpcoming ? 1 : 0),
+      totalBookings: previous.totalBookings + (session.bookedCount ?? 0),
+    });
+  }
+
+  return map;
+}
+
+function GuideActivitiesTab({
+  templates,
+  sessions,
+  loading,
+  loadingMore,
+  error,
+  onLoadMore,
+}: {
+  templates: PaginatedResponse<ActivityTemplateResponse> | null;
+  sessions: ActivitySessionResponse[];
+  loading: boolean;
+  loadingMore: boolean;
+  error: string | null;
+  onLoadMore: () => void;
+}) {
+  const sessionStats = useMemo(() => buildGuideTemplateSessionStats(sessions), [sessions]);
+
+  if (loading) {
+    return (
+      <div className={styles.tabPanel}>
+        <div className={styles.panelSkeleton} aria-hidden="true" />
+        <div className={styles.panelSkeleton} aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className={styles.errorState}>{error}</div>;
+  }
+
+  if (!templates?.content.length) {
+    return (
+      <div className={styles.tabPanel}>
+        <section className={styles.panel}>
+          <div className={styles.emptyFingerprint}>
+            <Icon name="compass" />
+            <p>No activities created yet — Create your first guided adventure to start receiving bookings.</p>
+          </div>
+          <Link to="/activities/create" className={styles.createActivityCta}>
+            Create activity
+          </Link>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.tabPanel}>
+      <section className={styles.panel}>
+        <div className={styles.panelHeader}>
+          <span className={styles.eyebrow}>Guide activities</span>
+          <h2>Activities you created</h2>
+        </div>
+
+        <div className={styles.guideActivityGrid}>
+          {templates.content.map((rawTemplate) => {
+            const template = rawTemplate as GuideTemplateCard;
+            const cover = getGuideTemplateCover(template);
+            const locationText = getGuideTemplateLocation(template);
+            const tags = guideTemplateTags(template);
+            const stats = sessionStats.get(template.id);
+
+            return (
+              <article key={template.id} className={styles.guideActivityCard}>
+                <Link to={`/guide/templates/${template.id}/sessions`} className={styles.guideActivityMedia}>
+                  {cover ? (
+                    <img src={cover} alt={template.title} />
+                  ) : (
+                    <span>{template.title.slice(0, 1).toUpperCase()}</span>
+                  )}
+                </Link>
+
+                <div className={styles.guideActivityBody}>
+                  <div className={styles.guideActivityTopline}>
+                    <span className={styles.guideActivityId}>ID {template.id}</span>
+                    <span className={template.archived ? styles.statusArchived : styles.statusLive}>
+                      {template.archived ? "Archived" : "Active"}
+                    </span>
+                  </div>
+
+                  <Link to={`/guide/templates/${template.id}/sessions`} className={styles.guideActivityTitle}>
+                    {template.title}
+                  </Link>
+
+                  {locationText && <p className={styles.guideActivityLocation}>{locationText}</p>}
+
+                  <div className={styles.guideActivityFacts}>
+                    <span>{formatTemplatePrice(template.price)}</span>
+                    <span>{formatDifficultyLabel(template.difficulty)}</span>
+                    <span>{stats?.upcomingSessions ?? 0} upcoming</span>
+                    <span>{stats?.totalSessions ?? 0} sessions</span>
+                    <span>{stats?.totalBookings ?? 0} bookings</span>
+                  </div>
+
+                  {tags.length > 0 && (
+                    <div className={styles.guideActivityTags}>
+                      {tags.map((tag) => (
+                        <span key={tag}>{displayCategoryName(tag)}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className={styles.guideActivityActions}>
+                    <Link to={`/activities/${template.id}`}>View public page</Link>
+                    <Link to={`/guide/templates/${template.id}/sessions`}>Manage sessions</Link>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {!templates.last && (
+          <button
+            type="button"
+            className={styles.loadMoreReviewsButton}
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading activities..." : "Load more activities"}
+          </button>
+        )}
+      </section>
     </div>
   );
 }
@@ -1021,6 +1214,11 @@ export function ProfilePage() {
   const [guideReviewsLoading, setGuideReviewsLoading] = useState(false);
   const [guideReviewsLoadingMore, setGuideReviewsLoadingMore] = useState(false);
   const [guideReviewsError, setGuideReviewsError] = useState<string | null>(null);
+  const [guideTemplates, setGuideTemplates] = useState<PaginatedResponse<ActivityTemplateResponse> | null>(null);
+  const [guideSessions, setGuideSessions] = useState<ActivitySessionResponse[]>([]);
+  const [guideTemplatesLoading, setGuideTemplatesLoading] = useState(false);
+  const [guideTemplatesLoadingMore, setGuideTemplatesLoadingMore] = useState(false);
+  const [guideTemplatesError, setGuideTemplatesError] = useState<string | null>(null);
 
   const isGuide = user?.role === "GUIDE";
   const verifiedGuide = isGuide && (user?.guideProfile?.verifiedBadge === true || guide?.verifiedBadge === true);
@@ -1042,9 +1240,25 @@ export function ProfilePage() {
   }, [location.hash, tabs]);
 
   useEffect(() => {
+    if (loading) return;
+
     let alive = true;
 
     async function loadActivityFeed() {
+      if (!user) {
+        setActivityFeed(null);
+        setTopCategories([]);
+        setActivityFeedLoading(false);
+        return;
+      }
+
+      if (isGuide) {
+        setActivityFeed(null);
+        setTopCategories([]);
+        setActivityFeedLoading(false);
+        return;
+      }
+
       setActivityFeedLoading(true);
       setActivityFeedError(null);
       try {
@@ -1078,7 +1292,43 @@ export function ProfilePage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isGuide, loading, user]);
+
+  useEffect(() => {
+    if (!isGuide || activeTab !== "activity") return;
+    if (guideTemplates) return;
+
+    let alive = true;
+
+    async function loadGuideTemplates() {
+      setGuideTemplatesLoading(true);
+      setGuideTemplatesError(null);
+
+      try {
+        const [templatesPage, sessions] = await Promise.all([
+          ActivityApi.listMyTemplatesPage(0, GUIDE_TEMPLATES_PAGE_SIZE),
+          ActivityApi.listMySessions(),
+        ]);
+
+        if (!alive) return;
+        setGuideTemplates(templatesPage);
+        setGuideSessions(sessions ?? []);
+      } catch (e: any) {
+        if (!alive) return;
+        setGuideTemplatesError(e?.message ?? "Failed to load guide activities");
+        setGuideTemplates(null);
+        setGuideSessions([]);
+      } finally {
+        if (alive) setGuideTemplatesLoading(false);
+      }
+    }
+
+    loadGuideTemplates();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeTab, guideTemplates, isGuide]);
 
   useEffect(() => {
     let alive = true;
@@ -1107,7 +1357,7 @@ export function ProfilePage() {
   }, [isGuide]);
 
   useEffect(() => {
-    if (!isGuide || !user?.id || (activeTab !== "guide" && activeTab !== "reviews")) return;
+    if (!isGuide || !user?.id) return;
     if (guideReviews) return;
 
     let alive = true;
@@ -1138,7 +1388,7 @@ export function ProfilePage() {
     return () => {
       alive = false;
     };
-  }, [activeTab, guideReviews, isGuide, user?.id]);
+  }, [guideReviews, isGuide, user?.id]);
 
   const handleLoadMoreTrips = async () => {
     if (!activityFeed || activityFeed.completedTrips.last || loadingMoreTrips) return;
@@ -1203,6 +1453,31 @@ export function ProfilePage() {
       setActivityFeedError(e?.message ?? "Failed to load more reviews");
     } finally {
       setLoadingMoreReviews(false);
+    }
+  };
+
+  const handleLoadMoreGuideTemplates = async () => {
+    if (!guideTemplates || guideTemplates.last || guideTemplatesLoadingMore) return;
+
+    setGuideTemplatesLoadingMore(true);
+    setGuideTemplatesError(null);
+    try {
+      const next = await ActivityApi.listMyTemplatesPage(
+        guideTemplates.page + 1,
+        GUIDE_TEMPLATES_PAGE_SIZE
+      );
+
+      setGuideTemplates((prev) => {
+        if (!prev) return next;
+        return {
+          ...next,
+          content: [...prev.content, ...next.content],
+        };
+      });
+    } catch (e: any) {
+      setGuideTemplatesError(e?.message ?? "Failed to load more guide activities");
+    } finally {
+      setGuideTemplatesLoadingMore(false);
     }
   };
 
@@ -1271,7 +1546,6 @@ export function ProfilePage() {
             guide={guide}
             isGuide={Boolean(isGuide)}
             activityFeed={activityFeed}
-            onBack={() => navigate(-1)}
           />
 
           <section className={styles.contentColumn}>
@@ -1294,26 +1568,35 @@ export function ProfilePage() {
                   verifiedGuide={Boolean(verifiedGuide)}
                   guideReviews={guideReviews}
                   guideReviewsLoading={guideReviewsLoading}
-                  guideReviewsLoadingMore={guideReviewsLoadingMore}
                   guideReviewsError={guideReviewsError}
-                  onLoadMoreGuideReviews={handleLoadMoreGuideReviews}
+                  onOpenReviews={() => handleTabChange("reviews")}
                   loading={guideLoading}
                   error={guideErr}
                 />
               )}
 
-              {activeTab === "activity" && (
-                <ActivityTab
-                  trips={activityFeed?.completedTrips ?? null}
-                  reviews={activityFeed?.reviews ?? null}
-                  loading={activityFeedLoading}
-                  error={activityFeedError}
-                  loadingMoreTrips={loadingMoreTrips}
-                  loadingMoreReviews={loadingMoreReviews}
-                  onLoadMoreTrips={handleLoadMoreTrips}
-                  onLoadMoreReviews={handleLoadMoreReviews}
-                />
-              )}
+              {activeTab === "activity" &&
+                (isGuide ? (
+                  <GuideActivitiesTab
+                    templates={guideTemplates}
+                    sessions={guideSessions}
+                    loading={guideTemplatesLoading}
+                    loadingMore={guideTemplatesLoadingMore}
+                    error={guideTemplatesError}
+                    onLoadMore={handleLoadMoreGuideTemplates}
+                  />
+                ) : (
+                  <ActivityTab
+                    trips={activityFeed?.completedTrips ?? null}
+                    reviews={activityFeed?.reviews ?? null}
+                    loading={activityFeedLoading}
+                    error={activityFeedError}
+                    loadingMoreTrips={loadingMoreTrips}
+                    loadingMoreReviews={loadingMoreReviews}
+                    onLoadMoreTrips={handleLoadMoreTrips}
+                    onLoadMoreReviews={handleLoadMoreReviews}
+                  />
+                ))}
 
               {activeTab === "reviews" &&
                 (isGuide ? (
@@ -1340,3 +1623,4 @@ export function ProfilePage() {
     </>
   );
 }
+

@@ -40,6 +40,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // WebSocket handshake is public; STOMP CONNECT is authenticated by WebSocketAuthChannelInterceptor.
+                        .requestMatchers("/ws/**").permitAll()
 
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
@@ -47,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/activities/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/templates/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessions/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/*/public-profile").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/search/semantic").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
 

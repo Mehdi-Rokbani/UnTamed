@@ -4,18 +4,9 @@ import { useAuth } from "../auth/auth.store";
 import * as UserApi from "../api/user.api";
 import styles from "../style/ProfileEditPage.module.css";
 import { Header } from "../components/Header";
+import { BackButton } from "../components/BackButton";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
-
-function BackIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5M12 5l-7 7 7 7" />
-    </svg>
-  );
-}
 
 function CameraIcon() {
   return (
@@ -119,9 +110,7 @@ export function ProfileEditPage() {
         {/* ── Page header ───────────────────────────────────────────────── */}
         <div className={styles.pageHeader}>
           <div className={styles.pageHeaderInner}>
-            <button className={styles.backButton} onClick={handleBack} aria-label="Go back">
-              <BackIcon />
-            </button>
+            <BackButton fallbackTo="/profile" className={styles.backButton} variant="plain" />
             <h1 className={styles.pageTitle}>Edit profile</h1>
           </div>
         </div>

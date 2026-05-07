@@ -17,6 +17,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,13 +34,14 @@ public class GuestPassService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final UserRepository userRepository;
     private final LevelingService levelingService;
+    private final NotificationService notificationService;
 
     public GuestPassService(
             GuestPassRepository guestPassRepository,
             BookingRepository bookingRepository,
             ActivitySessionRepository activitySessionRepository,
             ActivityTemplateRepository activityTemplateRepository,
-            UserRepository userRepository, LevelingService levelingService
+            UserRepository userRepository, LevelingService levelingService, NotificationService notificationService
     ) {
         this.guestPassRepository = guestPassRepository;
         this.bookingRepository = bookingRepository;
@@ -45,6 +49,7 @@ public class GuestPassService {
         this.activityTemplateRepository = activityTemplateRepository;
         this.userRepository = userRepository;
         this.levelingService = levelingService;
+        this.notificationService = notificationService;
     }
 
     public List<GuestPassDto> generatePassesForPaidBooking(String bookingId) {
@@ -197,10 +202,20 @@ public class GuestPassService {
         pass.markPresent(guideId);
         guestPassRepository.save(pass);
 
-        if (!wasAlreadyPresent && pass.getBookingId() != null) {
-            bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
-                    levelingService.recalculateUserLevel(booking.getUserId())
+        if (!wasAlreadyPresent) {
+            notifyAttendanceChanged(
+                    pass,
+                    NotificationType.ATTENDANCE_MARKED_PRESENT,
+                    NotificationSeverity.SUCCESS,
+                    "Checked in",
+                    "You were marked present for %s."
             );
+
+            if (pass.getBookingId() != null) {
+                bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
+                        levelingService.recalculateUserLevel(booking.getUserId())
+                );
+            }
         }
 
         return buildVerificationResponse(token);
@@ -215,18 +230,78 @@ public class GuestPassService {
 
         validateGuideCanMarkAttendance(pass, guideId);
 
-        boolean wasPresent = pass.getAttendanceStatus() == AttendanceStatus.PRESENT;
+        boolean wasAlreadyAbsent = pass.getAttendanceStatus() == AttendanceStatus.ABSENT;
 
         pass.markAbsent(guideId);
         guestPassRepository.save(pass);
 
-        if (wasPresent && pass.getBookingId() != null) {
-            bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
-                    levelingService.recalculateUserLevel(booking.getUserId())
+        if (!wasAlreadyAbsent) {
+            notifyAttendanceChanged(
+                    pass,
+                    NotificationType.ATTENDANCE_MARKED_ABSENT,
+                    NotificationSeverity.WARNING,
+                    "Attendance marked absent",
+                    "Attendance was marked absent for %s."
             );
+
+            if (pass.getBookingId() != null) {
+                bookingRepository.findById(pass.getBookingId()).ifPresent(booking ->
+                        levelingService.recalculateUserLevel(booking.getUserId())
+                );
+            }
         }
 
         return buildVerificationResponse(token);
+    }
+
+    private void notifyAttendanceChanged(
+            GuestPass pass,
+            NotificationType type,
+            NotificationSeverity severity,
+            String title,
+            String messageTemplate
+    ) {
+        try {
+            if (pass.getBookingId() == null || pass.getBookingId().isBlank()) {
+                return;
+            }
+
+            bookingRepository.findById(pass.getBookingId()).ifPresent(booking -> {
+                if (booking.getUserId() == null || booking.getUserId().isBlank()) {
+                    return;
+                }
+
+                String activityTitle = resolveActivityTitleForNotification(pass, booking);
+
+                notificationService.createAndSend(
+                        booking.getUserId(),
+                        type,
+                        title,
+                        String.format(messageTemplate, activityTitle),
+                        severity,
+                        "/my-bookings",
+                        "GUEST_PASS",
+                        pass.getId()
+                );
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to send attendance notification: " + e.getMessage());
+        }
+    }
+
+    private String resolveActivityTitleForNotification(GuestPass pass, Booking booking) {
+        try {
+            ActivitySession session = resolveSessionForPass(pass, booking);
+            ActivityTemplate template = resolveTemplateForPass(pass, session);
+
+            if (template.getTitle() != null && !template.getTitle().isBlank()) {
+                return template.getTitle();
+            }
+        } catch (Exception ignored) {
+            // notification copy should not block attendance flow
+        }
+
+        return "your activity";
     }
 
     private VerifyGuestPassDto buildVerificationResponse(String token) {
