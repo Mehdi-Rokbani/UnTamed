@@ -30,6 +30,8 @@ import GuestPassPage from "./pages/GuestPassPage";
 import GuideSessionAttendancePage from "./pages/GuideSessionAttendancePage";
 import GuideAttendanceHistoryPage from "./pages/GuideAttendanceHistoryPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import ChatRoomsPage from "./pages/ChatRoomsPage";
+import ChatRoomPage from "./pages/ChatRoomPage";
 
 function ForbiddenFallback() {
   return <div style={{ padding: 24 }}>403 — Forbidden</div>;
@@ -83,6 +85,24 @@ export default function App() {
           element={
             <RequireAuth>
               <NotificationsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/chat"
+          element={
+            <RequireAuth>
+              <ChatRoomsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/chat/rooms/:roomId"
+          element={
+            <RequireAuth>
+              <ChatRoomPage />
             </RequireAuth>
           }
         />

@@ -6,6 +6,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { QRCodeCanvas } from "qrcode.react";
 import L from "leaflet";
 import { Header } from "../components/Header";
+import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
 import ReviewForm from "../components/review/ReviewForm";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
@@ -777,6 +778,12 @@ function PreviewBookingCard({
                 <Link to={`/users/${b.guideId}`}>View guide <IcoExtLink /></Link>
               )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
+              {b.status === "COMPLETED" && (
+                <OpenSessionChatButton
+                  sessionId={b.sessionId}
+                  className={styles.chatActionButton}
+                />
+              )}
               {canReview && b.alreadyReviewed && (
                 <button type="button" disabled>Activity reviewed</button>
               )}

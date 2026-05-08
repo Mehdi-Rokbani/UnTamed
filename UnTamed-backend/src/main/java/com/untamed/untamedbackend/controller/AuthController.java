@@ -72,11 +72,13 @@ public class AuthController {
                 .maxAge(7 * 24 * 60 * 60)
                 .build();
 
-        // Return whatever you want here (user info is typical)
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .body(toUserResponse(user));
+                .body(Map.of(
+                        "accessToken", accessToken,
+                        "user", toUserResponse(user)
+                ));
 
     }
 
@@ -165,7 +167,10 @@ public class AuthController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
-                .body(toUserResponse(user));
+                .body(Map.of(
+                        "accessToken", newAccess,
+                        "user", toUserResponse(user)
+                ));
 
     }
 

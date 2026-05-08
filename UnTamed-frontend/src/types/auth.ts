@@ -66,6 +66,7 @@ export type AuthUser = {
 
 export type LoginResponse =
   | { accessToken: string; user: AuthUser }
+  | { token: string; userResponse: AuthUser }
   | AuthUser;
 
 export type RegisterResponse = AuthUser;

@@ -54,4 +54,6 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     void deleteBySessionIdIn(Collection<String> sessionIds);
 
     List<Booking> findByUserIdAndStatus(String userId, BookingStatus status);
+
+    boolean existsBySessionIdAndUserIdAndStatus(String sessionId, String userId, BookingStatus status);
 }

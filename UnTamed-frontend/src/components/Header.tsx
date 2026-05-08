@@ -405,6 +405,14 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                       My bookings
                     </Link>
 
+                    <Link to="/chat" className={styles.dropdownItem} role="menuitem"
+                      onClick={() => setDropdownOpen(false)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z" />
+                      </svg>
+                      Chats
+                    </Link>
+
                     <div className={styles.dropdownDivider} />
 
                     <button className={`${styles.dropdownItem} ${styles.dropdownLogout}`}

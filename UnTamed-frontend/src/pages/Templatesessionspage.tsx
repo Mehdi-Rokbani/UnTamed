@@ -23,6 +23,7 @@ import {
 } from "../api/activity.api";
 import { removeGuideBooking } from "../api/guide.api";
 import { BackButton } from "../components/BackButton";
+import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
 import styles from "../style/templateSessions.module.css";
 
 const Icon = {
@@ -1146,6 +1147,12 @@ export default function TemplateSessionsPage() {
                           <Icon.Users />
                           {booked}
                         </button>
+
+                        <OpenSessionChatButton
+                          sessionId={s.id}
+                          className={styles.actBtn}
+                          label="Session chat"
+                        />
 
                         {canEdit && (
                           <button

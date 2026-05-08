@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuideGuestPassAttendance } from "../api/guestPass.api";
 import { BackButton } from "../components/BackButton";
+import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
 import styles from "../style/guide-attendance.module.css";
 
 function formatDateTime(iso?: string | null): string {
@@ -101,6 +102,11 @@ export default function GuideSessionAttendancePage() {
             label="Back to history"
             className={styles.actionLink}
             variant="plain"
+          />
+          <OpenSessionChatButton
+            sessionId={sessionId}
+            className={styles.refreshBtn}
+            label="Open chat"
           />
           <button className={styles.refreshBtn} type="button" onClick={load}>
             Refresh

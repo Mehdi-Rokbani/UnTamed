@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as GuestPassApi from "../api/guestPass.api";
 import type { GuideGuestPassAttendance } from "../api/guestPass.api";
 import { BackButton } from "../components/BackButton";
+import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
 import styles from "../style/guide-attendance.module.css";
 
 type StatusFilter = "ALL" | "UPCOMING" | "PAST" | "CANCELLED";
@@ -405,6 +406,12 @@ export default function GuideAttendanceHistoryPage() {
                         >
                           View
                         </a>
+                        <OpenSessionChatButton
+                          sessionId={session.sessionId}
+                          className={styles.actionLink}
+                          label="Open chat"
+                          onClickCapture={(event) => event.stopPropagation()}
+                        />
                       </div>
 
                       {expanded && (

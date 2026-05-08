@@ -4,6 +4,7 @@ import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingRepository;
 import com.untamed.untamedbackend.booking.BookingStatus;
 import com.untamed.untamedbackend.booking.SessionSeatOps;
+import com.untamed.untamedbackend.chat.ChatService;
 import com.untamed.untamedbackend.dto.ActivitySessionCreateRequest;
 import com.untamed.untamedbackend.dto.ActivitySessionDeleteAction;
 import com.untamed.untamedbackend.dto.ActivitySessionDeleteResponse;
@@ -70,6 +71,7 @@ public class ActivitySessionService {
     private final SessionSeatOps sessionSeatOps;
     private final GuestPassRepository guestPassRepo;
     private final NotificationService notificationService;
+    private final ChatService chatService;
 
     // -------- Guide dashboard lists --------
 
@@ -786,6 +788,11 @@ public class ActivitySessionService {
             return;
         }
 
+        createChatSystemMessage(
+                session.getId(),
+                cancelled ? "This session was cancelled." : "This session time was updated."
+        );
+
         try {
             String title = activityTitle(session);
             Collection<String> recipientIds = affectedBookingUserIds(session);
@@ -820,6 +827,15 @@ public class ActivitySessionService {
         } catch (RuntimeException e) {
             System.out.println("Failed to create session change notifications for session "
                     + session.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private void createChatSystemMessage(String sessionId, String message) {
+        try {
+            chatService.createSystemMessageForSession(sessionId, message);
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create chat system message for session "
+                    + sessionId + ": " + e.getMessage());
         }
     }
 

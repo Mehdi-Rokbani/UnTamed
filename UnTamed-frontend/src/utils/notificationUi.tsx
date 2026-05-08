@@ -96,6 +96,12 @@ const TYPE_META: Record<NotificationType, Omit<NotificationMeta, "actionLabel">>
     tone: "error",
     icon: "credit-card",
   },
+  CHAT_MESSAGE: {
+    categoryLabel: "Message",
+    statusLabel: "New message",
+    tone: "info",
+    icon: "message",
+  },
   SYSTEM: {
     categoryLabel: "Account",
     statusLabel: "Account",
@@ -210,6 +216,7 @@ export function NotificationGlyph({ icon }: { icon: string }) {
   if (icon === "receipt") return <IconReceipt />;
   if (icon === "receipt-off") return <IconReceiptOff />;
   if (icon === "credit-card") return <IconCreditCard />;
+  if (icon === "message") return <IconMessage />;
   return <IconBell />;
 }
 
@@ -218,6 +225,7 @@ function actionLabelFor(notification: Notification): string {
   if (category === "Booking" || category === "Payment" || category === "Attendance") return "View booking";
   if (category === "Session update") return "View session";
   if (category === "Review") return "View review";
+  if (category === "Message") return "Open chat";
   return "View details";
 }
 
@@ -243,6 +251,10 @@ function BaseIcon({ children }: { children: React.ReactNode }) {
 
 function IconBell() {
   return <BaseIcon><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></BaseIcon>;
+}
+
+function IconMessage() {
+  return <BaseIcon><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></BaseIcon>;
 }
 
 function IconCalendarCheck() {

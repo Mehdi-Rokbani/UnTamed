@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.booking;
 
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -66,11 +67,11 @@ public class BookingController {
     @PutMapping("/{id}/guests")
     public ResponseEntity<Booking> updateGuestNames(
             @PathVariable String id,
-            @RequestBody UpdateBookingGuestNamesRequest request,
+            @Valid @RequestBody UpdateBookingGuestNamesRequest request,
             Authentication auth
     ) {
         String userId = bookingService.requireAuthenticatedDbUserId(auth);
-        return ResponseEntity.ok(bookingService.updateGuestNames(id, userId, request.getGuestNames()));
+        return ResponseEntity.ok(bookingService.updateGuestNames(id, userId, request.guestNames()));
     }
 
     @GetMapping("/mine")

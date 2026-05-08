@@ -15,5 +15,6 @@ public enum NotificationType {
     REFUND_REJECTED,
     PAYMENT_SUCCESS,
     PAYMENT_FAILED,
+    CHAT_MESSAGE,
     SYSTEM
 }

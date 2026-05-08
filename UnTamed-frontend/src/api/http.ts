@@ -1,6 +1,7 @@
 // src/api/http.ts  (cookie-only)
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { setAccessToken } from "../auth/accessToken";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
@@ -45,6 +46,13 @@ function waitForRefresh(): Promise<boolean> {
   return new Promise((resolve) => refreshWaiters.push(resolve));
 }
 
+function storeAccessTokenFromRefresh(data: any) {
+  const token = data?.accessToken ?? data?.token;
+  if (typeof token === "string" && token.trim()) {
+    setAccessToken(token);
+  }
+}
+
 function isAuthUrl(url?: string) {
   if (!url) return false;
   return (
@@ -84,7 +92,8 @@ http.interceptors.response.use(
       try {
         // bare client should send JSON by default only when needed.
         // here body is null so no Content-Type is required
-        await bare.post("/api/auth/refresh", null);
+        const refreshResponse = await bare.post("/api/auth/refresh", null);
+        storeAccessTokenFromRefresh(refreshResponse.data);
         notifyRefreshWaiters(true);
         return http(original);
       } catch {

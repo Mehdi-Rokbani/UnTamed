@@ -1,4 +1,4 @@
-import { Client, type IMessage } from "@stomp/stompjs";
+import { Client, type IMessage, type StompSubscription } from "@stomp/stompjs";
 import { API_BASE_URL } from "../api/http";
 import { getAccessToken } from "../auth/accessToken";
 import type { Notification } from "../types/notification";
@@ -6,7 +6,20 @@ import type { Notification } from "../types/notification";
 type NotificationHandler = (notification: Notification) => void;
 
 let client: Client | null = null;
-let activeHandler: NotificationHandler | null = null;
+let clientToken: string | null = null;
+let activating = false;
+let subscription: StompSubscription | null = null;
+let disconnectTimer: number | null = null;
+const handlers = new Set<NotificationHandler>();
+
+function debugNotificationSocket(message: string, detail?: unknown) {
+  if (!import.meta.env.DEV) return;
+  if (detail === undefined) {
+    console.debug(message);
+    return;
+  }
+  console.debug(message, detail);
+}
 
 function toWebSocketUrl(apiBaseUrl: string): string {
   const explicit = import.meta.env.VITE_WS_URL;
@@ -18,24 +31,69 @@ function toWebSocketUrl(apiBaseUrl: string): string {
   return `ws://${base}/ws`;
 }
 
-export function connectNotificationSocket(onNotification: NotificationHandler): () => void {
-  activeHandler = onNotification;
+function clearDisconnectTimer() {
+  if (disconnectTimer == null) return;
+  window.clearTimeout(disconnectTimer);
+  disconnectTimer = null;
+}
 
-  const token = getAccessToken();
-  if (!token) {
-    return () => {
-      if (activeHandler === onNotification) activeHandler = null;
-    };
+function subscribeNotifications() {
+  if (!client?.connected || subscription) return;
+
+  subscription = client.subscribe("/user/queue/notifications", (message: IMessage) => {
+    try {
+      const notification = JSON.parse(message.body) as Notification;
+      handlers.forEach((handler) => handler(notification));
+    } catch {
+      // Ignore malformed socket payloads; REST remains the source of truth.
+    }
+  });
+}
+
+function disconnectNow() {
+  clearDisconnectTimer();
+  subscription?.unsubscribe();
+  subscription = null;
+
+  const current = client;
+  client = null;
+  clientToken = null;
+  activating = false;
+  current?.deactivate();
+}
+
+function scheduleDisconnectIfIdle() {
+  if (handlers.size > 0 || disconnectTimer != null) return;
+
+  disconnectTimer = window.setTimeout(() => {
+    if (handlers.size === 0) {
+      disconnectNow();
+    }
+  }, 300);
+}
+
+function ensureClient(token: string) {
+  if (client && clientToken === token) {
+    debugNotificationSocket("notification ws: reusing existing client");
+    if (!client.active && !activating) {
+      activating = true;
+      debugNotificationSocket("notification ws: activating client");
+      client.activate();
+    }
+    return;
   }
 
-  if (client) {
-    return () => {
-      if (activeHandler === onNotification) activeHandler = null;
-    };
+  if (client && clientToken !== token) {
+    disconnectNow();
   }
+
+  const brokerURL = toWebSocketUrl(API_BASE_URL);
+  clientToken = token;
+  activating = true;
+  debugNotificationSocket("notification ws: activating client");
 
   client = new Client({
-    brokerURL: toWebSocketUrl(API_BASE_URL),
+    brokerURL,
     connectHeaders: {
       Authorization: `Bearer ${token}`,
     },
@@ -43,38 +101,38 @@ export function connectNotificationSocket(onNotification: NotificationHandler): 
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
     onConnect: () => {
-      client?.subscribe("/user/queue/notifications", (message: IMessage) => {
-        try {
-          const notification = JSON.parse(message.body) as Notification;
-          activeHandler?.(notification);
-        } catch {
-          // Ignore malformed socket payloads; REST remains the source of truth.
-        }
-      });
+      activating = false;
+      subscribeNotifications();
     },
     onStompError: () => {
-      const current = client;
-      client = null;
-      current?.deactivate();
+      subscription = null;
     },
     onWebSocketClose: () => {
-      client = null;
+      activating = false;
+      subscription = null;
     },
   });
 
   client.activate();
+}
+
+export function connectNotificationSocket(onNotification: NotificationHandler): () => void {
+  clearDisconnectTimer();
+  handlers.add(onNotification);
+
+  const token = getAccessToken();
+  if (token) {
+    ensureClient(token);
+    if (client?.connected) subscribeNotifications();
+  }
 
   return () => {
-    if (activeHandler === onNotification) activeHandler = null;
-    const current = client;
-    client = null;
-    current?.deactivate();
+    handlers.delete(onNotification);
+    scheduleDisconnectIfIdle();
   };
 }
 
 export function disconnectNotificationSocket() {
-  activeHandler = null;
-  const current = client;
-  client = null;
-  current?.deactivate();
+  handlers.clear();
+  disconnectNow();
 }

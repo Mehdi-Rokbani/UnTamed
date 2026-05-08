@@ -13,6 +13,7 @@ export type NotificationType =
   | "REFUND_REJECTED"
   | "PAYMENT_SUCCESS"
   | "PAYMENT_FAILED"
+  | "CHAT_MESSAGE"
   | "SYSTEM";
 
 export type NotificationSeverity = "INFO" | "SUCCESS" | "WARNING" | "ERROR";

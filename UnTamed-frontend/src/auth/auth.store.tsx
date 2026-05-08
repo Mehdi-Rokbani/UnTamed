@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshMe = async () => {
     try {
-      const me = await AuthApi.me(); // ✅ cookie-auth; interceptor refreshes automatically on 401
+      const me = await AuthApi.refreshSession();
       setUser(me);
     } catch {
       clear();

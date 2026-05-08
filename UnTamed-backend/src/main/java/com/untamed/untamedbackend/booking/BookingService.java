@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.booking;
 
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
+import com.untamed.untamedbackend.chat.ChatService;
 import com.untamed.untamedbackend.guestpass.GuestPass;
 import com.untamed.untamedbackend.guestpass.GuestPassRepository;
 import com.untamed.untamedbackend.model.*;
@@ -54,6 +55,7 @@ public class BookingService {
     private final StripeRefundService stripeRefundService;
     private final LevelingService levelingService;
     private final NotificationService notificationService;
+    private final ChatService chatService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -260,8 +262,9 @@ public class BookingService {
         RefundPreviewResponse preview =
                 refundPolicyService.previewUserCancellation(b, session, attempt);
 
+        boolean wasCompleted = b.getStatus() == BookingStatus.COMPLETED;
         boolean wasCompletedAndPresent =
-                b.getStatus() == BookingStatus.COMPLETED && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
+                wasCompleted && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
 
         int toRelease = b.getNumberOfPeople();
         if (toRelease > 0) {
@@ -307,6 +310,13 @@ public class BookingService {
         );
 
         Booking savedBooking = bookingRepository.save(b);
+        if (wasCompleted) {
+            sendChatRemovalEvent(savedBooking);
+        }
+        syncChatRoomParticipants(savedBooking.getSessionId());
+        if (wasCompleted) {
+            createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " left the group.");
+        }
         cancelGuestPasses(savedBooking.getId());
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         notifyRefundOutcome(savedBooking, CancelledBy.USER);
@@ -405,6 +415,8 @@ public class BookingService {
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
         notifyBookingConfirmedIfFirstTransition(savedBooking, oldStatus);
+        syncChatRoomParticipants(savedBooking.getSessionId());
+        createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " joined the group.");
 
         return savedBooking;
     }
@@ -567,6 +579,8 @@ public class BookingService {
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         incrementConfirmedTripsCount(savedBooking.getUserId());
         notifyBookingConfirmedIfFirstTransition(savedBooking, oldStatus);
+        syncChatRoomParticipants(savedBooking.getSessionId());
+        createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " joined the group.");
 
         return savedBooking;
     }
@@ -675,8 +689,9 @@ public class BookingService {
         RefundPreviewResponse preview =
                 refundPolicyService.previewGuideRemoval(b, session, attempt);
 
+        boolean wasCompleted = b.getStatus() == BookingStatus.COMPLETED;
         boolean wasCompletedAndPresent =
-                b.getStatus() == BookingStatus.COMPLETED && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
+                wasCompleted && !Boolean.TRUE.equals(b.isAttendanceMarkedAbsent());
 
         int toRelease = b.getNumberOfPeople();
         if (toRelease > 0) {
@@ -720,6 +735,13 @@ public class BookingService {
         );
 
         Booking savedBooking = bookingRepository.save(b);
+        if (wasCompleted) {
+            sendChatRemovalEvent(savedBooking);
+        }
+        syncChatRoomParticipants(savedBooking.getSessionId());
+        if (wasCompleted) {
+            createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " left the group.");
+        }
         cancelGuestPasses(savedBooking.getId());
         levelingService.recalculateUserLevel(savedBooking.getUserId());
         notifyRefundOutcome(savedBooking, CancelledBy.GUIDE);
@@ -1029,6 +1051,52 @@ public class BookingService {
             System.out.println("Failed to create booking confirmation notifications for booking "
                     + booking.getId() + ": " + e.getMessage());
         }
+    }
+
+    private void syncChatRoomParticipants(String sessionId) {
+        try {
+            chatService.refreshRoomParticipantsForSession(sessionId);
+        } catch (RuntimeException e) {
+            System.out.println("Failed to refresh chat participants for session "
+                    + sessionId + ": " + e.getMessage());
+        }
+    }
+
+    private void createChatSystemMessage(String sessionId, String message) {
+        try {
+            chatService.createSystemMessageForSession(sessionId, message);
+        } catch (RuntimeException e) {
+            System.out.println("Failed to create chat system message for session "
+                    + sessionId + ": " + e.getMessage());
+        }
+    }
+
+    private void sendChatRemovalEvent(Booking booking) {
+        if (booking == null || isBlank(booking.getUserId())) {
+            return;
+        }
+
+        try {
+            chatService.sendUserRemovedFromSessionChat(
+                    booking.getSessionId(),
+                    booking.getUserId(),
+                    "You no longer have access to this chat because your booking was cancelled."
+            );
+        } catch (RuntimeException e) {
+            System.out.println("Failed to send chat removal event for booking "
+                    + booking.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private String usernameForSystemMessage(Booking booking) {
+        if (booking == null || isBlank(booking.getUserId())) {
+            return "A traveler";
+        }
+
+        return userRepository.findById(booking.getUserId())
+                .map(User::getUsername)
+                .filter(username -> !isBlank(username))
+                .orElse("A traveler");
     }
 
     private BookingNotificationContext buildBookingNotificationContext(Booking booking) {

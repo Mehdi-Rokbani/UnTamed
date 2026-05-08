@@ -17,6 +17,24 @@ export async function login(body: LoginRequest): Promise<AuthUser> {
     setAccessToken(data.accessToken);
     return data.user;
   }
+  if ("token" in data) {
+    setAccessToken(data.token);
+    return data.userResponse;
+  }
+  clearAccessToken();
+  return data;
+}
+
+export async function refreshSession(): Promise<AuthUser> {
+  const { data } = await http.post<LoginResponse>("/api/auth/refresh", null);
+  if ("accessToken" in data) {
+    setAccessToken(data.accessToken);
+    return data.user;
+  }
+  if ("token" in data) {
+    setAccessToken(data.token);
+    return data.userResponse;
+  }
   clearAccessToken();
   return data;
 }
