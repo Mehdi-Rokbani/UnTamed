@@ -6,7 +6,7 @@ public record ChatRoomPreviewEvent(
         String roomId,
         String sessionId,
         String lastMessageId,
-        String lastMessageText,
+        String lastMessagePreview,
         String lastMessageSenderId,
         String lastMessageSenderName,
         Instant lastMessageAt,

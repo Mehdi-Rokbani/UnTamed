@@ -112,7 +112,7 @@ function upsertRoomPreview(prevRooms: ChatRoom[], event: ChatRoomPreviewEvent) {
     return {
       ...room,
       sessionId: event.sessionId ?? room.sessionId,
-      lastMessagePreview: event.lastMessageText ?? room.lastMessagePreview,
+      lastMessagePreview: event.lastMessagePreview ?? room.lastMessagePreview,
       lastMessageAt: event.lastMessageAt ?? room.lastMessageAt,
       updatedAt: event.lastMessageAt ?? room.updatedAt,
       participantCount: event.participantCount ?? room.participantCount,
@@ -128,7 +128,7 @@ function upsertRoomPreview(prevRooms: ChatRoom[], event: ChatRoomPreviewEvent) {
       activityTitle: "Session chat",
       activityImageUrl: null,
       participantCount: event.participantCount ?? 0,
-      lastMessagePreview: event.lastMessageText,
+      lastMessagePreview: event.lastMessagePreview,
       lastMessageAt: event.lastMessageAt,
       createdAt: event.lastMessageAt,
       updatedAt: event.lastMessageAt,
@@ -661,11 +661,17 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [accessLostByRoomId, setAccessLostByRoomId] = useState<Record<string, string>>({});
+  const roomsPageRef = useRef<PaginatedResponse<ChatRoom> | null>(null);
+  const previewReloadingRef = useRef(false);
 
   const rooms = roomsPage?.content ?? [];
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
 
-  const loadRooms = async (page = 0) => {
+  useEffect(() => {
+    roomsPageRef.current = roomsPage;
+  }, [roomsPage]);
+
+  const loadRooms = useCallback(async (page = 0) => {
     setLoading(true);
     setError(null);
     try {
@@ -678,7 +684,15 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const reloadRoomsForPreview = useCallback(() => {
+    if (previewReloadingRef.current) return;
+    previewReloadingRef.current = true;
+    loadRooms(0).finally(() => {
+      previewReloadingRef.current = false;
+    });
+  }, [loadRooms]);
 
   useEffect(() => {
     let alive = true;
@@ -707,18 +721,22 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
   useEffect(() => {
     if (!selectedRoomId || loading || error || selectedRoom || rooms.length === 0) return;
     loadRooms(0).catch(() => undefined);
-  }, [error, loading, rooms.length, selectedRoom, selectedRoomId]);
+  }, [error, loadRooms, loading, rooms.length, selectedRoom, selectedRoomId]);
 
   useEffect(() => {
     function handleMembershipEvent(event: ChatRoomMembershipEvent) {
       if (event.type !== "REMOVED" || !event.roomId) return;
 
       setRoomsPage((current) => current
-        ? {
-          ...current,
-          content: current.content.filter((room) => room.id !== event.roomId),
-          totalElements: Math.max(0, current.totalElements - 1),
-        }
+        ? (() => {
+          const content = current.content.filter((room) => room.id !== event.roomId);
+          const removed = content.length !== current.content.length;
+          return {
+            ...current,
+            content,
+            totalElements: removed ? Math.max(0, current.totalElements - 1) : current.totalElements,
+          };
+        })()
         : current);
 
       setAccessLostByRoomId((current) => ({
@@ -734,17 +752,26 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
     function handlePreviewEvent(event: ChatRoomPreviewEvent) {
       if (!event.roomId) return;
 
+      const currentSnapshot = roomsPageRef.current;
+      const shouldReloadRooms = event.type === "MESSAGE_CREATED"
+        && (!currentSnapshot || !currentSnapshot.content.some((room) => room.id === event.roomId));
+
       setRoomsPage((current) => {
         if (!current) return current;
         const content = upsertRoomPreview(current.content, event);
+        const removed = event.type === "ROOM_REMOVED" && content.length !== current.content.length;
         return {
           ...current,
           content,
           totalElements: event.type === "ROOM_REMOVED"
-            ? Math.max(0, current.totalElements - 1)
+            ? removed ? Math.max(0, current.totalElements - 1) : current.totalElements
             : Math.max(current.totalElements, content.length),
         };
       });
+
+      if (shouldReloadRooms) {
+        reloadRoomsForPreview();
+      }
 
       if (event.type === "ROOM_REMOVED") {
         setAccessLostByRoomId((current) => ({
@@ -755,7 +782,7 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
     }
 
     return connectChatRoomPreviewSocket(handlePreviewEvent);
-  }, []);
+  }, [reloadRoomsForPreview]);
 
   return (
     <>

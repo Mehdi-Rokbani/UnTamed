@@ -36,6 +36,15 @@ function debugChatSocket(message: string, detail?: unknown) {
   console.debug(message, detail);
 }
 
+function logChatPreview(message: string, detail?: unknown) {
+  if (!import.meta.env.DEV) return;
+  if (detail === undefined) {
+    console.log(message);
+    return;
+  }
+  console.log(message, detail);
+}
+
 function toWebSocketUrl(apiBaseUrl: string): string {
   const explicit = import.meta.env.VITE_WS_URL;
   if (explicit) return explicit;
@@ -135,6 +144,7 @@ function subscribePreviewOnClient() {
   if (!client?.connected || previewSubscription || previewHandlers.size === 0) return;
 
   previewSubscription = client.subscribe("/user/queue/chat-room-previews", (frame: IMessage) => {
+    logChatPreview("[CHAT_PREVIEW_RECEIVED]", frame.body);
     try {
       const event = JSON.parse(frame.body) as ChatRoomPreviewEvent;
       debugChatSocket("chat room preview received", event.roomId ?? frame.body);
@@ -143,6 +153,7 @@ function subscribePreviewOnClient() {
       // REST chat room list remains the source of truth if a preview is malformed.
     }
   });
+  logChatPreview("[CHAT_PREVIEW_SUBSCRIBE] /user/queue/chat-room-previews");
   debugChatSocket("chat room preview subscribed");
 }
 
@@ -207,6 +218,7 @@ function ensureClient(token: string): boolean {
     heartbeatOutgoing: 10000,
     onConnect: () => {
       activating = false;
+      logChatPreview("[CHAT_WS_CONNECTED]");
       debugChatSocket("chat ws: connected");
       subscribeAllRooms();
       notifyAllStatus(true);

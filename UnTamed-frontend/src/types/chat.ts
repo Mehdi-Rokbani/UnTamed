@@ -53,7 +53,7 @@ export type ChatRoomPreviewEvent = {
   roomId: string;
   sessionId: string;
   lastMessageId: string | null;
-  lastMessageText: string | null;
+  lastMessagePreview: string | null;
   lastMessageSenderId: string | null;
   lastMessageSenderName: string | null;
   lastMessageAt: string | null;

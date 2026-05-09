@@ -74,6 +74,7 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
                 principal.getName()
         );
         accessor.setUser(principal);
+        log.info("[WS_CONNECT] principal={}", accessor.getUser() != null ? accessor.getUser().getName() : null);
         log.info(
                 "websocket accessor user class={} name={}",
                 accessor.getUser() == null ? null : accessor.getUser().getClass().getName(),

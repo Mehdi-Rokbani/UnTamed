@@ -15,6 +15,7 @@ import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatService {
 
     private static final int MAX_ROOM_PAGE_SIZE = 50;
@@ -267,24 +269,29 @@ public class ChatService {
                     Instant.now()
             );
             messagingTemplate.convertAndSendToUser(userId, "/queue/chat-membership", event);
-            messagingTemplate.convertAndSendToUser(
-                    userId,
-                    "/queue/chat-room-previews",
-                    new ChatRoomPreviewEvent(
-                            room.getId(),
-                            room.getSessionId(),
-                            null,
-                            null,
-                            null,
-                            null,
-                            room.getUpdatedAt(),
-                            room.getParticipantUserIds() == null ? 0 : room.getParticipantUserIds().size(),
-                            "ROOM_REMOVED"
-                    )
+            ChatRoomPreviewEvent previewEvent = new ChatRoomPreviewEvent(
+                    room.getId(),
+                    room.getSessionId(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    room.getUpdatedAt(),
+                    room.getParticipantUserIds() == null ? 0 : room.getParticipantUserIds().size(),
+                    "ROOM_REMOVED"
             );
+            log.info(
+                    "[CHAT_PREVIEW_SEND] userId={} roomId={} destination={} type={} preview={} lastMessageAt={}",
+                    userId,
+                    room.getId(),
+                    "/queue/chat-room-previews",
+                    previewEvent.type(),
+                    previewEvent.lastMessagePreview(),
+                    previewEvent.lastMessageAt()
+            );
+            messagingTemplate.convertAndSendToUser(userId, "/queue/chat-room-previews", previewEvent);
         } catch (RuntimeException e) {
-            System.out.println("Failed to send chat membership event for user "
-                    + userId + " session " + sessionId + ": " + e.getMessage());
+            log.warn("Failed to send chat membership event for user {} session {}: {}", userId, sessionId, e.getMessage());
         }
     }
 
@@ -540,12 +547,20 @@ public class ChatService {
                     type
             );
 
-            recipientIds.forEach(userId ->
-                    messagingTemplate.convertAndSendToUser(userId, "/queue/chat-room-previews", event)
-            );
+            recipientIds.forEach(userId -> {
+                log.info(
+                        "[CHAT_PREVIEW_SEND] userId={} roomId={} destination={} type={} preview={} lastMessageAt={}",
+                        userId,
+                        room.getId(),
+                        "/queue/chat-room-previews",
+                        event.type(),
+                        event.lastMessagePreview(),
+                        event.lastMessageAt()
+                );
+                messagingTemplate.convertAndSendToUser(userId, "/queue/chat-room-previews", event);
+            });
         } catch (RuntimeException e) {
-            System.out.println("Failed to send chat room preview event for room "
-                    + room.getId() + ": " + e.getMessage());
+            log.warn("Failed to send chat room preview event for room {}: {}", room.getId(), e.getMessage());
         }
     }
 
