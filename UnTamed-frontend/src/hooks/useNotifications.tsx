@@ -22,6 +22,8 @@ type NotificationContextValue = {
 
 const NotificationsContext = createContext<NotificationContextValue | null>(null);
 const LATEST_LIMIT = 20;
+const LATEST_CACHE_MS = 30_000;
+const UNREAD_COUNT_DEDUPE_MS = 2000;
 
 function notificationTime(notification: Notification): number {
   const time = new Date(notification.createdAt).getTime();
@@ -31,11 +33,11 @@ function notificationTime(notification: Notification): number {
 function mergeNotifications(existing: Notification[], incoming: Notification[]): Notification[] {
   const byId = new Map<string, Notification>();
 
-  for (const notification of existing) {
+  for (const notification of existing.filter((item) => item.type !== "CHAT_MESSAGE")) {
     byId.set(notification.id, notification);
   }
 
-  for (const notification of incoming) {
+  for (const notification of incoming.filter((item) => item.type !== "CHAT_MESSAGE")) {
     byId.set(notification.id, notification);
   }
 
@@ -55,6 +57,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [realtimeEventId, setRealtimeEventId] = useState(0);
   const mountedRef = useRef(true);
   const loadingLatestRef = useRef(false);
+  const latestLoadedRef = useRef(false);
+  const latestLoadedAtRef = useRef(0);
+  const unreadLoadingRef = useRef(false);
+  const unreadLoadedAtRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -65,12 +71,23 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const refreshUnread = useCallback(async () => {
     if (!user) return;
-    const count = await NotificationApi.getUnreadNotificationCount();
-    if (mountedRef.current) setUnreadCount(count);
-  }, [user]);
+    const now = Date.now();
+    if (unreadLoadingRef.current || now - unreadLoadedAtRef.current < UNREAD_COUNT_DEDUPE_MS) return;
+
+    unreadLoadingRef.current = true;
+    try {
+      const count = await NotificationApi.getUnreadNotificationCount();
+      unreadLoadedAtRef.current = Date.now();
+      if (mountedRef.current) setUnreadCount(count);
+    } finally {
+      unreadLoadingRef.current = false;
+    }
+  }, [user?.id]);
 
   const loadLatest = useCallback(async () => {
     if (!user || loadingLatestRef.current) return;
+    if (latestLoadedRef.current && Date.now() - latestLoadedAtRef.current < LATEST_CACHE_MS) return;
+
     loadingLatestRef.current = true;
     setLatestLoading(true);
     setLatestError(null);
@@ -79,6 +96,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       if (!mountedRef.current) return;
       setLatest((items) => mergeNotifications(items, page.content ?? []));
       setLatestLoaded(true);
+      latestLoadedRef.current = true;
+      latestLoadedAtRef.current = Date.now();
     } catch (e: any) {
       if (mountedRef.current) setLatestError(e?.message ?? "Could not load notifications.");
       throw e;
@@ -86,15 +105,18 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       loadingLatestRef.current = false;
       if (mountedRef.current) setLatestLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   const syncNotifications = useCallback((notifications: Notification[]) => {
     if (notifications.length === 0) return;
     setLatest((items) => mergeNotifications(items, notifications));
     setLatestLoaded(true);
+    latestLoadedRef.current = true;
+    latestLoadedAtRef.current = Date.now();
   }, []);
 
   const upsertSocketNotification = useCallback((notification: Notification) => {
+    if (notification.type === "CHAT_MESSAGE") return;
     setLatest((items) => {
       const existing = items.find((item) => item.id === notification.id);
       if (!existing && !notification.read) {
@@ -103,6 +125,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       return mergeNotifications(items, [notification]);
     });
     setLatestLoaded(true);
+    latestLoadedRef.current = true;
+    latestLoadedAtRef.current = Date.now();
   }, []);
 
   const markRead = useCallback(async (notification: Notification) => {
@@ -137,31 +161,32 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       setLatestLoaded(false);
       setLatestError(null);
       setRealtimeAnnouncement(null);
+      latestLoadedRef.current = false;
+      latestLoadedAtRef.current = 0;
+      unreadLoadingRef.current = false;
+      unreadLoadedAtRef.current = 0;
       disconnectNotificationSocket();
       return;
     }
 
     let alive = true;
     refreshUnread().catch(() => undefined);
-    loadLatest().catch(() => undefined);
 
     const disconnect = connectNotificationSocket((notification) => {
       if (!alive) return;
       upsertSocketNotification(notification);
+      if (!notification.read && notification.type !== "CHAT_MESSAGE") {
+        refreshUnread().catch(() => undefined);
+      }
       setRealtimeAnnouncement(`New notification: ${notification.title}`);
       setRealtimeEventId((id) => id + 1);
     });
 
-    const pollId = window.setInterval(() => {
-      refreshUnread().catch(() => undefined);
-    }, 45000);
-
     return () => {
       alive = false;
-      window.clearInterval(pollId);
       disconnect();
     };
-  }, [loadLatest, loading, refreshUnread, upsertSocketNotification, user]);
+  }, [loading, refreshUnread, upsertSocketNotification, user?.id]);
 
   const value = useMemo<NotificationContextValue>(() => ({
     unreadCount,

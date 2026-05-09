@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -30,11 +32,21 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        boolean rebuiltAccessor = false;
+        if (accessor == null) {
+            accessor = StompHeaderAccessor.wrap(message);
+            rebuiltAccessor = true;
+        }
+
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             authenticateConnect(accessor);
         } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
             authorizeSubscribe(accessor);
+        }
+
+        if (rebuiltAccessor || StompCommand.CONNECT.equals(accessor.getCommand())) {
+            return MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
         }
         return message;
     }

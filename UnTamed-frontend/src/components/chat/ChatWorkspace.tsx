@@ -1,11 +1,13 @@
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Header } from "../Header";
 import { BackButton } from "../BackButton";
 import * as ChatApi from "../../api/chat.api";
+import { useAuth } from "../../auth/auth.store";
 import { useChatRoom } from "../../hooks/useChatRoom";
 import { connectChatMembershipSocket, connectChatRoomPreviewSocket } from "../../realtime/chatSocket";
-import type { ChatMessage, ChatRoom, ChatRoomMembershipEvent, ChatRoomPreviewEvent } from "../../types/chat";
+import type { ChatMessage, ChatRoom, ChatRoomMember, ChatRoomMembershipEvent, ChatRoomPreviewEvent } from "../../types/chat";
 import type { PaginatedResponse } from "../../types/pagination";
 import styles from "../../style/chat.module.css";
 
@@ -113,6 +115,7 @@ function upsertRoomPreview(prevRooms: ChatRoom[], event: ChatRoomPreviewEvent) {
       ...room,
       sessionId: event.sessionId ?? room.sessionId,
       lastMessagePreview: event.lastMessagePreview ?? room.lastMessagePreview,
+      lastMessageSenderName: event.lastMessageSenderName ?? room.lastMessageSenderName,
       lastMessageAt: event.lastMessageAt ?? room.lastMessageAt,
       updatedAt: event.lastMessageAt ?? room.updatedAt,
       participantCount: event.participantCount ?? room.participantCount,
@@ -129,7 +132,9 @@ function upsertRoomPreview(prevRooms: ChatRoom[], event: ChatRoomPreviewEvent) {
       activityImageUrl: null,
       participantCount: event.participantCount ?? 0,
       lastMessagePreview: event.lastMessagePreview,
+      lastMessageSenderName: event.lastMessageSenderName,
       lastMessageAt: event.lastMessageAt,
+      unreadCount: 0,
       createdAt: event.lastMessageAt,
       updatedAt: event.lastMessageAt,
     });
@@ -292,9 +297,11 @@ function ChatRoomListItem({ room, active }: { room: ChatRoom; active: boolean })
 function ChatRoomHeader({
   room,
   connected,
+  onMembersClick,
 }: {
   room: ChatRoom | null;
   connected: boolean;
+  onMembersClick: () => void;
 }) {
   const title = room?.activityTitle || "Session group chat";
   return (
@@ -316,10 +323,157 @@ function ChatRoomHeader({
           </span>
         </div>
       </div>
-      <button type="button" className={styles.headerAction} disabled title="Coming soon">
-        View trip
+      <button type="button" className={styles.headerAction} onClick={onMembersClick} disabled={!room}>
+        Members
       </button>
     </header>
+  );
+}
+
+function memberInitial(member: ChatRoomMember) {
+  return (member.name?.trim() || member.email?.trim() || "U").slice(0, 1).toUpperCase();
+}
+
+function MemberModal({
+  room,
+  open,
+  onClose,
+  onRoomUpdated,
+  onRoomRemoved,
+}: {
+  room: ChatRoom | null;
+  open: boolean;
+  onClose: () => void;
+  onRoomUpdated: (room: ChatRoom) => void;
+  onRoomRemoved: (roomId: string, message: string) => void;
+}) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [members, setMembers] = useState<ChatRoomMember[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const isGuideOwner = Boolean(room?.guideId && user?.id === room.guideId);
+  const currentMember = members.find((member) => member.userId === user?.id);
+  const canLeave = Boolean(currentMember && !currentMember.owner);
+
+  const loadMembers = useCallback(async () => {
+    if (!room?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setMembers(await ChatApi.listChatRoomMembers(room.id));
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load chat members.");
+    } finally {
+      setLoading(false);
+    }
+  }, [room?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    loadMembers();
+  }, [loadMembers, open]);
+
+  if (!open || !room) return null;
+
+  const handleLeave = async () => {
+    if (!window.confirm("You will leave this chat, but your trip booking will not be affected.")) return;
+    setBusyUserId(user?.id ?? "me");
+    setError(null);
+    try {
+      await ChatApi.leaveChatRoom(room.id);
+      onRoomRemoved(room.id, "You left this chat.");
+      onClose();
+      navigate("/chat");
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to leave chat.");
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  const handleRemove = async (member: ChatRoomMember) => {
+    if (!window.confirm("Remove this user from chat? Their trip booking will not be affected.")) return;
+    setBusyUserId(member.userId);
+    setError(null);
+    try {
+      const updatedRoom = await ChatApi.removeChatRoomMember(room.id, member.userId);
+      setMembers((current) => current.filter((item) => item.userId !== member.userId));
+      onRoomUpdated(updatedRoom);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to remove member.");
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  return (
+    <div className={styles.modalBackdrop} role="presentation" onMouseDown={onClose}>
+      <section
+        className={styles.memberModal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-members-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className={styles.memberModalHeader}>
+          <div>
+            <h2 id="chat-members-title">Chat members</h2>
+            <p>Manage who can participate in this group chat. Trip bookings are not affected.</p>
+          </div>
+          <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close members">
+            x
+          </button>
+        </div>
+
+        {error && <div className={styles.memberError}>{error}</div>}
+
+        <div className={styles.memberList} aria-busy={loading}>
+          {loading && Array.from({ length: 3 }).map((_, index) => (
+            <div className={styles.memberSkeleton} key={index} />
+          ))}
+
+          {!loading && members.map((member) => (
+            <div className={styles.memberRow} key={member.userId}>
+              <div className={styles.memberAvatar}>
+                {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : <span>{memberInitial(member)}</span>}
+              </div>
+              <div className={styles.memberInfo}>
+                <strong>{member.name || "Trip member"}</strong>
+                <span>{member.email || "No email shown"}</span>
+              </div>
+              <span className={member.owner ? styles.memberRoleOwner : styles.memberRole}>
+                {member.owner ? "Guide" : "Adventurer"}
+              </span>
+              {isGuideOwner && !member.owner && (
+                <button
+                  type="button"
+                  className={styles.memberRemoveButton}
+                  onClick={() => handleRemove(member)}
+                  disabled={busyUserId === member.userId}
+                >
+                  {busyUserId === member.userId ? "Removing..." : "Remove"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {canLeave && (
+          <div className={styles.memberModalFooter}>
+            <button
+              type="button"
+              className={styles.leaveChatButton}
+              onClick={handleLeave}
+              disabled={busyUserId === user?.id}
+            >
+              {busyUserId === user?.id ? "Leaving..." : "Leave chat"}
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -431,40 +585,82 @@ function ChatComposer({
 }
 
 function MessageList({
+  roomId,
   chat,
   onLoadOlder,
 }: {
+  roomId: string;
   chat: ReturnType<typeof useChatRoom>;
   onLoadOlder: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const firstLoadRef = useRef(true);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const autoScrolledRoomRef = useRef<string | null>(null);
+  const nearBottomRef = useRef(true);
   const [showNewMessages, setShowNewMessages] = useState(false);
   const previousCountRef = useRef(0);
 
   const items = useMemo(() => buildMessageItems(chat.messages), [chat.messages]);
 
-  useEffect(() => {
-    const node = listRef.current;
-    if (!node || chat.loading) return;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
 
-    const wasNearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 110;
+  const updateNearBottom = useCallback(() => {
+    const node = listRef.current;
+    if (!node) return true;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 120;
+    nearBottomRef.current = nearBottom;
+    if (nearBottom) setShowNewMessages(false);
+    return nearBottom;
+  }, []);
+
+  useEffect(() => {
+    autoScrolledRoomRef.current = null;
+    previousCountRef.current = 0;
+    nearBottomRef.current = true;
+    setShowNewMessages(false);
+  }, [roomId]);
+
+  useEffect(() => {
+    if (chat.loading) return;
+
+    if (chat.messages.length === 0) {
+      previousCountRef.current = 0;
+      setShowNewMessages(false);
+      return;
+    }
+
     const countIncreased = chat.messages.length > previousCountRef.current;
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    const shouldAutoScrollInitial = autoScrolledRoomRef.current !== roomId;
+    const shouldSmoothScroll = countIncreased && (nearBottomRef.current || Boolean(lastMessage?.mine));
     previousCountRef.current = chat.messages.length;
 
-    if (firstLoadRef.current || wasNearBottom) {
-      node.scrollTo({ top: node.scrollHeight, behavior: firstLoadRef.current ? "auto" : "smooth" });
-      firstLoadRef.current = false;
+    if (shouldAutoScrollInitial) {
+      autoScrolledRoomRef.current = roomId;
+      window.requestAnimationFrame(() => {
+        scrollToBottom("auto");
+        nearBottomRef.current = true;
+        setShowNewMessages(false);
+      });
+      return;
+    }
+
+    if (shouldSmoothScroll) {
+      window.requestAnimationFrame(() => {
+        scrollToBottom("smooth");
+        nearBottomRef.current = true;
+      });
       setShowNewMessages(false);
     } else if (countIncreased) {
       setShowNewMessages(true);
     }
-  }, [chat.loading, chat.messages.length]);
+  }, [chat.loading, chat.messages, roomId, scrollToBottom]);
 
   const jumpToLatest = () => {
-    const node = listRef.current;
-    if (!node) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    scrollToBottom("smooth");
+    nearBottomRef.current = true;
     setShowNewMessages(false);
   };
 
@@ -484,6 +680,7 @@ function MessageList({
         aria-label="Messages"
         aria-live="polite"
         aria-busy={chat.loading}
+        onScroll={updateNearBottom}
       >
         {chat.loading && (
           Array.from({ length: 6 }).map((_, index) => (
@@ -509,6 +706,7 @@ function MessageList({
             />
           )
         ))}
+        <div ref={messagesEndRef} aria-hidden="true" />
       </div>
       {showNewMessages && (
         <button type="button" className={styles.newMessagesButton} onClick={jumpToLatest}>
@@ -523,14 +721,19 @@ function ChatRoomPanel({
   roomId,
   room,
   accessLostMessage,
+  onRoomUpdated,
+  onRoomRemoved,
 }: {
   roomId: string;
   room: ChatRoom | null;
   accessLostMessage: string | null;
+  onRoomUpdated: (room: ChatRoom) => void;
+  onRoomRemoved: (roomId: string, message: string) => void;
 }) {
   const chat = useChatRoom(roomId);
   const sendTyping = chat.sendTyping;
   const [draft, setDraft] = useState("");
+  const [membersOpen, setMembersOpen] = useState(false);
   const lastTypingSentAtRef = useRef(0);
   const typingStopTimerRef = useRef<number | null>(null);
   const trimmedDraft = draft.trim();
@@ -606,7 +809,14 @@ function ChatRoomPanel({
 
   return (
     <section className={styles.panel} aria-label="Selected chat">
-      <ChatRoomHeader room={room} connected={chat.realtimeConnected} />
+      <ChatRoomHeader room={room} connected={chat.realtimeConnected} onMembersClick={() => setMembersOpen(true)} />
+      <MemberModal
+        room={room}
+        open={membersOpen}
+        onClose={() => setMembersOpen(false)}
+        onRoomUpdated={onRoomUpdated}
+        onRoomRemoved={onRoomRemoved}
+      />
       {chat.error && (
         <div className={styles.panelError}>
           <span>{chat.error}</span>
@@ -626,7 +836,7 @@ function ChatRoomPanel({
           <p>This room is hidden because your confirmed booking is no longer active.</p>
         </div>
       ) : (
-        <MessageList chat={chat} onLoadOlder={chat.loadOlder} />
+        <MessageList roomId={roomId} chat={chat} onLoadOlder={chat.loadOlder} />
       )}
       <TypingIndicator users={accessLost ? [] : chat.typingUsers.map((item) => item.username)} />
       <ChatComposer
@@ -655,6 +865,7 @@ function PanelEmpty() {
 }
 
 export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
+  const navigate = useNavigate();
   const [roomsPage, setRoomsPage] = useState<PaginatedResponse<ChatRoom> | null>(null);
   const [pageNumber, setPageNumber] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -663,6 +874,7 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
   const [accessLostByRoomId, setAccessLostByRoomId] = useState<Record<string, string>>({});
   const roomsPageRef = useRef<PaginatedResponse<ChatRoom> | null>(null);
   const previewReloadingRef = useRef(false);
+  const roomListLoadingPagesRef = useRef<Set<number>>(new Set());
 
   const rooms = roomsPage?.content ?? [];
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
@@ -672,9 +884,12 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
   }, [roomsPage]);
 
   const loadRooms = useCallback(async (page = 0) => {
+    if (roomListLoadingPagesRef.current.has(page)) return;
+    roomListLoadingPagesRef.current.add(page);
     setLoading(true);
     setError(null);
     try {
+      console.log("[CHAT_FETCH_ROOMS]");
       const data = await ChatApi.listChatRooms(page, ROOM_PAGE_SIZE);
       setRoomsPage((prev) => page === 0
         ? data
@@ -682,6 +897,7 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
     } catch (e: any) {
       setError(e?.message ?? "Failed to load trip chats.");
     } finally {
+      roomListLoadingPagesRef.current.delete(page);
       setLoading(false);
     }
   }, []);
@@ -694,34 +910,30 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
     });
   }, [loadRooms]);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
+  const handleRoomUpdated = useCallback((updatedRoom: ChatRoom) => {
+    setRoomsPage((current) => current
+      ? { ...current, content: sortRoomsByLatest(mergeRooms(current.content, [updatedRoom])) }
+      : current);
+  }, []);
 
-    ChatApi.listChatRooms(pageNumber, ROOM_PAGE_SIZE)
-      .then((data) => {
-        if (!alive) return;
-        setRoomsPage((prev) => pageNumber === 0
-          ? data
-          : { ...data, content: mergeRooms(prev?.content ?? [], data.content ?? []) });
-      })
-      .catch((e: any) => {
-        if (alive) setError(e?.message ?? "Failed to load trip chats.");
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [pageNumber]);
+  const handleRoomRemoved = useCallback((roomId: string, message: string) => {
+    setRoomsPage((current) => current
+      ? (() => {
+        const content = current.content.filter((room) => room.id !== roomId);
+        const removed = content.length !== current.content.length;
+        return {
+          ...current,
+          content,
+          totalElements: removed ? Math.max(0, current.totalElements - 1) : current.totalElements,
+        };
+      })()
+      : current);
+    setAccessLostByRoomId((current) => ({ ...current, [roomId]: message }));
+  }, []);
 
   useEffect(() => {
-    if (!selectedRoomId || loading || error || selectedRoom || rooms.length === 0) return;
-    loadRooms(0).catch(() => undefined);
-  }, [error, loadRooms, loading, rooms.length, selectedRoom, selectedRoomId]);
+    loadRooms(pageNumber).catch(() => undefined);
+  }, [loadRooms, pageNumber]);
 
   useEffect(() => {
     function handleMembershipEvent(event: ChatRoomMembershipEvent) {
@@ -743,10 +955,14 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
         ...current,
         [event.roomId]: event.message || "You no longer have access to this chat.",
       }));
+
+      if (selectedRoomId === event.roomId) {
+        window.setTimeout(() => navigate("/chat"), 1800);
+      }
     }
 
     return connectChatMembershipSocket(handleMembershipEvent);
-  }, []);
+  }, [navigate, selectedRoomId]);
 
   useEffect(() => {
     function handlePreviewEvent(event: ChatRoomPreviewEvent) {
@@ -811,6 +1027,8 @@ export function ChatWorkspace({ selectedRoomId }: ChatWorkspaceProps) {
               roomId={selectedRoomId}
               room={selectedRoom}
               accessLostMessage={accessLostByRoomId[selectedRoomId] ?? null}
+              onRoomUpdated={handleRoomUpdated}
+              onRoomRemoved={handleRoomRemoved}
             />
           ) : (
             <PanelEmpty />

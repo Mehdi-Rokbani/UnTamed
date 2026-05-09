@@ -8,9 +8,6 @@ import com.untamed.untamedbackend.model.ActivityImage;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.User;
-import com.untamed.untamedbackend.notification.NotificationService;
-import com.untamed.untamedbackend.notification.NotificationSeverity;
-import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
@@ -27,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,7 +51,6 @@ public class ChatService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final NotificationService notificationService;
 
     public record ChatAccessDecision(
             boolean allowed,
@@ -69,13 +66,19 @@ public class ChatService {
 
     public ChatRoomResponse getOrCreateSessionRoom(String sessionId, String currentUserId) {
         ActivitySession session = getSessionOrThrow(sessionId);
-        assertCanAccessSessionChat(session, currentUserId);
 
         ChatRoom room = chatRoomRepository.findBySessionId(sessionId)
-                .map(existing -> refreshRoomMembership(existing, session))
-                .orElseGet(() -> createRoom(session));
+                .map(existing -> {
+                    ChatRoom refreshed = refreshRoomMembership(existing, session);
+                    assertCanAccessRoom(refreshed, currentUserId);
+                    return refreshed;
+                })
+                .orElseGet(() -> {
+                    assertCanAccessSessionChat(session, currentUserId);
+                    return createRoom(session);
+                });
 
-        return toRoomResponse(room);
+        return toRoomResponse(room, currentUserId);
     }
 
     public PaginatedResponse<ChatRoomResponse> listMyRooms(String currentUserId, int page, int size) {
@@ -103,7 +106,7 @@ public class ChatService {
 
         List<ChatRoomResponse> content = accessibleRooms.subList(from, to)
                 .stream()
-                .map(this::toRoomResponse)
+                .map(room -> toRoomResponse(room, currentUserId))
                 .toList();
 
         return PaginatedResponse.of(content, safePage, safeSize, accessibleRooms.size());
@@ -178,7 +181,6 @@ public class ChatService {
 
         ChatMessageResponse response = toMessageResponse(savedMessage, sender, currentUserId);
         sendRoomPreviewEvent(room, response, sender, "MESSAGE_CREATED");
-        notifyChatMessageRecipients(room, sender, text);
         return response;
     }
 
@@ -224,6 +226,92 @@ public class ChatService {
         return inspectRoomAccess(roomId, currentUserId).allowed();
     }
 
+    public ChatRoomResponse markRoomRead(String roomId, String currentUserId) {
+        ChatRoom room = getRoomOrThrow(roomId);
+        assertCanAccessRoom(room, currentUserId);
+        ensureReadMap(room);
+        room.getLastReadAtByUserIds().put(currentUserId, Instant.now());
+        return toRoomResponse(chatRoomRepository.save(room), currentUserId);
+    }
+
+    public List<ChatRoomMemberDto> listMembers(String roomId, String currentUserId) {
+        ChatRoom room = getRoomOrThrow(roomId);
+        assertCanAccessRoom(room, currentUserId);
+
+        LinkedHashSet<String> memberIds = roomRecipientIds(room);
+        Map<String, User> usersById = loadUsersById(memberIds);
+
+        List<ChatRoomMemberDto> members = new ArrayList<>();
+        User guide = room.getGuideId() == null ? null : usersById.get(room.getGuideId());
+        if (guide != null) {
+            members.add(toMemberDto(guide, true));
+        }
+
+        if (room.getParticipantUserIds() != null) {
+            room.getParticipantUserIds().stream()
+                    .filter(userId -> userId != null && !userId.isBlank())
+                    .filter(userId -> !userId.equals(room.getGuideId()))
+                    .map(usersById::get)
+                    .filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(this::senderName, String.CASE_INSENSITIVE_ORDER))
+                    .map(user -> toMemberDto(user, false))
+                    .forEach(members::add);
+        }
+
+        return members;
+    }
+
+    public ChatRoomResponse leaveRoom(String roomId, String currentUserId) {
+        ChatRoom room = getRoomOrThrow(roomId);
+        assertCanAccessRoom(room, currentUserId);
+        if (currentUserId.equals(room.getGuideId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Guides cannot leave their own session chat.");
+        }
+        if (room.getParticipantUserIds() == null || !room.getParticipantUserIds().contains(currentUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not a current chat participant.");
+        }
+
+        User user = userRepository.findById(currentUserId).orElse(null);
+        ensureExclusionLists(room);
+        removeParticipant(room, currentUserId);
+        room.getLeftUserIds().add(currentUserId);
+        room.getKickedUserIds().remove(currentUserId);
+        room.setUpdatedAt(Instant.now());
+        ChatRoom savedRoom = chatRoomRepository.save(room);
+
+        sendMembershipRemovedToUser(savedRoom, currentUserId, "You left this chat.");
+        sendRoomPreviewEvent(savedRoom, null, null, "ROOM_UPDATED");
+        createSystemMessageForSession(savedRoom.getSessionId(), senderName(user) + " left the chat.");
+        return toRoomResponse(savedRoom, currentUserId);
+    }
+
+    public ChatRoomResponse removeMember(String roomId, String targetUserId, String currentUserId) {
+        ChatRoom room = getRoomOrThrow(roomId);
+        assertCanAccessRoom(room, currentUserId);
+        if (!currentUserId.equals(room.getGuideId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the guide can remove chat members.");
+        }
+        if (targetUserId == null || targetUserId.isBlank() || targetUserId.equals(room.getGuideId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove the chat owner.");
+        }
+        if (room.getParticipantUserIds() == null || !room.getParticipantUserIds().contains(targetUserId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat member not found.");
+        }
+
+        User target = userRepository.findById(targetUserId).orElse(null);
+        ensureExclusionLists(room);
+        removeParticipant(room, targetUserId);
+        room.getKickedUserIds().add(targetUserId);
+        room.getLeftUserIds().remove(targetUserId);
+        room.setUpdatedAt(Instant.now());
+        ChatRoom savedRoom = chatRoomRepository.save(room);
+
+        sendMembershipRemovedToUser(savedRoom, targetUserId, "You were removed from this chat by the guide.");
+        sendRoomPreviewEvent(savedRoom, null, null, "ROOM_UPDATED");
+        createSystemMessageForSession(savedRoom.getSessionId(), senderName(target) + " was removed from the chat.");
+        return toRoomResponse(savedRoom, currentUserId);
+    }
+
     public void refreshRoomParticipantsForSession(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return;
@@ -241,7 +329,11 @@ public class ChatService {
 
         room.setTemplateId(session.getTemplateId());
         room.setGuideId(session.getGuideId());
-        room.setParticipantUserIds(completedBookingUserIds(session.getId(), session.getGuideId()));
+        room.setParticipantUserIds(completedBookingUserIds(
+                session.getId(),
+                session.getGuideId(),
+                exclusionUserIds(room)
+        ));
         room.setUpdatedAt(Instant.now());
         ChatRoom savedRoom = chatRoomRepository.save(room);
         sendRoomPreviewEvent(savedRoom, null, null, "ROOM_UPDATED");
@@ -258,38 +350,13 @@ public class ChatService {
         }
 
         try {
-            ChatRoomMembershipEvent event = new ChatRoomMembershipEvent(
-                    room.getId(),
-                    room.getSessionId(),
+            sendMembershipRemovedToUser(
+                    room,
                     userId,
-                    "REMOVED",
                     message == null || message.isBlank()
                             ? "You no longer have access to this chat."
-                            : message.trim(),
-                    Instant.now()
+                            : message.trim()
             );
-            messagingTemplate.convertAndSendToUser(userId, "/queue/chat-membership", event);
-            ChatRoomPreviewEvent previewEvent = new ChatRoomPreviewEvent(
-                    room.getId(),
-                    room.getSessionId(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    room.getUpdatedAt(),
-                    room.getParticipantUserIds() == null ? 0 : room.getParticipantUserIds().size(),
-                    "ROOM_REMOVED"
-            );
-            log.info(
-                    "[CHAT_PREVIEW_SEND] userId={} roomId={} destination={} type={} preview={} lastMessageAt={}",
-                    userId,
-                    room.getId(),
-                    "/queue/chat-room-previews",
-                    previewEvent.type(),
-                    previewEvent.lastMessagePreview(),
-                    previewEvent.lastMessageAt()
-            );
-            messagingTemplate.convertAndSendToUser(userId, "/queue/chat-room-previews", previewEvent);
         } catch (RuntimeException e) {
             log.warn("Failed to send chat membership event for user {} session {}: {}", userId, sessionId, e.getMessage());
         }
@@ -317,15 +384,12 @@ public class ChatService {
         }
 
         boolean guideMatch = currentUserId.equals(session.getGuideId());
-        boolean completedBookingMatch = bookingRepository.existsBySessionIdAndUserIdAndStatus(
-                session.getId(),
-                currentUserId,
-                BookingStatus.COMPLETED
-        );
+        boolean completedBookingMatch = room.getParticipantUserIds() != null
+                && room.getParticipantUserIds().contains(currentUserId);
         boolean allowed = guideMatch || completedBookingMatch;
         String reason = allowed
-                ? guideMatch ? "session guide" : "completed booking"
-                : "no completed booking or guide ownership";
+                ? guideMatch ? "session guide" : "current chat participant"
+                : "not a current chat participant or guide";
 
         return new ChatAccessDecision(
                 allowed,
@@ -345,7 +409,11 @@ public class ChatService {
                 .sessionId(session.getId())
                 .templateId(session.getTemplateId())
                 .guideId(session.getGuideId())
-                .participantUserIds(completedBookingUserIds(session.getId(), session.getGuideId()))
+                .participantUserIds(completedBookingUserIds(
+                        session.getId(),
+                        session.getGuideId(),
+                        Collections.emptySet()
+                ))
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -368,7 +436,11 @@ public class ChatService {
     }
 
     private ChatRoom refreshRoomMembership(ChatRoom room, ActivitySession session) {
-        List<String> participantUserIds = completedBookingUserIds(session.getId(), session.getGuideId());
+        List<String> participantUserIds = completedBookingUserIds(
+                session.getId(),
+                session.getGuideId(),
+                exclusionUserIds(room)
+        );
         boolean changed = !Objects.equals(room.getTemplateId(), session.getTemplateId())
                 || !Objects.equals(room.getGuideId(), session.getGuideId())
                 || !Objects.equals(room.getParticipantUserIds(), participantUserIds);
@@ -384,12 +456,13 @@ public class ChatService {
         return chatRoomRepository.save(room);
     }
 
-    private List<String> completedBookingUserIds(String sessionId, String guideId) {
+    private List<String> completedBookingUserIds(String sessionId, String guideId, Set<String> excludedUserIds) {
         return bookingRepository.findBySessionIdAndStatusOrderByCreatedAtAsc(sessionId, BookingStatus.COMPLETED)
                 .stream()
                 .map(Booking::getUserId)
                 .filter(userId -> userId != null && !userId.isBlank())
                 .filter(userId -> !userId.equals(guideId))
+                .filter(userId -> excludedUserIds == null || !excludedUserIds.contains(userId))
                 .distinct()
                 .toList();
     }
@@ -410,7 +483,11 @@ public class ChatService {
             return false;
         }
 
-        return canAccessSessionChat(session, currentUserId);
+        if (currentUserId.equals(session.getGuideId())) {
+            return true;
+        }
+
+        return room.getParticipantUserIds() != null && room.getParticipantUserIds().contains(currentUserId);
     }
 
     private void assertCanAccessSessionChat(ActivitySession session, String currentUserId) {
@@ -445,10 +522,14 @@ public class ChatService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat room not found."));
     }
 
-    private ChatRoomResponse toRoomResponse(ChatRoom room) {
+    private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserId) {
         ActivityTemplate template = room.getTemplateId() == null
                 ? null
                 : activityTemplateRepository.findById(room.getTemplateId()).orElse(null);
+        ChatMessage latestMessage = chatMessageRepository.findFirstByRoomIdOrderByCreatedAtDesc(room.getId()).orElse(null);
+        User latestSender = latestMessage == null || latestMessage.getSenderId() == null
+                ? null
+                : userRepository.findById(latestMessage.getSenderId()).orElse(null);
 
         return new ChatRoomResponse(
                 room.getId(),
@@ -459,7 +540,9 @@ public class ChatService {
                 coverImageUrl(template),
                 room.getParticipantUserIds() == null ? 0 : room.getParticipantUserIds().size(),
                 room.getLastMessagePreview(),
+                latestSender == null ? null : senderName(latestSender),
                 room.getLastMessageAt(),
+                unreadCount(room, currentUserId),
                 room.getCreatedAt(),
                 room.getUpdatedAt()
         );
@@ -483,40 +566,16 @@ public class ChatService {
         );
     }
 
-    private void notifyChatMessageRecipients(ChatRoom room, User sender, String message) {
-        if (room == null || sender == null || sender.getId() == null || message == null) {
-            return;
-        }
-
-        try {
-            LinkedHashSet<String> recipientIds = roomRecipientIds(room);
-            recipientIds.remove(sender.getId());
-            if (recipientIds.isEmpty()) {
-                return;
-            }
-
-            Map<String, User> usersById = loadUsersById(recipientIds);
-            String title = "New message in " + activityTitleForNotification(room);
-            String notificationMessage = senderName(sender) + ": " + chatNotificationPreview(message);
-
-            recipientIds.stream()
-                    .map(usersById::get)
-                    .filter(Objects::nonNull)
-                    .filter(user -> user.isEnabled() && !user.isSuspended())
-                    .forEach(user -> notificationService.createAndSend(
-                            user.getId(),
-                            NotificationType.CHAT_MESSAGE,
-                            title,
-                            notificationMessage,
-                            NotificationSeverity.INFO,
-                            "/chat/rooms/" + room.getId(),
-                            "CHAT_ROOM",
-                            room.getId()
-                    ));
-        } catch (RuntimeException e) {
-            System.out.println("Failed to create chat message notifications for room "
-                    + room.getId() + ": " + e.getMessage());
-        }
+    private ChatRoomMemberDto toMemberDto(User user, boolean owner) {
+        return new ChatRoomMemberDto(
+                user.getId(),
+                senderName(user),
+                user.getEmail(),
+                user.getRole() != null && user.getRole().name().equals("GUIDE") ? "GUIDE" : "ADVENTURER",
+                user.getProfileImageUrl(),
+                owner,
+                null
+        );
     }
 
     private void sendRoomPreviewEvent(
@@ -577,17 +636,108 @@ public class ChatService {
         return recipientIds;
     }
 
-    private String activityTitleForNotification(ChatRoom room) {
-        ActivityTemplate template = room.getTemplateId() == null
-                ? null
-                : activityTemplateRepository.findById(room.getTemplateId()).orElse(null);
-        if (template != null && template.getTitle() != null && !template.getTitle().isBlank()) {
-            return template.getTitle();
+    private void sendMembershipRemovedToUser(ChatRoom room, String userId, String message) {
+        if (room == null || userId == null || userId.isBlank()) {
+            return;
         }
-        return "your trip chat";
+
+        ChatRoomMembershipEvent event = new ChatRoomMembershipEvent(
+                room.getId(),
+                room.getSessionId(),
+                userId,
+                "REMOVED",
+                message,
+                Instant.now()
+        );
+        messagingTemplate.convertAndSendToUser(userId, "/queue/chat-membership", event);
+
+        ChatRoomPreviewEvent previewEvent = new ChatRoomPreviewEvent(
+                room.getId(),
+                room.getSessionId(),
+                null,
+                null,
+                null,
+                null,
+                room.getUpdatedAt(),
+                room.getParticipantUserIds() == null ? 0 : room.getParticipantUserIds().size(),
+                "ROOM_REMOVED"
+        );
+        log.info(
+                "[CHAT_PREVIEW_SEND] userId={} roomId={} destination={} type={} preview={} lastMessageAt={}",
+                userId,
+                room.getId(),
+                "/queue/chat-room-previews",
+                previewEvent.type(),
+                previewEvent.lastMessagePreview(),
+                previewEvent.lastMessageAt()
+        );
+        messagingTemplate.convertAndSendToUser(userId, "/queue/chat-room-previews", previewEvent);
+    }
+
+    private void removeParticipant(ChatRoom room, String userId) {
+        if (room.getParticipantUserIds() == null) {
+            room.setParticipantUserIds(new ArrayList<>());
+            return;
+        }
+        room.setParticipantUserIds(new ArrayList<>(room.getParticipantUserIds()
+                .stream()
+                .filter(existingUserId -> !Objects.equals(existingUserId, userId))
+                .toList()));
+    }
+
+    private Set<String> exclusionUserIds(ChatRoom room) {
+        LinkedHashSet<String> excluded = new LinkedHashSet<>();
+        if (room.getLeftUserIds() != null) {
+            excluded.addAll(room.getLeftUserIds());
+        }
+        if (room.getKickedUserIds() != null) {
+            excluded.addAll(room.getKickedUserIds());
+        }
+        return excluded;
+    }
+
+    private void ensureExclusionLists(ChatRoom room) {
+        if (room.getLeftUserIds() == null) {
+            room.setLeftUserIds(new LinkedHashSet<>());
+        }
+        if (room.getKickedUserIds() == null) {
+            room.setKickedUserIds(new LinkedHashSet<>());
+        }
+    }
+
+    private void ensureReadMap(ChatRoom room) {
+        if (room.getLastReadAtByUserIds() == null) {
+            room.setLastReadAtByUserIds(new LinkedHashMap<>());
+        }
+    }
+
+    private int unreadCount(ChatRoom room, String currentUserId) {
+        if (room == null || room.getId() == null || currentUserId == null || currentUserId.isBlank()) {
+            return 0;
+        }
+
+        Instant readAt = room.getLastReadAtByUserIds() == null
+                ? null
+                : room.getLastReadAtByUserIds().get(currentUserId);
+        long count = readAt == null
+                ? chatMessageRepository.countByRoomIdAndSenderIdNotAndType(
+                        room.getId(),
+                        currentUserId,
+                        ChatMessageType.TEXT
+                )
+                : chatMessageRepository.countByRoomIdAndCreatedAtAfterAndSenderIdNotAndType(
+                        room.getId(),
+                        readAt,
+                        currentUserId,
+                        ChatMessageType.TEXT
+                );
+        return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
     }
 
     private String senderName(User sender) {
+        if (sender == null) {
+            return "A traveler";
+        }
         return sender.getUsername() != null && !sender.getUsername().isBlank()
                 ? sender.getUsername()
                 : "A traveler";

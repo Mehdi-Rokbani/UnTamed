@@ -11,7 +11,9 @@ public record ChatRoomResponse(
         String activityImageUrl,
         int participantCount,
         String lastMessagePreview,
+        String lastMessageSenderName,
         Instant lastMessageAt,
+        int unreadCount,
         Instant createdAt,
         Instant updatedAt
 ) {

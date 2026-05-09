@@ -6,11 +6,52 @@ import type { ChatMessage, ChatTypingEvent } from "../types/chat";
 
 const PAGE_SIZE = 50;
 const TYPING_EXPIRY_MS = 3000;
+const MARK_READ_DEDUPE_MS = 3000;
+const INITIAL_MESSAGES_DEDUPE_MS = 1000;
+
+type InitialMessagesRequest = ReturnType<typeof ChatApi.listChatMessages>;
 
 type TypingUser = {
   userId: string;
   username: string;
 };
+
+const lastMarkedReadByRoom = new Map<string, number>();
+const initialMessagesByRoom = new Map<string, { expiresAt: number; promise: InitialMessagesRequest }>();
+const messagesByRoomId = new Map<string, ChatMessage[]>();
+const hasOlderByRoomId = new Map<string, boolean>();
+
+function markRoomReadOnce(roomId: string) {
+  const now = Date.now();
+  const previous = lastMarkedReadByRoom.get(roomId) ?? 0;
+  if (now - previous < MARK_READ_DEDUPE_MS) return;
+
+  lastMarkedReadByRoom.set(roomId, now);
+  console.log("[CHAT_MARK_READ]", roomId);
+  ChatApi.markChatRoomRead(roomId).catch(() => undefined);
+}
+
+function loadInitialMessages(roomId: string) {
+  const now = Date.now();
+  const cached = initialMessagesByRoom.get(roomId);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  console.log("[CHAT_FETCH_MESSAGES]", roomId);
+  const promise = ChatApi.listChatMessages(roomId, 0, PAGE_SIZE);
+  initialMessagesByRoom.set(roomId, {
+    expiresAt: now + INITIAL_MESSAGES_DEDUPE_MS,
+    promise,
+  });
+  promise.finally(() => {
+    window.setTimeout(() => {
+      const current = initialMessagesByRoom.get(roomId);
+      if (current?.promise === promise) {
+        initialMessagesByRoom.delete(roomId);
+      }
+    }, INITIAL_MESSAGES_DEDUPE_MS);
+  });
+  return promise;
+}
 
 function byCreatedAtAsc(a: ChatMessage, b: ChatMessage) {
   return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -40,6 +81,7 @@ function friendlyAccessError(message: string) {
 
 export function useChatRoom(roomId: string | undefined) {
   const { user } = useAuth();
+  const userIdRef = useRef<string | undefined>(user?.id);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [page, setPage] = useState(0);
   const [hasOlder, setHasOlder] = useState(false);
@@ -51,11 +93,15 @@ export function useChatRoom(roomId: string | undefined) {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const typingTimersRef = useRef<Map<string, number>>(new Map());
 
+  useEffect(() => {
+    userIdRef.current = user?.id;
+  }, [user?.id]);
+
   const normalizeMessage = useCallback((message: ChatMessage): ChatMessage => ({
     ...message,
     type: message.type ?? "TEXT",
-    mine: message.type !== "SYSTEM" && Boolean(user?.id && message.senderId === user.id),
-  }), [user?.id]);
+    mine: message.type !== "SYSTEM" && Boolean(userIdRef.current && message.senderId === userIdRef.current),
+  }), []);
 
   const normalizeMessages = useCallback(
     (items: ChatMessage[]) => items.map(normalizeMessage),
@@ -64,8 +110,16 @@ export function useChatRoom(roomId: string | undefined) {
 
   const upsertMessage = useCallback((message: ChatMessage) => {
     debugChatState("chat state appended", message.id);
-    setMessages((current) => mergeMessages(current, [normalizeMessage(message)]));
-  }, [normalizeMessage]);
+    const normalized = normalizeMessage(message);
+    setMessages((current) => {
+      const merged = mergeMessages(current, [normalized]);
+      if (roomId) messagesByRoomId.set(roomId, merged);
+      return merged;
+    });
+    if (roomId && message.senderId !== userIdRef.current) {
+      markRoomReadOnce(roomId);
+    }
+  }, [normalizeMessage, roomId]);
 
   const removeTypingUser = useCallback((userId: string) => {
     const timer = typingTimersRef.current.get(userId);
@@ -108,8 +162,13 @@ export function useChatRoom(roomId: string | undefined) {
     setLoading(true);
     setError(null);
     try {
+      console.log("[CHAT_FETCH_MESSAGES]", roomId);
       const data = await ChatApi.listChatMessages(roomId, 0, PAGE_SIZE);
-      setMessages(normalizeMessages(data.content ?? []));
+      markRoomReadOnce(roomId);
+      const nextMessages = normalizeMessages(data.content ?? []);
+      messagesByRoomId.set(roomId, nextMessages);
+      hasOlderByRoomId.set(roomId, !data.last);
+      setMessages(nextMessages);
       setPage(0);
       setHasOlder(!data.last);
     } catch (e: any) {
@@ -125,12 +184,29 @@ export function useChatRoom(roomId: string | undefined) {
     let alive = true;
     if (!roomId) return;
 
+    const cachedMessages = messagesByRoomId.get(roomId);
+    if (cachedMessages) {
+      setMessages(cachedMessages);
+      setPage(0);
+      setHasOlder(hasOlderByRoomId.get(roomId) ?? false);
+      setError(null);
+      setLoading(false);
+      markRoomReadOnce(roomId);
+      return () => {
+        alive = false;
+      };
+    }
+
     setLoading(true);
     setError(null);
-    ChatApi.listChatMessages(roomId, 0, PAGE_SIZE)
+    loadInitialMessages(roomId)
       .then((data) => {
         if (!alive) return;
-        setMessages(normalizeMessages(data.content ?? []));
+        markRoomReadOnce(roomId);
+        const nextMessages = normalizeMessages(data.content ?? []);
+        messagesByRoomId.set(roomId, nextMessages);
+        hasOlderByRoomId.set(roomId, !data.last);
+        setMessages(nextMessages);
         setPage(0);
         setHasOlder(!data.last);
       })
@@ -147,7 +223,7 @@ export function useChatRoom(roomId: string | undefined) {
     return () => {
       alive = false;
     };
-  }, [normalizeMessages, roomId]);
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -178,9 +254,15 @@ export function useChatRoom(roomId: string | undefined) {
     setLoadingOlder(true);
     try {
       const data = await ChatApi.listChatMessages(roomId, nextPage, PAGE_SIZE);
-      setMessages((current) => mergeMessages(normalizeMessages(data.content ?? []), current));
+      const olderMessages = normalizeMessages(data.content ?? []);
+      setMessages((current) => {
+        const merged = mergeMessages(olderMessages, current);
+        messagesByRoomId.set(roomId, merged);
+        return merged;
+      });
       setPage(nextPage);
       setHasOlder(!data.last);
+      hasOlderByRoomId.set(roomId, !data.last);
     } catch (e: any) {
       setError(friendlyAccessError(e?.message ?? "Failed to load older messages."));
     } finally {

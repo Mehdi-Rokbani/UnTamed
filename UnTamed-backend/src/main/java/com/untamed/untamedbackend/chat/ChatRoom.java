@@ -12,7 +12,11 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Document(collection = "chat_rooms")
 @CompoundIndexes({
@@ -36,6 +40,15 @@ public class ChatRoom {
 
     @Builder.Default
     private List<String> participantUserIds = new ArrayList<>();
+
+    @Builder.Default
+    private Set<String> leftUserIds = new LinkedHashSet<>();
+
+    @Builder.Default
+    private Set<String> kickedUserIds = new LinkedHashSet<>();
+
+    @Builder.Default
+    private Map<String, Instant> lastReadAtByUserIds = new LinkedHashMap<>();
 
     private String lastMessagePreview;
     private Instant lastMessageAt;

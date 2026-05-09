@@ -9,9 +9,21 @@ export type ChatRoom = {
   activityImageUrl: string | null;
   participantCount: number;
   lastMessagePreview: string | null;
+  lastMessageSenderName: string | null;
   lastMessageAt: string | null;
+  unreadCount: number;
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+export type ChatRoomMember = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  role: "GUIDE" | "ADVENTURER" | string;
+  avatarUrl: string | null;
+  owner: boolean;
+  joinedAt: string | null;
 };
 
 export type ChatMessage = {

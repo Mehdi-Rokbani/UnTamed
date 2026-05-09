@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/chat")
@@ -51,6 +54,39 @@ public class ChatController {
             @RequestParam(defaultValue = "50") int size
     ) {
         return chatService.listMessages(roomId, currentUserId(authentication), page, size);
+    }
+
+    @GetMapping("/rooms/{roomId}/members")
+    public List<ChatRoomMemberDto> listMembers(
+            @PathVariable String roomId,
+            Authentication authentication
+    ) {
+        return chatService.listMembers(roomId, currentUserId(authentication));
+    }
+
+    @PostMapping("/rooms/{roomId}/leave")
+    public ChatRoomResponse leaveRoom(
+            @PathVariable String roomId,
+            Authentication authentication
+    ) {
+        return chatService.leaveRoom(roomId, currentUserId(authentication));
+    }
+
+    @DeleteMapping("/rooms/{roomId}/members/{userId}")
+    public ChatRoomResponse removeMember(
+            @PathVariable String roomId,
+            @PathVariable String userId,
+            Authentication authentication
+    ) {
+        return chatService.removeMember(roomId, userId, currentUserId(authentication));
+    }
+
+    @PostMapping("/rooms/{roomId}/read")
+    public ChatRoomResponse markRoomRead(
+            @PathVariable String roomId,
+            Authentication authentication
+    ) {
+        return chatService.markRoomRead(roomId, currentUserId(authentication));
     }
 
     @PostMapping("/rooms/{roomId}/messages")

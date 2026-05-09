@@ -1,7 +1,5 @@
 package com.untamed.untamedbackend.chat;
 
-import com.untamed.untamedbackend.booking.BookingRepository;
-import com.untamed.untamedbackend.booking.BookingStatus;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +11,6 @@ public class ChatRoomAccessService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final ActivitySessionRepository activitySessionRepository;
-    private final BookingRepository bookingRepository;
 
     public record ChatAccessDecision(
             boolean allowed,
@@ -53,15 +50,12 @@ public class ChatRoomAccessService {
         }
 
         boolean guideMatch = currentUserId.equals(session.getGuideId());
-        boolean completedBookingMatch = bookingRepository.existsBySessionIdAndUserIdAndStatus(
-                session.getId(),
-                currentUserId,
-                BookingStatus.COMPLETED
-        );
+        boolean completedBookingMatch = room.getParticipantUserIds() != null
+                && room.getParticipantUserIds().contains(currentUserId);
         boolean allowed = guideMatch || completedBookingMatch;
         String reason = allowed
-                ? guideMatch ? "session guide" : "completed booking"
-                : "no completed booking or guide ownership";
+                ? guideMatch ? "session guide" : "current chat participant"
+                : "not a current chat participant or guide";
 
         return new ChatAccessDecision(
                 allowed,

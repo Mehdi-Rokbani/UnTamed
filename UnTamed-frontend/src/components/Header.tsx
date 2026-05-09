@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from "../style/header.module.css";
 import { useAuth } from "../auth/auth.store";
 import { useNotifications } from "../hooks/useNotifications";
+import * as ChatApi from "../api/chat.api";
+import { MiniChatPopup } from "./chat/MiniChatPopup";
+import { connectChatMembershipSocket, connectChatRoomPreviewSocket } from "../realtime/chatSocket";
+import type { ChatRoom, ChatRoomPreviewEvent } from "../types/chat";
 import type { Notification } from "../types/notification";
 import {
   getNotificationMeta,
@@ -31,13 +35,25 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen]     = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [miniChatRoomId, setMiniChatRoomId] = useState<string | null>(null);
   const [bellPulse, setBellPulse] = useState(false);
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const { user, signOut } = useAuth();
   const notifications = useNotifications();
   const navigate          = useNavigate();
+  const location          = useLocation();
   const dropdownRef       = useRef<HTMLDivElement>(null);
   const notificationRef   = useRef<HTMLDivElement>(null);
+  const messagesRef       = useRef<HTMLDivElement>(null);
+  const visibleChatRoomIdRef = useRef<string | null>(null);
+  const messagesOpenRef = useRef(false);
+  const isChatPageRef = useRef(false);
+  const chatRoomsLoadedAtRef = useRef(0);
+  const chatRoomsLoadingRef = useRef(false);
 
   /* ── Scroll listener ── */
   useEffect(() => {
@@ -56,21 +72,25 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
       if (notificationRef.current && !notificationRef.current.contains(target)) {
         setNotificationsOpen(false);
       }
+      if (messagesRef.current && !messagesRef.current.contains(target)) {
+        setMessagesOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
-    if (!notificationsOpen) return;
+    if (!notificationsOpen && !messagesOpen) return;
 
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") setNotificationsOpen(false);
+      if (e.key === "Escape") setMessagesOpen(false);
     };
 
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [notificationsOpen]);
+  }, [messagesOpen, notificationsOpen]);
 
   useEffect(() => {
     if (notifications.realtimeEventId === 0) return;
@@ -93,6 +113,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
     await signOut();
     setDropdownOpen(false);
     setNotificationsOpen(false);
+    setMessagesOpen(false);
     closeMobileMenu();
     navigate("/login");
   };
@@ -105,10 +126,146 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
 
     const willOpen = !notificationsOpen;
     setDropdownOpen(false);
+    setMessagesOpen(false);
     setNotificationsOpen(willOpen);
     if (willOpen) {
       await notifications.loadLatest().catch(() => undefined);
     }
+  };
+
+  const activeRoomId = useMemo(() => {
+    const match = location.pathname.match(/^\/chat\/rooms\/([^/]+)/);
+    return match?.[1] ?? null;
+  }, [location.pathname]);
+  const isChatPage = location.pathname === "/chat" || location.pathname.startsWith("/chat/rooms/");
+  const visibleChatRoomId = miniChatRoomId ?? activeRoomId;
+
+  useEffect(() => {
+    visibleChatRoomIdRef.current = visibleChatRoomId;
+    messagesOpenRef.current = messagesOpen;
+    isChatPageRef.current = isChatPage;
+  }, [isChatPage, messagesOpen, visibleChatRoomId]);
+
+  const sortChatRooms = (rooms: ChatRoom[]) => [...rooms].sort((a, b) => {
+    const left = new Date(a.lastMessageAt ?? a.updatedAt ?? a.createdAt ?? 0).getTime();
+    const right = new Date(b.lastMessageAt ?? b.updatedAt ?? b.createdAt ?? 0).getTime();
+    return right - left;
+  });
+
+  const loadChatRooms = async (force = false) => {
+    if (!user) return;
+    if (!force && chatRooms.length > 0 && Date.now() - chatRoomsLoadedAtRef.current < 30_000) return;
+    if (chatRoomsLoadingRef.current) return;
+    chatRoomsLoadingRef.current = true;
+    setChatLoading(true);
+    setChatError(null);
+    try {
+      const page = await ChatApi.listChatRooms(0, 10);
+      chatRoomsLoadedAtRef.current = Date.now();
+      setChatRooms(sortChatRooms(page.content ?? []));
+    } catch (e: any) {
+      setChatError(e?.message ?? "Could not load messages.");
+    } finally {
+      chatRoomsLoadingRef.current = false;
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setChatRooms([]);
+      setChatError(null);
+      chatRoomsLoadedAtRef.current = 0;
+      chatRoomsLoadingRef.current = false;
+      return;
+    }
+    return connectChatRoomPreviewSocket((event: ChatRoomPreviewEvent) => {
+      if (!event.roomId) return;
+      setChatRooms((current) => {
+        if (event.type === "ROOM_REMOVED") {
+          return current.filter((room) => room.id !== event.roomId);
+        }
+
+        const existing = current.find((room) => room.id === event.roomId);
+        if (!existing) {
+          if (
+            event.type === "MESSAGE_CREATED"
+            && messagesOpenRef.current
+            && !isChatPageRef.current
+          ) {
+            loadChatRooms(true).catch(() => undefined);
+          }
+          return current;
+        }
+
+        const shouldIncrement = event.type === "MESSAGE_CREATED"
+          && event.lastMessageSenderId !== user.id
+          && visibleChatRoomIdRef.current !== event.roomId;
+
+        return sortChatRooms(current.map((room) => room.id === event.roomId
+          ? {
+            ...room,
+            sessionId: event.sessionId ?? room.sessionId,
+            lastMessagePreview: event.lastMessagePreview ?? room.lastMessagePreview,
+            lastMessageSenderName: event.lastMessageSenderName ?? room.lastMessageSenderName,
+            lastMessageAt: event.lastMessageAt ?? room.lastMessageAt,
+            updatedAt: event.lastMessageAt ?? room.updatedAt,
+            participantCount: event.participantCount ?? room.participantCount,
+            unreadCount: shouldIncrement ? (room.unreadCount ?? 0) + 1 : room.unreadCount ?? 0,
+          }
+          : room));
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!visibleChatRoomId) return;
+    setChatRooms((current) => current.map((room) => (
+      room.id === visibleChatRoomId ? { ...room, unreadCount: 0 } : room
+    )));
+  }, [visibleChatRoomId]);
+
+  useEffect(() => {
+    if (isChatPage) {
+      setMiniChatRoomId(null);
+    }
+  }, [isChatPage]);
+
+  useEffect(() => {
+    if (!user) return;
+    return connectChatMembershipSocket((event) => {
+      if (event.type !== "REMOVED" || !event.roomId) return;
+      setChatRooms((current) => current.filter((room) => room.id !== event.roomId));
+      if (miniChatRoomId === event.roomId) {
+        setMiniChatRoomId(null);
+      }
+    });
+  }, [miniChatRoomId, user]);
+
+  const openMessages = async () => {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      navigate("/chat");
+      return;
+    }
+
+    const willOpen = !messagesOpen;
+    setDropdownOpen(false);
+    setNotificationsOpen(false);
+    setMessagesOpen(willOpen);
+    if (willOpen && !isChatPage) {
+      await loadChatRooms().catch(() => undefined);
+    }
+  };
+
+  const handleChatClick = async (room: ChatRoom) => {
+    setMessagesOpen(false);
+    setChatRooms((current) => current.map((item) => item.id === room.id ? { ...item, unreadCount: 0 } : item));
+    if (isChatPage) {
+      navigate(`/chat/rooms/${room.id}`);
+      return;
+    }
+    setMiniChatRoomId(room.id);
   };
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -126,6 +283,13 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   const bellAriaLabel = notifications.unreadCount > 0
     ? `Notifications, ${notifications.unreadCount} unread`
     : "Notifications";
+  const chatUnreadCount = useMemo(
+    () => chatRooms.reduce((total, room) => total + Math.max(0, room.unreadCount ?? 0), 0),
+    [chatRooms]
+  );
+  const messagesAriaLabel = chatUnreadCount > 0
+    ? `Messages, ${chatUnreadCount} unread`
+    : "Messages";
 
   const profileImageUrl = user?.profileImageUrl ?? null;
   const showGuideVerifiedBadge = user?.role === "GUIDE" && user.guideProfile?.verifiedBadge === true;
@@ -196,6 +360,121 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
               </div>
             ) : (
               <>
+              <div className={styles.notificationWrapper} ref={messagesRef}>
+                <button
+                  type="button"
+                  className={[
+                    styles.notificationButton,
+                    messagesOpen ? styles.notificationButtonActive : "",
+                  ].filter(Boolean).join(" ")}
+                  onClick={openMessages}
+                  aria-label={messagesAriaLabel}
+                  aria-expanded={messagesOpen}
+                  aria-haspopup="true"
+                >
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z" />
+                  </svg>
+                  {chatUnreadCount > 0 && chatUnreadCount <= 3 && (
+                    <span className={styles.notificationDotBadge} aria-hidden="true" />
+                  )}
+                  {chatUnreadCount > 3 && (
+                    <span className={styles.notificationBadge} aria-hidden="true">
+                      {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
+                    </span>
+                  )}
+                  {chatUnreadCount > 0 && (
+                    <span className={styles.srOnly}>{chatUnreadCount} unread messages</span>
+                  )}
+                </button>
+
+                {messagesOpen && (
+                  <div
+                    className={`${styles.notificationDropdown} ${styles.messagesDropdown}`}
+                    role="dialog"
+                    aria-labelledby="messages-dropdown-title"
+                  >
+                    <div className={styles.notificationDropdownHeader}>
+                      <div>
+                        <div className={styles.notificationTitle} id="messages-dropdown-title">Messages</div>
+                        {chatUnreadCount > 0 && (
+                          <div className={styles.notificationNewChip}>{chatUnreadCount} unread</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={styles.notificationList}>
+                      {chatLoading && (
+                        Array.from({ length: 4 }).map((_, index) => (
+                          <div className={styles.notificationSkeleton} key={index}>
+                            <span />
+                            <div>
+                              <strong />
+                              <em />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {!chatLoading && chatError && (
+                        <div className={styles.notificationState}>
+                          <strong>Could not load messages</strong>
+                          <button type="button" onClick={() => loadChatRooms().catch(() => undefined)}>
+                            Retry
+                          </button>
+                        </div>
+                      )}
+                      {!chatLoading && !chatError && chatRooms.length === 0 && (
+                        <div className={styles.notificationEmptyState}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z" />
+                          </svg>
+                          <strong>No messages yet</strong>
+                          <span>Trip group chats will appear here.</span>
+                        </div>
+                      )}
+                      {!chatLoading && !chatError && chatRooms.map((room) => {
+                        const title = room.activityTitle || "Session chat";
+                        const unread = Math.max(0, room.unreadCount ?? 0);
+                        const preview = room.lastMessagePreview || "No messages yet.";
+                        const sender = room.lastMessageSenderName ? `${room.lastMessageSenderName}: ` : "";
+                        return (
+                          <button
+                            type="button"
+                            className={`${styles.messagePreviewItem} ${unread > 0 ? styles.messagePreviewUnread : ""}`}
+                            key={room.id}
+                            onClick={() => handleChatClick(room)}
+                          >
+                            <span className={styles.messagePreviewAvatar}>
+                              {room.activityImageUrl ? (
+                                <img src={room.activityImageUrl} alt="" />
+                              ) : (
+                                <span>{title.slice(0, 2).toUpperCase()}</span>
+                              )}
+                            </span>
+                            <span className={styles.messagePreviewBody}>
+                              <span className={styles.messagePreviewTitle}>{title}</span>
+                              <span className={styles.messagePreviewText}>{sender}{preview}</span>
+                            </span>
+                            <span className={styles.messagePreviewMeta}>
+                              <span>{relativeNotificationTime(room.lastMessageAt ?? room.updatedAt ?? room.createdAt ?? new Date().toISOString())}</span>
+                              {unread > 0 && <i aria-hidden="true">{unread > 9 ? "9+" : unread}</i>}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <Link
+                      to="/chat"
+                      className={styles.notificationViewAll}
+                      onClick={() => setMessagesOpen(false)}
+                    >
+                      View all messages
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <div className={styles.notificationWrapper} ref={notificationRef}>
                 <span className={styles.srOnly} aria-live="polite">
                   {notifications.realtimeAnnouncement ?? ""}
@@ -329,6 +608,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                   className={`${styles.profileButton} ${dropdownOpen ? styles.profileButtonActive : ""}`}
                   onClick={() => {
                     setNotificationsOpen(false);
+                    setMessagesOpen(false);
                     setDropdownOpen((v) => !v);
                   }}
                   aria-expanded={dropdownOpen}
@@ -463,6 +743,18 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
             style={{ width: `${Math.min(100, Math.max(0, stepProgress!))}%` }}
           />
         </div>
+      )}
+      {!isChatPage && miniChatRoomId && (
+        <MiniChatPopup
+          roomId={miniChatRoomId}
+          initialRoom={chatRooms.find((room) => room.id === miniChatRoomId) ?? null}
+          onClose={() => setMiniChatRoomId(null)}
+          onExpand={() => {
+            const roomId = miniChatRoomId;
+            setMiniChatRoomId(null);
+            navigate(`/chat/rooms/${roomId}`);
+          }}
+        />
       )}
     </>
   );

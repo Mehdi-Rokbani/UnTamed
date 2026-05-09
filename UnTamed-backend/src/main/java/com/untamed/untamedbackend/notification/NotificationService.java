@@ -138,7 +138,11 @@ public class NotificationService {
                 Math.max(1, Math.min(size, MAX_PAGE_SIZE))
         );
         Page<Notification> notifications =
-                notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(currentUserId, pageable);
+                notificationRepository.findByRecipientUserIdAndTypeNotOrderByCreatedAtDesc(
+                        currentUserId,
+                        NotificationType.CHAT_MESSAGE,
+                        pageable
+                );
         List<NotificationResponse> content = notifications.getContent().stream()
                 .map(this::toResponse)
                 .toList();
@@ -147,7 +151,10 @@ public class NotificationService {
     }
 
     public long unreadCount(String currentUserId) {
-        return notificationRepository.countByRecipientUserIdAndReadFalse(currentUserId);
+        return notificationRepository.countByRecipientUserIdAndReadFalseAndTypeNot(
+                currentUserId,
+                NotificationType.CHAT_MESSAGE
+        );
     }
 
     public NotificationResponse markRead(String notificationId, String currentUserId) {
@@ -161,7 +168,10 @@ public class NotificationService {
     }
 
     public void markAllRead(String currentUserId) {
-        List<Notification> unread = notificationRepository.findByRecipientUserIdAndReadFalse(currentUserId);
+        List<Notification> unread = notificationRepository.findByRecipientUserIdAndReadFalseAndTypeNot(
+                currentUserId,
+                NotificationType.CHAT_MESSAGE
+        );
         if (unread.isEmpty()) {
             return;
         }
