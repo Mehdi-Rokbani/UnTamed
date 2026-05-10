@@ -10,6 +10,7 @@ import {
   type AddressSuggestion,
   listPublicTemplatesPage,
   searchPublicTemplatesPage,
+  suggestPublicAddresses,
 } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
@@ -22,13 +23,10 @@ const PAGE_SIZE = 12;
 
 const QUICK_SUGGESTIONS = [
   "Hiking",
-  "Camping",
   "Surfing",
-  "Climbing",
-  "Mountain Biking",
   "Diving",
-  "Kayaking",
-  "Trekking",
+  "Camping",
+  "MTB",
 ];
 
 function semanticItemToTemplateCard(item: SemanticSearchItem): PublicTemplateCard {
@@ -87,6 +85,9 @@ export default function HomePage() {
   const [queryInput, setQueryInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [heroLocationSuggestions, setHeroLocationSuggestions] = useState<AddressSuggestion[]>([]);
+  const [heroLocationOpen, setHeroLocationOpen] = useState(false);
+  const [heroLocationLoading, setHeroLocationLoading] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "All">("All");
@@ -135,6 +136,30 @@ export default function HomePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const trimmed = locationInput.trim();
+    if (!trimmed) {
+      setHeroLocationSuggestions([]);
+      setHeroLocationOpen(false);
+      return;
+    }
+
+    const handle = window.setTimeout(async () => {
+      try {
+        setHeroLocationLoading(true);
+        const data = await suggestPublicAddresses(trimmed);
+        setHeroLocationSuggestions(data ?? []);
+        setHeroLocationOpen((data ?? []).length > 0);
+      } catch {
+        setHeroLocationSuggestions([]);
+      } finally {
+        setHeroLocationLoading(false);
+      }
+    }, 280);
+
+    return () => window.clearTimeout(handle);
+  }, [locationInput]);
 
   const categoryOptions = useMemo(
     () => categories.map((c) => ({ id: c.id, label: c.name })),
@@ -317,6 +342,7 @@ export default function HomePage() {
   const handleLocationSelect = (address: AddressSuggestion) => {
     setLocationInput(address.displayName);
     setSelectedAddressId(address.id);
+    setHeroLocationOpen(false);
   };
 
   const handleLocationInputChange = (value: string) => {
@@ -344,7 +370,17 @@ export default function HomePage() {
   };
 
   const handleQuickSuggestion = (label: string) => {
-    setQueryInput(label);
+    const categoryName = label === "MTB" ? "Mountain Biking" : label;
+    const matchingCategory = categories.find(
+      (category) => category.name.trim().toLowerCase() === categoryName.toLowerCase()
+    );
+
+    if (matchingCategory) {
+      handleToggleCategory(matchingCategory.id);
+      setQueryInput("");
+    } else {
+      setQueryInput(categoryName);
+    }
     scrollToResults();
   };
 
@@ -384,12 +420,181 @@ export default function HomePage() {
         {/* ── COMPACT HERO ── */}
         <section
           ref={heroRef}
-          className={`${styles.homeHero} ${!heroVisible ? styles.homeHeroHidden : ""}`}
+          className={`${styles.heroCinematic} ${!heroVisible ? styles.homeHeroHidden : ""}`}
         >
           {/* Subtle decorative background blobs */}
           <div className={styles.heroBlob1} aria-hidden="true" />
           <div className={styles.heroBlob2} aria-hidden="true" />
-          <div className={styles.heroPattern} aria-hidden="true" />
+          <div className={styles.heroShell}>
+            <div className={styles.heroLeft}>
+              <div className={styles.heroTrustPill}>
+                <span className={styles.trustDot} />
+                200+ adventures · 4.9★ average · Expert-led
+              </div>
+
+              <h1 className={styles.heroHeadline}>
+                <span>The world is wild.</span>
+                <span className={styles.heroAccent}>Go find it.</span>
+              </h1>
+
+              <p className={styles.heroSubtitle}>
+                Book curated outdoor experiences with certified local guides. From summit to shore.
+              </p>
+
+              <form
+                className={styles.heroSearchCard}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  scrollToResults();
+                }}
+              >
+                <div className={styles.heroSearchGrid}>
+                  <label className={styles.heroSearchField}>
+                    <span>What</span>
+                    <input
+                      value={queryInput}
+                      placeholder="Hiking, surfing, climbing..."
+                      onChange={(event) => setQueryInput(event.target.value)}
+                    />
+                  </label>
+
+                  <label className={`${styles.heroSearchField} ${styles.heroLocationField}`}>
+                    <span>Where</span>
+                    <input
+                      value={locationInput}
+                      placeholder="Any destination"
+                      onFocus={() => {
+                        if (heroLocationSuggestions.length > 0) setHeroLocationOpen(true);
+                      }}
+                      onChange={(event) => handleLocationInputChange(event.target.value)}
+                    />
+                    {heroLocationLoading && <em className={styles.heroFieldLoading}>...</em>}
+                    {heroLocationOpen && heroLocationSuggestions.length > 0 && (
+                      <div className={styles.heroLocationMenu}>
+                        {heroLocationSuggestions.map((item) => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => handleLocationSelect(item)}
+                          >
+                            {item.displayName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </label>
+
+                  <label className={styles.heroSearchField}>
+                    <span>From</span>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(event) => setDateFrom(event.target.value)}
+                    />
+                  </label>
+
+                  <label className={styles.heroSearchField}>
+                    <span>To</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom || new Date().toISOString().split("T")[0]}
+                      onChange={(event) => setDateTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className={styles.heroSearchFooter}>
+                  <span>128 open spots this month</span>
+                  <button type="submit">Explore now</button>
+                </div>
+              </form>
+
+              <div className={styles.heroQuickChips}>
+                <span>TRY:</span>
+                {QUICK_SUGGESTIONS.map((label) => {
+                  const categoryName = label === "MTB" ? "Mountain Biking" : label;
+                  const matchingCategory = categories.find(
+                    (category) => category.name.trim().toLowerCase() === categoryName.toLowerCase()
+                  );
+                  const selected = matchingCategory
+                    ? categoryIds.includes(matchingCategory.id)
+                    : queryInput === categoryName;
+
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      className={selected ? styles.heroChipActive : ""}
+                      onClick={() => handleQuickSuggestion(label)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className={styles.heroStats}>
+                <div><strong>12K+</strong><span>Adventurers</span></div>
+                <div><strong>50+</strong><span>Expert guides</span></div>
+                <div><strong>38</strong><span>Countries</span></div>
+              </div>
+
+              {state === "done" && hasActiveFilters && (
+                <div className={styles.resultsPill}>
+                  <span className={styles.resultsPillDot} />
+                  <span>
+                    <strong>{templates.length}</strong> of {totalElements || templates.length}{" "}
+                    {templates.length === 1 ? "experience" : "experiences"} found
+                  </span>
+                  {templates.length > 0 && (
+                    <button type="button" className={styles.seeResultsBtn} onClick={scrollToResults}>
+                      See results ↓
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.heroRight} aria-label="Adventure highlights">
+              <div className={`${styles.heroFloatingCard} ${styles.heroAvailabilityCard}`}>
+                <span className={styles.heroPulseDot} />
+                <div><strong>Next available</strong><span>Jun 14 · 4 spots left</span></div>
+              </div>
+              <div className={`${styles.heroFloatingCard} ${styles.heroRatingCard}`}>
+                <strong>4.9</strong><span>★★★★★</span><em>2,400 reviews</em>
+              </div>
+              <div className={`${styles.heroFloatingCard} ${styles.heroDestinationCard}`}>
+                38 destinations
+              </div>
+
+              <div className={styles.heroMosaic}>
+                <article className={`${styles.heroScene} ${styles.sceneForest}`}>
+                  <span>HARD · 4,200m</span><i className={styles.sceneSun} /><i className={styles.scenePerson} />
+                </article>
+                <article className={`${styles.heroScene} ${styles.sceneOcean}`}>
+                  <span>BALI · EASY</span><i className={styles.sceneSun} /><i className={styles.scenePerson} />
+                </article>
+                <article className={`${styles.heroScene} ${styles.sceneDesert}`}>
+                  <span>MOAB · HARD</span><i className={styles.scenePerson} />
+                </article>
+                <article className={`${styles.heroScene} ${styles.sceneSnow}`}>
+                  <span>NEPAL · MODERATE</span><i className={styles.scenePerson} />
+                </article>
+              </div>
+
+              <div className={`${styles.heroFloatingCard} ${styles.heroGuideCard}`}>
+                <span>AK</span>
+                <div>
+                  <strong>Aiko Kimura</strong>
+                  <small>★★★★★ Expert guide · 7yr</small>
+                  <em>Verified · 340 trips</em>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className={styles.heroContent}>
             {/* Trust bar — top */}

@@ -91,15 +91,6 @@
   50%       { transform: translate(12px, -18px) scale(1.06); }
 }
 
-.heroPattern {
-  position: absolute;
-  inset: 0;
-  opacity: 0.045;
-  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1.5' fill='%23ffffff'/%3E%3C/svg%3E");
-  background-size: 40px 40px;
-  pointer-events: none;
-}
-
 /* ══════════════════════════════════════════
    HERO CONTENT
 ══════════════════════════════════════════ */
@@ -522,4 +513,606 @@
 .sortSelect:focus-visible {
   outline: 2px solid var(--sunset-orange);
   outline-offset: 4px;
+}
+
+/* New cinematic home hero */
+.heroCinematic {
+  --hero-forest: #0e2a1a;
+  --hero-forest-dark: #081b12;
+  --hero-orange: #e8732a;
+  --hero-cream: #fffaf2;
+  --hero-muted: rgba(245, 240, 232, 0.68);
+  position: relative;
+  padding: calc(var(--header-h, 64px) + 28px) 24px 34px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 55% 0%, rgba(232, 115, 42, 0.16), transparent 32%),
+    linear-gradient(130deg, var(--hero-forest-dark), var(--hero-forest) 58%, #163b25);
+  color: var(--hero-cream);
+}
+
+.heroCinematic .heroBlob1,
+.heroCinematic .heroBlob2,
+.heroCinematic .heroContent {
+  display: none;
+}
+
+.heroShell {
+  position: relative;
+  z-index: 1;
+  width: min(1380px, 100%);
+  min-height: clamp(610px, 76vh, 760px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
+  gap: clamp(28px, 4vw, 56px);
+  align-items: center;
+}
+
+.heroLeft {
+  display: grid;
+  align-content: center;
+  gap: 20px;
+  animation: heroFadeUp 0.7s ease both;
+}
+
+.heroTrustPill {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 15px;
+  border: 1px solid rgba(255, 250, 242, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.08);
+  color: rgba(255, 250, 242, 0.78);
+  font-size: 12px;
+  font-weight: 800;
+  backdrop-filter: blur(14px);
+}
+
+.heroHeadline {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(48px, 6.6vw, 96px);
+  line-height: 0.92;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.heroAccent {
+  color: var(--hero-orange);
+}
+
+.heroSubtitle {
+  max-width: 560px;
+  margin: 0;
+  color: var(--hero-muted);
+  font-size: clamp(16px, 1.7vw, 20px);
+  line-height: 1.55;
+}
+
+.heroSearchCard {
+  width: min(620px, 100%);
+  margin-top: 8px;
+  overflow: visible;
+  border: 1px solid rgba(232, 115, 42, 0.18);
+  border-radius: 22px;
+  background: var(--hero-cream);
+  color: #173d2c;
+  box-shadow: 0 24px 80px rgba(3, 18, 11, 0.34);
+  animation: heroScaleIn 0.7s ease 0.12s both;
+}
+
+.heroSearchGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.heroSearchField {
+  position: relative;
+  min-height: 94px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 18px 20px;
+  border-right: 1px solid #e7ded2;
+  border-bottom: 1px solid #e7ded2;
+}
+
+.heroSearchField:nth-child(2n) { border-right: 0; }
+.heroSearchField:nth-child(n + 3) { border-bottom: 0; }
+
+.heroSearchField::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--hero-orange);
+  position: absolute;
+  left: 20px;
+  top: 18px;
+}
+
+.heroSearchField span {
+  padding-left: 17px;
+  color: #805b43;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.heroSearchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #143625;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.heroSearchField input::placeholder { color: #9a8b7d; }
+.heroSearchField:focus-within { background: rgba(232, 115, 42, 0.06); }
+
+.heroFieldLoading {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  color: var(--hero-orange);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.heroLocationMenu {
+  position: absolute;
+  z-index: 20;
+  left: 12px;
+  right: 12px;
+  top: calc(100% - 8px);
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e7ded2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(8, 32, 22, 0.18);
+}
+
+.heroLocationMenu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #173d2c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 11px 13px;
+  text-align: left;
+}
+
+.heroLocationMenu button:hover { background: rgba(232, 115, 42, 0.09); }
+
+.heroSearchFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 14px 14px 20px;
+  border-top: 1px solid #e7ded2;
+}
+
+.heroSearchFooter span {
+  color: #6e776d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.heroSearchFooter button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--hero-orange);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 950;
+  padding: 0 24px;
+  box-shadow: 0 13px 28px rgba(232, 115, 42, 0.32);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.heroSearchFooter button:hover {
+  background: #f0853f;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(232, 115, 42, 0.4);
+}
+
+.heroQuickChips {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.heroQuickChips span {
+  color: rgba(255, 250, 242, 0.5);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+}
+
+.heroQuickChips button {
+  min-height: 34px;
+  border: 1px solid rgba(255, 250, 242, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.07);
+  color: rgba(255, 250, 242, 0.86);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 0 15px;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.heroQuickChips button:hover,
+.heroQuickChips .heroChipActive {
+  border-color: rgba(232, 115, 42, 0.74);
+  background: rgba(232, 115, 42, 0.18);
+  transform: translateY(-1px);
+}
+
+.heroStats {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 24px;
+  margin-top: 4px;
+}
+
+.heroStats div { display: grid; gap: 3px; }
+.heroStats strong { color: var(--hero-cream); font-size: 26px; line-height: 1; }
+.heroStats span { color: rgba(255, 250, 242, 0.56); font-size: 12px; font-weight: 750; }
+
+.heroRight {
+  position: relative;
+  min-height: 590px;
+  animation: heroFadeUp 0.7s ease 0.18s both;
+}
+
+.heroMosaic {
+  position: absolute;
+  inset: 54px 18px 54px 32px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  transform: rotate(-1.5deg);
+}
+
+.heroScene {
+  position: relative;
+  overflow: hidden;
+  min-height: 190px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 250, 242, 0.14);
+  box-shadow: inset 0 -80px 90px rgba(0, 0, 0, 0.28), 0 18px 44px rgba(0, 0, 0, 0.2);
+  animation: sceneIn 0.65s ease both;
+}
+
+.heroScene span {
+  position: absolute;
+  z-index: 3;
+  left: 14px;
+  top: 14px;
+  border-radius: 999px;
+  background: rgba(7, 22, 16, 0.58);
+  color: #fffaf2;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  padding: 7px 10px;
+  backdrop-filter: blur(8px);
+}
+
+.heroScene::before,
+.heroScene::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  pointer-events: none;
+}
+
+.sceneForest { background: linear-gradient(160deg, #0d321f, #1e5d38); }
+.sceneForest::before {
+  height: 72%;
+  background:
+    linear-gradient(135deg, transparent 48%, rgba(2, 15, 9, 0.72) 49% 54%, transparent 55%) 10% 100% / 70px 150px repeat-x,
+    linear-gradient(145deg, transparent 48%, rgba(6, 28, 17, 0.8) 49% 54%, transparent 55%) 0 100% / 92px 190px repeat-x;
+}
+
+.sceneOcean { background: linear-gradient(160deg, #08243a, #0e6570); }
+.sceneOcean::before {
+  height: 44%;
+  background:
+    radial-gradient(120px 28px at 12% 48%, transparent 45%, rgba(255,255,255,0.32) 47% 50%, transparent 52%),
+    radial-gradient(130px 30px at 55% 66%, transparent 45%, rgba(255,255,255,0.24) 47% 50%, transparent 52%),
+    linear-gradient(180deg, transparent, rgba(0,0,0,0.18));
+}
+
+.sceneDesert { background: linear-gradient(160deg, #a14f27, #3a2115); }
+.sceneDesert::before {
+  height: 78%;
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(69, 31, 18, 0.7) 31% 48%, transparent 49%),
+    linear-gradient(250deg, transparent 28%, rgba(255, 185, 93, 0.35) 29% 43%, transparent 44%);
+}
+
+.sceneSnow { background: linear-gradient(160deg, #0a2135, #37536e); }
+.sceneSnow::before {
+  height: 70%;
+  background:
+    linear-gradient(135deg, transparent 45%, #dbe9ef 46% 53%, transparent 54%) 10% 100% / 145px 160px repeat-x,
+    linear-gradient(145deg, transparent 44%, rgba(255,255,255,0.54) 45% 53%, transparent 54%) 0 100% / 185px 210px repeat-x;
+}
+
+.sceneSun {
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  right: 20px;
+  top: 36px;
+  border-radius: 50%;
+  background: var(--hero-orange);
+  box-shadow: 0 0 44px rgba(232, 115, 42, 0.45);
+}
+
+.scenePerson {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 28px;
+  width: 14px;
+  height: 46px;
+  border-radius: 999px 999px 4px 4px;
+  background: #081b12;
+}
+
+.scenePerson::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #081b12;
+  transform: translateX(-50%);
+}
+
+.heroFloatingCard {
+  position: absolute;
+  z-index: 5;
+  border: 1px solid rgba(255, 250, 242, 0.18);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  animation: floatCard 5.8s ease-in-out infinite;
+}
+
+.heroAvailabilityCard {
+  left: 4px;
+  top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 18px;
+  background: rgba(8, 27, 18, 0.76);
+  backdrop-filter: blur(16px);
+  padding: 13px 15px;
+}
+
+.heroAvailabilityCard strong,
+.heroAvailabilityCard span { display: block; }
+.heroAvailabilityCard strong { color: #fffaf2; font-size: 12px; }
+.heroAvailabilityCard span { color: rgba(255, 250, 242, 0.66); font-size: 11px; font-weight: 750; }
+
+.heroPulseDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #49d17d;
+  box-shadow: 0 0 0 rgba(73, 209, 125, 0.45);
+  animation: pulseDot 1.8s infinite;
+}
+
+.heroRatingCard {
+  right: 0;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 122px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--hero-orange);
+  color: #fff;
+  padding: 15px;
+}
+
+.heroRatingCard strong { font-size: 30px; line-height: 1; }
+.heroRatingCard span,
+.heroRatingCard em { font-style: normal; font-size: 11px; font-weight: 850; }
+
+.heroDestinationCard {
+  right: 20px;
+  bottom: 114px;
+  border-radius: 999px;
+  background: rgba(8, 27, 18, 0.68);
+  color: #fffaf2;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 11px 15px;
+  backdrop-filter: blur(14px);
+}
+
+.heroGuideCard {
+  left: 70px;
+  right: 42px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border-radius: 20px;
+  background: #fffaf2;
+  color: #143625;
+  padding: 14px;
+}
+
+.heroGuideCard > span {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #173d2c;
+  color: #fffaf2;
+  font-weight: 950;
+}
+
+.heroGuideCard div { min-width: 0; display: grid; gap: 2px; }
+.heroGuideCard strong,
+.heroGuideCard small,
+.heroGuideCard em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heroGuideCard small { color: #657464; font-weight: 800; }
+.heroGuideCard em { color: var(--hero-orange); font-size: 12px; font-style: normal; font-weight: 900; }
+
+@keyframes heroScaleIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes sceneIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulseDot {
+  0% { box-shadow: 0 0 0 0 rgba(73, 209, 125, 0.45); }
+  70% { box-shadow: 0 0 0 9px rgba(73, 209, 125, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(73, 209, 125, 0); }
+}
+
+@media (max-width: 1199px) {
+  .heroShell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    gap: 24px;
+  }
+
+  .heroLeft {
+    justify-items: start;
+  }
+
+  .heroRight {
+    min-height: 320px;
+  }
+
+  .heroMosaic {
+    position: absolute;
+    inset: 16px 0 20px;
+    grid-template-columns: repeat(4, minmax(210px, 1fr));
+    grid-template-rows: 1fr;
+    overflow: hidden;
+    transform: none;
+  }
+
+  .heroScene {
+    min-height: 260px;
+  }
+
+  .heroAvailabilityCard,
+  .heroDestinationCard {
+    display: none;
+  }
+
+  .heroRatingCard {
+    right: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .heroCinematic {
+    padding: calc(var(--header-h, 56px) + 18px) 14px 26px;
+  }
+
+  .heroHeadline {
+    font-size: clamp(38px, 13vw, 58px);
+  }
+
+  .heroSearchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .heroSearchField,
+  .heroSearchField:nth-child(2n),
+  .heroSearchField:nth-child(n + 3) {
+    min-height: 76px;
+    border-right: 0;
+    border-bottom: 1px solid #e7ded2;
+  }
+
+  .heroSearchField:last-child {
+    border-bottom: 0;
+  }
+
+  .heroSearchFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .heroSearchFooter button {
+    width: 100%;
+  }
+
+  .heroQuickChips {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .heroStats {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .heroRight {
+    min-height: 260px;
+  }
+
+  .heroMosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+  }
+
+  .heroScene:nth-child(n + 3),
+  .heroRatingCard,
+  .heroDestinationCard,
+  .heroGuideCard {
+    display: none;
+  }
 }

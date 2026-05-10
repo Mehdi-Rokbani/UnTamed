@@ -117,11 +117,6 @@ function WeatherIcon({ code, size = 28 }: { code: number; size?: number }) {
   );
 }
 
-function formatDayShort(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
 function formatDayAbbr(iso: string) {
   const d = new Date(iso);
   const today = new Date();

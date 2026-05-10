@@ -8,6 +8,7 @@ import { NotificationsProvider } from "./hooks/useNotifications";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { LandingPage } from "./pages/LandingPage";
+import LaunchPage from "./pages/LaunchPage";
 import HomePage from "./pages/HomePage";
 import CreateActivityPage from "./pages/CreateActivityPage";
 import ActivityDetailsPage from "./pages/ActivityDetailsPage";
@@ -43,8 +44,9 @@ export default function App() {
       <NotificationsProvider>
         <Routes>
         {/* Public */}
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<LaunchPage />} />
         <Route path="/landing" element={<Navigate to="/" replace />} />
+        <Route path="/about" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />

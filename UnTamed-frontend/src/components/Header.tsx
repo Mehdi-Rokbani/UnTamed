@@ -28,9 +28,14 @@ type HeaderProps = {
    * pinned immediately below the header. Useful for multi-step forms.
    */
   stepProgress?: number;
+  /**
+   * Public landing treatment: lighter glass at the top of the hero,
+   * solid dark glass on scroll, and public navigation links.
+   */
+  variant?: "default" | "landing";
 };
 
-export function Header({ compactSearch, opaque = false, stepProgress }: HeaderProps) {
+export function Header({ compactSearch, opaque = false, stepProgress, variant = "default" }: HeaderProps) {
   const [scrolled, setScrolled]             = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen]     = useState(false);
@@ -163,8 +168,8 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
       const page = await ChatApi.listChatRooms(0, 10);
       chatRoomsLoadedAtRef.current = Date.now();
       setChatRooms(sortChatRooms(page.content ?? []));
-    } catch (e: any) {
-      setChatError(e?.message ?? "Could not load messages.");
+    } catch (e: unknown) {
+      setChatError(e instanceof Error ? e.message : "Could not load messages.");
     } finally {
       chatRoomsLoadingRef.current = false;
       setChatLoading(false);
@@ -308,6 +313,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
   /* ── Computed class strings ── */
   const headerClass = [
     styles.header,
+    variant === "landing" ? styles.landingHeader : "",
     scrolled ? styles.scrolled : "",
     opaque   ? styles.opaque   : "",
   ].filter(Boolean).join(" ");
@@ -332,16 +338,24 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
 
           {/* ── Center slot: compact search bar ── */}
           <div className={styles.centerSlot}>
-            <div
-              className={styles.compactSearchWrap}
-              style={{
-                opacity:       compactSearch ? 1 : 0,
-                transform:     compactSearch ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
-                pointerEvents: compactSearch ? "auto" : "none",
-              }}
-            >
-              {compactSearch}
-            </div>
+            {variant === "landing" && !user ? (
+              <nav className={styles.publicNav} aria-label="Landing navigation">
+                <Link to="/home">Explore</Link>
+                <a href="#adventures">Adventures</a>
+                <a href="#guides">Guides</a>
+              </nav>
+            ) : (
+              <div
+                className={styles.compactSearchWrap}
+                style={{
+                  opacity:       compactSearch ? 1 : 0,
+                  transform:     compactSearch ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
+                  pointerEvents: compactSearch ? "auto" : "none",
+                }}
+              >
+                {compactSearch}
+              </div>
+            )}
           </div>
 
           {/* ── Right actions ── */}
@@ -375,10 +389,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z" />
                   </svg>
-                  {chatUnreadCount > 0 && chatUnreadCount <= 3 && (
-                    <span className={styles.notificationDotBadge} aria-hidden="true" />
-                  )}
-                  {chatUnreadCount > 3 && (
+                  {chatUnreadCount > 0 && (
                     <span className={styles.notificationBadge} aria-hidden="true">
                       {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
                     </span>
@@ -495,10 +506,7 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                     <path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
                     <path d="M13.73 21a2 2 0 01-3.46 0" />
                   </svg>
-                  {notifications.unreadCount > 0 && notifications.unreadCount <= 3 && (
-                    <span className={styles.notificationDotBadge} aria-hidden="true" />
-                  )}
-                  {notifications.unreadCount > 3 && (
+                  {notifications.unreadCount > 0 && (
                     <span className={styles.notificationBadge} aria-hidden="true">
                       {notifications.unreadCount > 9 ? "9+" : notifications.unreadCount}
                     </span>
@@ -602,6 +610,8 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
                   </div>
                 )}
               </div>
+
+              <span className={styles.headerActionDivider} aria-hidden="true" />
 
               <div className={styles.profileWrapper} ref={dropdownRef}>
                 <button
@@ -725,7 +735,17 @@ export function Header({ compactSearch, opaque = false, stepProgress }: HeaderPr
           <nav
             className={`${styles.headerNav} ${mobileMenuOpen ? styles.active : ""}`}
             aria-label="Mobile navigation"
-          />
+          >
+            {variant === "landing" && !user && (
+              <>
+                <Link to="/home" className={styles.navLink} onClick={closeMobileMenu}>Explore</Link>
+                <a href="#adventures" className={styles.navLink} onClick={closeMobileMenu}>Adventures</a>
+                <a href="#guides" className={styles.navLink} onClick={closeMobileMenu}>Guides</a>
+                <Link to="/login" className={styles.navLink} onClick={closeMobileMenu}>Log in</Link>
+                <Link to="/register" className={styles.navLink} onClick={closeMobileMenu}>Get Started</Link>
+              </>
+            )}
+          </nav>
         </div>
       </header>
 

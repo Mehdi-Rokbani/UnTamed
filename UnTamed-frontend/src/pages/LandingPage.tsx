@@ -2,7 +2,6 @@ import { useState } from "react";
 import styles from "../style/landing.module.css";
 import hero from "../assets/images/hero.jpg";
 import { Header } from "../components/Header";
-import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 

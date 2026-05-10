@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMyRecommendations } from "../api/recommendation.api";
-import { listCategories } from "../api/category.api";
 import type { RecommendationItem } from "../types/recommendation";
-import type { Category } from "../types/category";
 import styles from "../style/RecommendedActivities.module.css";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-
-function formatPrice(price?: number): string | null {
-  if (typeof price !== "number") return null;
-  return `${price} TND`;
-}
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
