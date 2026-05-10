@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import * as THREE from "three";
 import { listPublicTemplatesPage } from "../api/activity.api";
+import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import styles from "../style/launch.module.css";
 import type { Difficulty, PublicTemplateCard } from "../types/activity";
@@ -846,22 +847,7 @@ function LaunchPage() {
           </motion.div>
         </Reveal>
 
-        {/* ── Footer ── */}
-        <motion.footer
-          className={styles.footer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={viewportReveal}
-          variants={staggerContainer}
-        >
-          <motion.strong variants={fadeUp}>Untamed</motion.strong>
-          <motion.span variants={fadeUp}>Guided outdoor experiences in Tunisia.</motion.span>
-          <motion.nav aria-label="Footer navigation" variants={fadeUp}>
-            <a href="#explore">Categories</a>
-            <a href="#adventures">Experiences</a>
-            <a href="#guides">Guides</a>
-          </motion.nav>
-        </motion.footer>
+        <Footer />
 
       </main>
     </>

@@ -367,15 +367,16 @@
 
 /* ===== BUTTONS ===== */
 .cta-button {
-  padding: 16px 40px;
-  border: none;
-  border-radius: 50px;
+  min-height: 56px;
+  padding: 16px 28px;
+  border: 1px solid rgba(7, 18, 13, 0.08);
+  border-radius: 999px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   font-family: 'Poppins', sans-serif;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
   position: relative;
   overflow: hidden;
   z-index: 1;
@@ -401,39 +402,46 @@
 }
 
 .cta-button.primary {
-  background: linear-gradient(135deg, var(--sunset-orange), var(--sunset-peach));
-  color: var(--white);
-  box-shadow: 0 8px 24px rgba(255, 140, 66, 0.4);
+  background: var(--sunset-orange);
+  color: #07120d;
+  box-shadow: 0 14px 34px rgba(255, 140, 66, 0.28);
   display: block;
   margin: 0 auto;
 }
 
 .cta-button.primary:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(255, 140, 66, 0.5);
+  background: #ff9855;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 44px rgba(255, 140, 66, 0.38);
 }
 
 .cta-button.secondary {
   background: var(--sunset-orange);
-  color: var(--white);
-  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.3);
+  color: #07120d;
+  box-shadow: 0 14px 34px rgba(255, 140, 66, 0.28);
 }
 
 .cta-button.secondary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(255, 140, 66, 0.4);
+  background: #ff9855;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 44px rgba(255, 140, 66, 0.38);
 }
 
 .cta-button.outline {
-  background: transparent;
-  color: var(--white);
-  border: 2px solid var(--white);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4ead7;
+  border: 1px solid rgba(244, 234, 215, 0.35);
 }
 
 .cta-button.outline:hover {
-  background: var(--white);
-  color: var(--forest-deep);
-  transform: translateY(-3px);
+  background: rgba(255, 140, 66, 0.1);
+  border-color: var(--sunset-orange);
+  color: #f4ead7;
+  transform: translateY(-2px);
+}
+
+.cta-button:active {
+  transform: translateY(0);
 }
 
 /* ===== WHY SECTION ===== */
@@ -576,7 +584,7 @@
 
 .cta-buttons {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   justify-content: center;
   flex-wrap: wrap;
   margin-bottom: 48px;

@@ -519,14 +519,14 @@
 .heroCinematic {
   --hero-forest: #0e2a1a;
   --hero-forest-dark: #081b12;
-  --hero-orange: #e8732a;
-  --hero-cream: #fffaf2;
-  --hero-muted: rgba(245, 240, 232, 0.68);
+  --hero-orange: #ff8c42;
+  --hero-cream: #f4ead7;
+  --hero-muted: rgba(244, 234, 215, 0.72);
   position: relative;
-  padding: calc(var(--header-h, 64px) + 28px) 24px 34px;
+  padding: calc(var(--header-h, 64px) + 18px) 24px 48px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 55% 0%, rgba(232, 115, 42, 0.16), transparent 32%),
+    radial-gradient(circle at 55% 0%, rgba(255, 140, 66, 0.16), transparent 32%),
     linear-gradient(130deg, var(--hero-forest-dark), var(--hero-forest) 58%, #163b25);
   color: var(--hero-cream);
 }
@@ -540,19 +540,19 @@
 .heroShell {
   position: relative;
   z-index: 1;
-  width: min(1380px, 100%);
-  min-height: clamp(610px, 76vh, 760px);
+  width: min(1240px, 100%);
+  min-height: calc(100vh - var(--header-h, 72px) - 66px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
-  gap: clamp(28px, 4vw, 56px);
+  grid-template-columns: minmax(0, 1.04fr) minmax(390px, 0.86fr);
+  gap: clamp(24px, 3.6vw, 48px);
   align-items: center;
 }
 
 .heroLeft {
   display: grid;
   align-content: center;
-  gap: 20px;
+  gap: 17px;
   animation: heroFadeUp 0.7s ease both;
 }
 
@@ -577,8 +577,8 @@
   display: grid;
   gap: 4px;
   font-family: 'Outfit', sans-serif;
-  font-size: clamp(48px, 6.6vw, 96px);
-  line-height: 0.92;
+  font-size: clamp(56px, 8vw, 112px);
+  line-height: 0.94;
   font-weight: 900;
   letter-spacing: 0;
 }
@@ -588,7 +588,7 @@
 }
 
 .heroSubtitle {
-  max-width: 560px;
+  max-width: 610px;
   margin: 0;
   color: var(--hero-muted);
   font-size: clamp(16px, 1.7vw, 20px);
@@ -596,51 +596,54 @@
 }
 
 .heroSearchCard {
-  width: min(620px, 100%);
-  margin-top: 8px;
+  width: min(760px, 100%);
+  margin-top: 4px;
   overflow: visible;
-  border: 1px solid rgba(232, 115, 42, 0.18);
-  border-radius: 22px;
-  background: var(--hero-cream);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: #173d2c;
-  box-shadow: 0 24px 80px rgba(3, 18, 11, 0.34);
+  box-shadow: none;
   animation: heroScaleIn 0.7s ease 0.12s both;
 }
 
-.heroSearchGrid {
+.heroSearchPill {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 74px;
+  border: 1px solid rgba(7, 18, 13, 0.08);
+  border-radius: 999px;
+  background: rgba(244, 234, 215, 0.96);
+  box-shadow: 0 22px 58px rgba(3, 18, 11, 0.3);
+  overflow: visible;
 }
 
 .heroSearchField {
   position: relative;
-  min-height: 94px;
+  flex: 1 1 0;
+  min-width: 0;
   display: grid;
   align-content: center;
-  gap: 8px;
-  padding: 18px 20px;
-  border-right: 1px solid #e7ded2;
-  border-bottom: 1px solid #e7ded2;
+  gap: 5px;
+  padding: 14px 20px;
+  border-radius: 999px;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.heroSearchField:nth-child(2n) { border-right: 0; }
-.heroSearchField:nth-child(n + 3) { border-bottom: 0; }
-
-.heroSearchField::before {
+.heroSearchField:not(:first-child)::before {
   content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  background: var(--hero-orange);
   position: absolute;
-  left: 20px;
+  left: 0;
   top: 18px;
+  bottom: 18px;
+  width: 1px;
+  background: rgba(7, 18, 13, 0.1);
 }
 
 .heroSearchField span {
-  padding-left: 17px;
-  color: #805b43;
+  color: #2d5f3e;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -653,14 +656,17 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #143625;
+  color: #07120d;
   font: inherit;
-  font-size: 16px;
-  font-weight: 750;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .heroSearchField input::placeholder { color: #9a8b7d; }
-.heroSearchField:focus-within { background: rgba(232, 115, 42, 0.06); }
+.heroSearchField:hover,
+.heroSearchField:focus-within {
+  background: rgba(255, 140, 66, 0.1);
+}
 
 .heroFieldLoading {
   position: absolute;
@@ -674,14 +680,14 @@
 .heroLocationMenu {
   position: absolute;
   z-index: 20;
-  left: 12px;
-  right: 12px;
-  top: calc(100% - 8px);
+  left: 10px;
+  right: 10px;
+  top: calc(100% + 10px);
   max-height: 220px;
   overflow-y: auto;
-  border: 1px solid #e7ded2;
-  border-radius: 14px;
-  background: #fff;
+  border: 1px solid rgba(7, 18, 13, 0.08);
+  border-radius: 18px;
+  background: #fffaf2;
   box-shadow: 0 18px 42px rgba(8, 32, 22, 0.18);
 }
 
@@ -701,40 +707,37 @@
 
 .heroLocationMenu button:hover { background: rgba(232, 115, 42, 0.09); }
 
-.heroSearchFooter {
+.heroSearchSubmit {
+  align-self: center;
+  flex: 0 0 auto;
+  min-width: 116px;
+  min-height: 54px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 14px 14px 20px;
-  border-top: 1px solid #e7ded2;
-}
-
-.heroSearchFooter span {
-  color: #6e776d;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.heroSearchFooter button {
-  min-height: 46px;
-  border: 0;
-  border-radius: 14px;
+  justify-content: center;
+  gap: 9px;
+  margin: 10px;
+  border: 1px solid rgba(7, 18, 13, 0.08);
+  border-radius: 999px;
   background: var(--hero-orange);
-  color: #fff;
+  color: #07120d;
   cursor: pointer;
   font: inherit;
   font-size: 14px;
-  font-weight: 950;
-  padding: 0 24px;
-  box-shadow: 0 13px 28px rgba(232, 115, 42, 0.32);
+  font-weight: 900;
+  padding: 0 22px;
+  box-shadow: 0 14px 34px rgba(255, 140, 66, 0.28);
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
-.heroSearchFooter button:hover {
-  background: #f0853f;
+.heroSearchSubmit:hover {
+  background: #ff9855;
   transform: translateY(-2px);
-  box-shadow: 0 16px 34px rgba(232, 115, 42, 0.4);
+  box-shadow: 0 18px 42px rgba(255, 140, 66, 0.38);
+}
+
+.heroSearchSubmit:active {
+  transform: translateY(0);
 }
 
 .heroQuickChips {
@@ -785,25 +788,25 @@
 
 .heroRight {
   position: relative;
-  min-height: 590px;
+  min-height: 470px;
   animation: heroFadeUp 0.7s ease 0.18s both;
 }
 
 .heroMosaic {
   position: absolute;
-  inset: 54px 18px 54px 32px;
+  inset: 42px 16px 58px 26px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  transform: rotate(-1.5deg);
+  gap: 12px;
+  transform: rotate(-1deg);
 }
 
 .heroScene {
   position: relative;
   overflow: hidden;
-  min-height: 190px;
-  border-radius: 22px;
+  min-height: 166px;
+  border-radius: 20px;
   border: 1px solid rgba(255, 250, 242, 0.14);
   box-shadow: inset 0 -80px 90px rgba(0, 0, 0, 0.28), 0 18px 44px rgba(0, 0, 0, 0.2);
   animation: sceneIn 0.65s ease both;
@@ -822,6 +825,29 @@
   letter-spacing: 0.08em;
   padding: 7px 10px;
   backdrop-filter: blur(8px);
+}
+
+.sceneCopy {
+  position: absolute;
+  z-index: 4;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.sceneCopy strong {
+  color: #fffaf2;
+  font-size: 15px;
+  line-height: 1.15;
+}
+
+.sceneCopy em {
+  color: rgba(244, 234, 215, 0.76);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
 }
 
 .heroScene::before,
@@ -857,12 +883,13 @@
     linear-gradient(250deg, transparent 28%, rgba(255, 185, 93, 0.35) 29% 43%, transparent 44%);
 }
 
-.sceneSnow { background: linear-gradient(160deg, #0a2135, #37536e); }
-.sceneSnow::before {
+.sceneOasis { background: linear-gradient(160deg, #123d2c, #2d5f3e 52%, #0f5b67); }
+.sceneOasis::before {
   height: 70%;
   background:
-    linear-gradient(135deg, transparent 45%, #dbe9ef 46% 53%, transparent 54%) 10% 100% / 145px 160px repeat-x,
-    linear-gradient(145deg, transparent 44%, rgba(255,255,255,0.54) 45% 53%, transparent 54%) 0 100% / 185px 210px repeat-x;
+    radial-gradient(120px 46px at 70% 60%, rgba(244, 234, 215, 0.34), transparent 62%),
+    linear-gradient(135deg, transparent 44%, rgba(8, 27, 18, 0.62) 45% 53%, transparent 54%) 10% 100% / 130px 160px repeat-x,
+    linear-gradient(180deg, transparent, rgba(0,0,0,0.2));
 }
 
 .sceneSun {
@@ -1027,7 +1054,7 @@
   }
 
   .heroRight {
-    min-height: 320px;
+    min-height: 300px;
   }
 
   .heroMosaic {
@@ -1040,7 +1067,7 @@
   }
 
   .heroScene {
-    min-height: 260px;
+    min-height: 230px;
   }
 
   .heroAvailabilityCard,
@@ -1055,36 +1082,43 @@
 
 @media (max-width: 768px) {
   .heroCinematic {
-    padding: calc(var(--header-h, 56px) + 18px) 14px 26px;
+    padding: calc(var(--header-h, 56px) + 18px) 14px 28px;
   }
 
   .heroHeadline {
     font-size: clamp(38px, 13vw, 58px);
   }
 
-  .heroSearchGrid {
-    grid-template-columns: 1fr;
+  .heroSearchCard,
+  .heroSearchPill {
+    border-radius: 28px;
   }
 
-  .heroSearchField,
-  .heroSearchField:nth-child(2n),
-  .heroSearchField:nth-child(n + 3) {
-    min-height: 76px;
-    border-right: 0;
-    border-bottom: 1px solid #e7ded2;
-  }
-
-  .heroSearchField:last-child {
-    border-bottom: 0;
-  }
-
-  .heroSearchFooter {
-    align-items: stretch;
+  .heroSearchPill {
     flex-direction: column;
+    min-height: 0;
+    padding: 8px;
   }
 
-  .heroSearchFooter button {
+  .heroSearchField {
+    min-height: 66px;
+    padding: 12px 14px;
+    border-radius: 20px;
+  }
+
+  .heroSearchField:not(:first-child)::before {
+    top: 0;
+    bottom: auto;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    height: 1px;
+  }
+
+  .heroSearchSubmit {
     width: 100%;
+    margin: 8px 0 0;
+    min-height: 52px;
   }
 
   .heroQuickChips {
@@ -1101,7 +1135,7 @@
   }
 
   .heroRight {
-    min-height: 260px;
+    min-height: 250px;
   }
 
   .heroMosaic {

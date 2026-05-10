@@ -361,7 +361,7 @@ export function Header({ compactSearch, opaque = false, stepProgress, variant = 
           {/* ── Right actions ── */}
           <div className={styles.headerActions}>
             {!user ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div className={styles.guestActions}>
                 <Link to="/login" className={styles.headerLogin}>
                   Log in
                 </Link>

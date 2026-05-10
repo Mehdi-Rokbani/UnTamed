@@ -14,7 +14,6 @@ import {
 } from "../api/activity.api";
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
-import { ActiveFilterChips } from "../components/search/ActiveFilterChips";
 import { SmartDiscoveryBar } from "../components/search/Smartdiscoverybar";
 import { semanticSearchPage, type SemanticSearchItem } from "../api/search.api";
 
@@ -27,6 +26,33 @@ const QUICK_SUGGESTIONS = [
   "Diving",
   "Camping",
   "MTB",
+];
+
+const HERO_VISUAL_CARDS = [
+  {
+    title: "Douz Desert Camp",
+    meta: "DOUZ - EASY",
+    status: "4 spots left",
+    className: "sceneDesert",
+  },
+  {
+    title: "Cap Serrat Surf Morning",
+    meta: "CAP SERRAT - BEGINNER",
+    status: "Open this week",
+    className: "sceneOcean",
+  },
+  {
+    title: "Zaghouan Mountain Hike",
+    meta: "ZAGHOUAN - MODERATE",
+    status: "Local guide",
+    className: "sceneForest",
+  },
+  {
+    title: "Chebika Waterfall Trek",
+    meta: "CHEBIKA - MODERATE",
+    status: "Small group",
+    className: "sceneOasis",
+  },
 ];
 
 function semanticItemToTemplateCard(item: SemanticSearchItem): PublicTemplateCard {
@@ -417,7 +443,7 @@ export default function HomePage() {
       </div>
 
       <main className={styles.home}>
-        {/* ── COMPACT HERO ── */}
+        {/* Compact hero */}
         <section
           ref={heroRef}
           className={`${styles.heroCinematic} ${!heroVisible ? styles.homeHeroHidden : ""}`}
@@ -429,7 +455,7 @@ export default function HomePage() {
             <div className={styles.heroLeft}>
               <div className={styles.heroTrustPill}>
                 <span className={styles.trustDot} />
-                200+ adventures · 4.9★ average · Expert-led
+                100+ sessions - 25+ local guides - Tunisia-based
               </div>
 
               <h1 className={styles.heroHeadline}>
@@ -438,7 +464,7 @@ export default function HomePage() {
               </h1>
 
               <p className={styles.heroSubtitle}>
-                Book curated outdoor experiences with certified local guides. From summit to shore.
+                Book guided outdoor experiences across Tunisia, from desert camps to mountain ridges and wild coastlines.
               </p>
 
               <form
@@ -448,12 +474,12 @@ export default function HomePage() {
                   scrollToResults();
                 }}
               >
-                <div className={styles.heroSearchGrid}>
+                <div className={styles.heroSearchPill}>
                   <label className={styles.heroSearchField}>
                     <span>What</span>
                     <input
                       value={queryInput}
-                      placeholder="Hiking, surfing, climbing..."
+                      placeholder="Hiking, camping, surfing..."
                       onChange={(event) => setQueryInput(event.target.value)}
                     />
                   </label>
@@ -504,11 +530,14 @@ export default function HomePage() {
                       onChange={(event) => setDateTo(event.target.value)}
                     />
                   </label>
-                </div>
 
-                <div className={styles.heroSearchFooter}>
-                  <span>128 open spots this month</span>
-                  <button type="submit">Explore now</button>
+                  <button type="submit" className={styles.heroSearchSubmit} aria-label="Search experiences">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <span>Search</span>
+                  </button>
                 </div>
               </form>
 
@@ -537,9 +566,9 @@ export default function HomePage() {
               </div>
 
               <div className={styles.heroStats}>
-                <div><strong>12K+</strong><span>Adventurers</span></div>
-                <div><strong>50+</strong><span>Expert guides</span></div>
-                <div><strong>38</strong><span>Countries</span></div>
+                <div><strong>100+</strong><span>Sessions</span></div>
+                <div><strong>25+</strong><span>Local guides</span></div>
+                <div><strong>4.8</strong><span>Avg rating</span></div>
               </div>
 
               {state === "done" && hasActiveFilters && (
@@ -551,7 +580,7 @@ export default function HomePage() {
                   </span>
                   {templates.length > 0 && (
                     <button type="button" className={styles.seeResultsBtn} onClick={scrollToResults}>
-                      See results ↓
+                      See results down
                     </button>
                   )}
                 </div>
@@ -561,144 +590,42 @@ export default function HomePage() {
             <div className={styles.heroRight} aria-label="Adventure highlights">
               <div className={`${styles.heroFloatingCard} ${styles.heroAvailabilityCard}`}>
                 <span className={styles.heroPulseDot} />
-                <div><strong>Next available</strong><span>Jun 14 · 4 spots left</span></div>
+                <div><strong>Next available</strong><span>Douz - 4 spots left</span></div>
               </div>
               <div className={`${styles.heroFloatingCard} ${styles.heroRatingCard}`}>
-                <strong>4.9</strong><span>★★★★★</span><em>2,400 reviews</em>
+                <strong>4.8</strong><span>Top rated</span><em>Local guide reviews</em>
               </div>
               <div className={`${styles.heroFloatingCard} ${styles.heroDestinationCard}`}>
-                38 destinations
+                100+ sessions
               </div>
 
               <div className={styles.heroMosaic}>
-                <article className={`${styles.heroScene} ${styles.sceneForest}`}>
-                  <span>HARD · 4,200m</span><i className={styles.sceneSun} /><i className={styles.scenePerson} />
-                </article>
-                <article className={`${styles.heroScene} ${styles.sceneOcean}`}>
-                  <span>BALI · EASY</span><i className={styles.sceneSun} /><i className={styles.scenePerson} />
-                </article>
-                <article className={`${styles.heroScene} ${styles.sceneDesert}`}>
-                  <span>MOAB · HARD</span><i className={styles.scenePerson} />
-                </article>
-                <article className={`${styles.heroScene} ${styles.sceneSnow}`}>
-                  <span>NEPAL · MODERATE</span><i className={styles.scenePerson} />
-                </article>
+                {HERO_VISUAL_CARDS.map((card) => (
+                  <article key={card.title} className={`${styles.heroScene} ${styles[card.className]}`}>
+                    <span>{card.meta}</span>
+                    <div className={styles.sceneCopy}>
+                      <strong>{card.title}</strong>
+                      <em>{card.status}</em>
+                    </div>
+                    <i className={styles.sceneSun} />
+                    <i className={styles.scenePerson} />
+                  </article>
+                ))}
               </div>
 
               <div className={`${styles.heroFloatingCard} ${styles.heroGuideCard}`}>
-                <span>AK</span>
+                <span>KB</span>
                 <div>
-                  <strong>Aiko Kimura</strong>
-                  <small>★★★★★ Expert guide · 7yr</small>
-                  <em>Verified · 340 trips</em>
+                  <strong>Karim B.</strong>
+                  <small>Top-rated certified desert guide - 7yr</small>
+                  <em>Verified - 340 trips</em>
                 </div>
               </div>
             </div>
           </div>
-
-          <div className={styles.heroContent}>
-            {/* Trust bar — top */}
-            <div className={styles.heroTrustBar}>
-              <span className={styles.trustItem}>
-                <span className={styles.trustDot} />
-                200+ experiences
-              </span>
-              <span className={styles.trustSep}>·</span>
-              <span className={styles.trustItem}>50+ expert guides</span>
-              <span className={styles.trustSep}>·</span>
-              <span className={styles.trustItem}>⭐ 4.8 avg rating</span>
-            </div>
-
-            {/* Headline */}
-            <h1 className={styles.homeTitle}>
-              Find your next{" "}
-              <span className={styles.accent}>UnTamed</span>{" "}
-              adventure
-            </h1>
-
-            {/* Search card — the star */}
-            <div className={styles.searchCard}>
-              <HeroSearchBar
-                queryInput={queryInput}
-                locationInput={locationInput}
-                selectedAddressId={selectedAddressId}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                onQueryInputChange={setQueryInput}
-                onLocationInputChange={handleLocationInputChange}
-                onLocationSelect={handleLocationSelect}
-                onDateFromChange={setDateFrom}
-                onDateToChange={setDateTo}
-              />
-            </div>
-
-            {/* Quick-suggestion chips — renamed label to "Try:" */}
-            <div className={styles.quickSuggestions}>
-              <span className={styles.quickLabel}>Try:</span>
-              {QUICK_SUGGESTIONS.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={`${styles.chip} ${
-                    queryInput === label ? styles.chipActive : ""
-                  }`}
-                  onClick={() => handleQuickSuggestion(label)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Live result pill — appears once search returns */}
-            {state === "done" && hasActiveFilters && (
-              <div className={styles.resultsPill}>
-                <span className={styles.resultsPillDot} />
-                <span>
-                  <strong>{templates.length}</strong>{" "}
-                  of {totalElements || templates.length}{" "}
-                  {templates.length === 1 ? "experience" : "experiences"} found
-                </span>
-                {templates.length > 0 && (
-                  <button
-                    type="button"
-                    className={styles.seeResultsBtn}
-                    onClick={scrollToResults}
-                  >
-                    See results ↓
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Active filter chips */}
-            <ActiveFilterChips
-              addressInput={locationInput}
-              selectedAddressId={selectedAddressId}
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              difficulty={difficulty}
-              categoryIds={categoryIds}
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-              categories={categoryOptions}
-              onClearAddress={() => {
-                setLocationInput("");
-                setSelectedAddressId(null);
-              }}
-              onClearDateFrom={() => setDateFrom("")}
-              onClearDateTo={() => setDateTo("")}
-              onClearDifficulty={() => setDifficulty("All")}
-              onRemoveCategory={(id) =>
-                setCategoryIds((prev) => prev.filter((x) => x !== id))
-              }
-              onClearMinPrice={() => setMinPrice("")}
-              onClearMaxPrice={() => setMaxPrice("")}
-              onClearAll={handleClearFilters}
-            />
-          </div>
         </section>
 
-        {/* ── SMART DISCOVERY BAR (replaces ExperienceFiltersBar) ── */}
+        {/* Smart discovery bar */}
         <SmartDiscoveryBar
           difficulty={difficulty}
           categoryIds={categoryIds}
@@ -722,7 +649,7 @@ export default function HomePage() {
           onClearAll={handleClearFilters}
         />
 
-        {/* ── AI RECOMMENDED (logged-in only) ── */}
+        {/* AI recommended */}
         {user && (
           <section className={styles.activitiesSection}>
             <div className={styles.container}>
@@ -731,13 +658,13 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* ── RESULTS SECTION ── */}
+        {/* Results section */}
         <section ref={resultsRef} className={styles.activitiesSection}>
           <div className={styles.container}>
             {state === "loading" && (
               <div className={styles.stateContainer}>
                 <div className={styles.loadingSpinner} />
-                <p className={styles.stateText}>Loading adventures…</p>
+                <p className={styles.stateText}>Loading adventures...</p>
               </div>
             )}
 
@@ -789,8 +716,8 @@ export default function HomePage() {
                     >
                       <option value="popular">Most popular</option>
                       <option value="soonest">Soonest</option>
-                      <option value="priceAsc">Price: low → high</option>
-                      <option value="priceDesc">Price: high → low</option>
+                      <option value="priceAsc">Price: low to high</option>
+                      <option value="priceDesc">Price: high to low</option>
                     </select>
                   </div>
                 </div>
@@ -821,3 +748,4 @@ export default function HomePage() {
     </>
   );
 }
+

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import styles from "../style/landing.module.css";
 import hero from "../assets/images/hero.jpg";
+import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { useNavigate } from "react-router-dom";
 
@@ -298,6 +299,7 @@ export function LandingPage() {
         </div>
       </section>
     </div>
+    <Footer />
     </>
   );
 }
