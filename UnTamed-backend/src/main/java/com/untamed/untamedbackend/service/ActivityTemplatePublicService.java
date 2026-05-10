@@ -7,6 +7,7 @@ import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ActivityTemplatePublicService {
 
     private final ActivityTemplateRepository templateRepo;
@@ -99,136 +101,54 @@ public class ActivityTemplatePublicService {
     }
 
     public List<PublicTemplateCardResponse> search(TemplateSearchCriteria c) {
-        Query query = new Query();
-        List<Criteria> criteriaList = new ArrayList<>();
-
-        // Hide archived templates from public search.
-        criteriaList.add(Criteria.where("archived").ne(true));
-
-        boolean hasAddressId = c.addressId() != null && !c.addressId().isBlank();
         boolean hasQ = c.q() != null && !c.q().isBlank();
-
-        // Exact selected address from suggestions
-        if (hasAddressId) {
-            criteriaList.add(Criteria.where("address_id").is(c.addressId()));
-        }
-        // Typed address search by display name
-        else if (hasQ) {
-            List<String> addressIds = addressRepo
-                    .findTop10ByDisplayNameContainingIgnoreCaseOrderByUsesCountDesc(c.q())
-                    .stream()
-                    .map(Address::getId)
-                    .toList();
-
-            if (addressIds.isEmpty()) {
-                return List.of();
-            }
-
-            criteriaList.add(Criteria.where("address_id").in(addressIds));
-        }
-
-        if (c.categoryIds() != null && !c.categoryIds().isEmpty()) {
-            List<String> cleanedCategoryIds = c.categoryIds()
-                    .stream()
-                    .filter(id -> id != null && !id.isBlank())
-                    .toList();
-
-            if (!cleanedCategoryIds.isEmpty()) {
-                criteriaList.add(Criteria.where("category_ids").in(cleanedCategoryIds));
-            }
-        }
-
-        if (c.difficulty() != null) {
-            criteriaList.add(Criteria.where("difficulty").is(c.difficulty()));
-        }
-
-        if (c.minPrice() != null || c.maxPrice() != null) {
-            Criteria priceCriteria = Criteria.where("price");
-
-            if (c.minPrice() != null) {
-                priceCriteria.gte(c.minPrice());
-            }
-
-            if (c.maxPrice() != null) {
-                priceCriteria.lte(c.maxPrice());
-            }
-
-            criteriaList.add(priceCriteria);
-        }
-
-        // Date filtering is based on sessions, not templates.
-        Set<String> templateIdsMatchingDate = findTemplateIdsMatchingDateRange(c.dateFrom(), c.dateTo());
-
-        if (templateIdsMatchingDate != null) {
-            if (templateIdsMatchingDate.isEmpty()) {
-                return List.of();
-            }
-
-            criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
-        }
-
-        if (!criteriaList.isEmpty()) {
-            query.addCriteria(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])));
-        }
-
+        List<String> variants = PublicSearchText.variants(c.q());
+        Query query = buildTemplateFilterQuery(c, !hasQ);
         Instant now = Instant.now();
 
-        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class)
+        List<ActivityTemplate> matchingTemplates = mongo.find(query, ActivityTemplate.class)
                 .stream()
                 .filter(t -> !t.isArchived())
+                .filter(t -> !hasQ || templateMatchesQuery(t, variants))
+                .toList();
+
+        List<PublicTemplateCardResponse> cards = matchingTemplates.stream()
                 .map(t -> toCard(t, now))
                 .filter(card -> card.nextSession() != null)
                 .toList();
+
+        if (hasQ) {
+            log.info(
+                    "Public template search q='{}', normalized='{}', variants={}, matchedTemplates={}",
+                    c.q(),
+                    PublicSearchText.normalize(c.q()),
+                    variants,
+                    cards.size()
+            );
+        }
 
         return sortResults(cards, c.sort());
     }
 
     public PaginatedResponse<PublicTemplateCardResponse> searchPage(TemplateSearchCriteria c, int page, int size) {
-        SearchQueryBuild build = buildSearchQuery(c);
+        List<PublicTemplateCardResponse> cards = search(c);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, size);
+        int fromIndex = Math.min(cards.size(), safePage * safeSize);
+        int toIndex = Math.min(cards.size(), fromIndex + safeSize);
 
-        if (build.empty()) {
-            return PaginatedResponse.of(List.of(), page, size, 0);
-        }
-
-        Query query = build.query();
-        long total = mongo.count(query, ActivityTemplate.class);
-
-        query.with(PageRequest.of(page, size, sortForSearch(c.sort())));
-
-        Instant now = Instant.now();
-        List<PublicTemplateCardResponse> cards = mongo.find(query, ActivityTemplate.class)
-                .stream()
-                .filter(t -> !t.isArchived())
-                .map(t -> toCard(t, now))
-                .filter(card -> card.nextSession() != null)
-                .toList();
-
-        return PaginatedResponse.of(sortResults(cards, c.sort()), page, size, total);
+        return PaginatedResponse.of(cards.subList(fromIndex, toIndex), safePage, safeSize, cards.size());
     }
 
-    private SearchQueryBuild buildSearchQuery(TemplateSearchCriteria c) {
+    private Query buildTemplateFilterQuery(TemplateSearchCriteria c, boolean includeAddressId) {
         Query query = new Query();
         List<Criteria> criteriaList = new ArrayList<>();
 
         criteriaList.add(Criteria.where("archived").ne(true));
 
         boolean hasAddressId = c.addressId() != null && !c.addressId().isBlank();
-        boolean hasQ = c.q() != null && !c.q().isBlank();
-
-        if (hasAddressId) {
+        if (includeAddressId && hasAddressId) {
             criteriaList.add(Criteria.where("address_id").is(c.addressId()));
-        } else if (hasQ) {
-            List<String> addressIds = addressRepo
-                    .findTop10ByDisplayNameContainingIgnoreCaseOrderByUsesCountDesc(c.q())
-                    .stream()
-                    .map(Address::getId)
-                    .toList();
-
-            if (addressIds.isEmpty()) {
-                return new SearchQueryBuild(query, true);
-            }
-
-            criteriaList.add(Criteria.where("address_id").in(addressIds));
         }
 
         if (c.categoryIds() != null && !c.categoryIds().isEmpty()) {
@@ -264,30 +184,46 @@ public class ActivityTemplatePublicService {
 
         if (templateIdsMatchingDate != null) {
             if (templateIdsMatchingDate.isEmpty()) {
-                return new SearchQueryBuild(query, true);
+                criteriaList.add(Criteria.where("_id").in(List.of("__no_public_template_matches_date__")));
+            } else {
+                criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
             }
-
-            criteriaList.add(Criteria.where("_id").in(templateIdsMatchingDate));
         }
 
         query.addCriteria(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])));
-        return new SearchQueryBuild(query, false);
+        return query;
     }
 
-    private Sort sortForSearch(String sort) {
-        if (sort == null || sort.isBlank()) {
-            return Sort.by(Sort.Direction.DESC, "createdAt");
+    private boolean templateMatchesQuery(ActivityTemplate template, List<String> variants) {
+        return PublicSearchText.containsAnyVariant(buildSearchableText(template), variants);
+    }
+
+    private String buildSearchableText(ActivityTemplate template) {
+        List<String> parts = new ArrayList<>();
+        parts.add(template.getTitle());
+        parts.add(template.getDescription());
+
+        if (template.getTags() != null) {
+            parts.addAll(template.getTags());
         }
 
-        return switch (sort) {
-            case "priceAsc" -> Sort.by(Sort.Direction.ASC, "price");
-            case "priceDesc" -> Sort.by(Sort.Direction.DESC, "price");
-            case "rating" -> Sort.by(Sort.Direction.DESC, "rating.average");
-            default -> Sort.by(Sort.Direction.DESC, "createdAt");
-        };
-    }
+        if (template.getSemanticHints() != null) {
+            parts.addAll(template.getSemanticHints());
+        }
 
-    private record SearchQueryBuild(Query query, boolean empty) {}
+        if (template.getAddressId() != null) {
+            addressRepo.findById(template.getAddressId()).ifPresent(address -> {
+                parts.add(address.getDisplayName());
+                parts.add(address.getLocality());
+                parts.add(address.getDelegation());
+                parts.add(address.getGovernorate());
+            });
+        }
+
+        return parts.stream()
+                .filter(part -> part != null && !part.isBlank())
+                .collect(Collectors.joining(" "));
+    }
 
     private Set<String> findTemplateIdsMatchingDateRange(Instant dateFrom, Instant dateTo) {
         boolean hasDateFrom = dateFrom != null;

@@ -391,7 +391,7 @@ export type AddressSuggestion = {
 };
 export async function suggestPublicAddresses(q: string) {
   const { data } = await http.get<AddressSuggestion[]>(
-    "/api/templates/public/addresses/suggest",
+    "/api/addresses/public/suggest",
     {
       params: { q },
       withCredentials: true,

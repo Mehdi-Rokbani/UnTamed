@@ -8,6 +8,7 @@ import { useAuth } from "../auth/auth.store";
 import styles from "../style/home.module.css";
 import {
   type AddressSuggestion,
+  type TemplateSearchParams,
   listPublicTemplatesPage,
   searchPublicTemplatesPage,
   suggestPublicAddresses,
@@ -15,10 +16,15 @@ import {
 import { listCategories } from "../api/category.api";
 import { HeroSearchBar } from "../components/search/HeroSearchBar";
 import { SmartDiscoveryBar } from "../components/search/Smartdiscoverybar";
-import { semanticSearchPage, type SemanticSearchItem } from "../api/search.api";
+import {
+  semanticSearchPage,
+  type SemanticSearchItem,
+  type SemanticSearchRequest,
+} from "../api/search.api";
 
 type LoadState = "idle" | "loading" | "error" | "done";
 const PAGE_SIZE = 12;
+const MIN_LOCATION_QUERY_LENGTH = 2;
 
 const QUICK_SUGGESTIONS = [
   "Hiking",
@@ -54,6 +60,17 @@ const HERO_VISUAL_CARDS = [
     className: "sceneOasis",
   },
 ];
+
+function useDebouncedValue<T>(value: T, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(handle);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 function semanticItemToTemplateCard(item: SemanticSearchItem): PublicTemplateCard {
   return {
@@ -128,6 +145,83 @@ export default function HomePage() {
   const resultsRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const requestSeqRef = useRef(0);
+  const suggestionSeqRef = useRef(0);
+  const lastSearchKeyRef = useRef("");
+  const lastSuggestionQueryRef = useRef("");
+  const debouncedLocationForSuggestions = useDebouncedValue(locationInput, 300);
+  const searchState = useMemo(
+    () => ({
+      queryInput,
+      locationInput,
+      categoryIds,
+      minPrice,
+      maxPrice,
+      difficulty,
+      dateFrom,
+      dateTo,
+      sort,
+    }),
+    [
+      queryInput,
+      locationInput,
+      categoryIds,
+      minPrice,
+      maxPrice,
+      difficulty,
+      dateFrom,
+      dateTo,
+      sort,
+    ]
+  );
+  const debouncedSearchState = useDebouncedValue(searchState, 650);
+
+  const normalizeSuggestionQuery = (value: string) => value.trim().toLowerCase();
+
+  const categoryOptions = useMemo(
+    () => categories.map((c) => ({ id: c.id, label: c.name })),
+    [categories]
+  );
+
+  const heroSimpleLocationSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+
+    return heroLocationSuggestions.filter((address) => {
+      const key = address.displayName.trim().toLowerCase();
+
+      if (!key || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  }, [heroLocationSuggestions]);
+
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(
+        queryInput.trim() ||
+          locationInput.trim() ||
+          dateFrom ||
+          dateTo ||
+          categoryIds.length > 0 ||
+          minPrice ||
+          maxPrice ||
+          difficulty !== "All" ||
+          sort !== "popular"
+      ),
+    [
+      queryInput,
+      locationInput,
+      dateFrom,
+      dateTo,
+      categoryIds,
+      minPrice,
+      maxPrice,
+      difficulty,
+      sort,
+    ]
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -164,59 +258,55 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const trimmed = locationInput.trim();
-    if (!trimmed) {
+    const trimmed = debouncedLocationForSuggestions.trim();
+
+    if (trimmed.length < MIN_LOCATION_QUERY_LENGTH) {
+      lastSuggestionQueryRef.current = "";
       setHeroLocationSuggestions([]);
       setHeroLocationOpen(false);
       return;
     }
 
-    const handle = window.setTimeout(async () => {
+    const suggestionKey = normalizeSuggestionQuery(trimmed);
+    if (lastSuggestionQueryRef.current === suggestionKey) {
+      return;
+    }
+
+    lastSuggestionQueryRef.current = suggestionKey;
+    const requestId = suggestionSeqRef.current + 1;
+    suggestionSeqRef.current = requestId;
+
+    console.log("[HOME_API_CALL]", {
+      type: "suggest",
+      key: suggestionKey,
+      q: trimmed,
+      reason: "debounced-location",
+    });
+
+    (async () => {
       try {
         setHeroLocationLoading(true);
         const data = await suggestPublicAddresses(trimmed);
+
+        if (suggestionSeqRef.current !== requestId) {
+          return;
+        }
+
         setHeroLocationSuggestions(data ?? []);
         setHeroLocationOpen((data ?? []).length > 0);
       } catch {
+        if (suggestionSeqRef.current !== requestId) {
+          return;
+        }
+
         setHeroLocationSuggestions([]);
       } finally {
-        setHeroLocationLoading(false);
+        if (suggestionSeqRef.current === requestId) {
+          setHeroLocationLoading(false);
+        }
       }
-    }, 280);
-
-    return () => window.clearTimeout(handle);
-  }, [locationInput]);
-
-  const categoryOptions = useMemo(
-    () => categories.map((c) => ({ id: c.id, label: c.name })),
-    [categories]
-  );
-
-  const hasActiveFilters = useMemo(
-    () =>
-      Boolean(
-        queryInput.trim() ||
-          locationInput.trim() ||
-          selectedAddressId ||
-          dateFrom ||
-          dateTo ||
-          categoryIds.length > 0 ||
-          minPrice ||
-          maxPrice ||
-          difficulty !== "All"
-      ),
-    [
-      queryInput,
-      locationInput,
-      selectedAddressId,
-      dateFrom,
-      dateTo,
-      categoryIds,
-      minPrice,
-      maxPrice,
-      difficulty,
-    ]
-  );
+    })();
+  }, [debouncedLocationForSuggestions]);
 
   const isAiSearch = queryInput.trim().length > 0;
 
@@ -225,7 +315,18 @@ export default function HomePage() {
     mode: "replace" | "append",
     requestSeq: number
   ) => {
-    const trimmedQuery = queryInput.trim();
+    const trimmedQuery = debouncedSearchState.queryInput.trim();
+    const trimmedLocation = debouncedSearchState.locationInput.trim();
+    const hasPublicSearchFilters = Boolean(
+      trimmedLocation ||
+        debouncedSearchState.categoryIds.length > 0 ||
+        debouncedSearchState.minPrice ||
+        debouncedSearchState.maxPrice ||
+        debouncedSearchState.difficulty !== "All" ||
+        debouncedSearchState.dateFrom ||
+        debouncedSearchState.dateTo ||
+        debouncedSearchState.sort !== "popular"
+    );
 
     if (mode === "replace") {
       setState("loading");
@@ -238,29 +339,48 @@ export default function HomePage() {
       let responsePage = pageToLoad;
       let responseLast = true;
       let responseTotal = 0;
+      let branch: "semantic" | "filtered-public-search" | "public-list" = "public-list";
+      let params: Record<string, unknown> = {};
 
       if (trimmedQuery) {
+        branch = "semantic";
+        const semanticParams: SemanticSearchRequest = {
+          query: trimmedQuery,
+          addressId: selectedAddressId || undefined,
+          limit: PAGE_SIZE,
+          difficulty:
+            debouncedSearchState.difficulty === "All"
+              ? undefined
+              : debouncedSearchState.difficulty,
+          categoryId:
+            debouncedSearchState.categoryIds.length === 1
+              ? debouncedSearchState.categoryIds[0]
+              : undefined,
+          minPrice: debouncedSearchState.minPrice
+            ? Number(debouncedSearchState.minPrice)
+            : undefined,
+          maxPrice: debouncedSearchState.maxPrice
+            ? Number(debouncedSearchState.maxPrice)
+            : undefined,
+          dateFrom: debouncedSearchState.dateFrom
+            ? new Date(`${debouncedSearchState.dateFrom}T00:00:00`).toISOString()
+            : undefined,
+          dateTo: debouncedSearchState.dateTo
+            ? new Date(`${debouncedSearchState.dateTo}T23:59:59`).toISOString()
+            : undefined,
+          sort: debouncedSearchState.sort,
+        };
+        params = { ...semanticParams, page: pageToLoad, size: PAGE_SIZE };
         const results = await semanticSearchPage(
-          {
-            query: trimmedQuery,
-            addressId: selectedAddressId || undefined,
-            limit: PAGE_SIZE,
-            difficulty: difficulty === "All" ? undefined : difficulty,
-            categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
-            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
-            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
-            sort,
-          },
+          semanticParams,
           pageToLoad,
           PAGE_SIZE
         );
 
         const filteredResults =
-          categoryIds.length > 1
+          debouncedSearchState.categoryIds.length > 1
             ? results.content.filter((r) =>
-                categoryIds.every((id) => (r.categoryIds ?? []).includes(id))
+                debouncedSearchState.categoryIds.every((id) => (r.categoryIds ?? []).includes(id))
               )
             : results.content;
 
@@ -268,18 +388,36 @@ export default function HomePage() {
         responsePage = results.page;
         responseLast = results.last;
         responseTotal = results.totalElements;
-      } else if (hasActiveFilters) {
+      } else if (hasPublicSearchFilters) {
+        branch = "filtered-public-search";
+        const searchParams: TemplateSearchParams = {
+          q: trimmedLocation || undefined,
+          addressId: undefined,
+          categoryIds:
+            debouncedSearchState.categoryIds.length > 0
+              ? debouncedSearchState.categoryIds
+              : undefined,
+          minPrice: debouncedSearchState.minPrice
+            ? Number(debouncedSearchState.minPrice)
+            : undefined,
+          maxPrice: debouncedSearchState.maxPrice
+            ? Number(debouncedSearchState.maxPrice)
+            : undefined,
+          difficulty:
+            debouncedSearchState.difficulty === "All"
+              ? undefined
+              : debouncedSearchState.difficulty,
+          dateFrom: debouncedSearchState.dateFrom
+            ? new Date(`${debouncedSearchState.dateFrom}T00:00:00`).toISOString()
+            : undefined,
+          dateTo: debouncedSearchState.dateTo
+            ? new Date(`${debouncedSearchState.dateTo}T23:59:59`).toISOString()
+            : undefined,
+          sort: debouncedSearchState.sort,
+        };
+        params = { ...searchParams, page: pageToLoad, size: PAGE_SIZE };
         const results = await searchPublicTemplatesPage(
-          {
-            addressId: selectedAddressId || undefined,
-            categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
-            difficulty: difficulty === "All" ? undefined : difficulty,
-            dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
-            dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
-            sort,
-          },
+          searchParams,
           pageToLoad,
           PAGE_SIZE
         );
@@ -289,6 +427,7 @@ export default function HomePage() {
         responseLast = results.last;
         responseTotal = results.totalElements;
       } else {
+        params = { page: pageToLoad, size: PAGE_SIZE };
         const results = await listPublicTemplatesPage(pageToLoad, PAGE_SIZE);
         content = results.content;
         responsePage = results.page;
@@ -299,6 +438,14 @@ export default function HomePage() {
       if (requestSeqRef.current !== requestSeq) {
         return;
       }
+
+      console.log("[HOME_SEARCH]", {
+        branch,
+        queryInput: trimmedQuery,
+        locationInput: trimmedLocation,
+        params,
+        totalElements: responseTotal || content.length,
+      });
 
       setTemplates((prev) => {
         if (mode === "replace") {
@@ -330,30 +477,61 @@ export default function HomePage() {
   };
 
   useEffect(() => {
+    const trimmedQuery = debouncedSearchState.queryInput.trim();
+    const trimmedLocation = debouncedSearchState.locationInput.trim();
+    const hasPublicSearchFilters = Boolean(
+      trimmedLocation ||
+        debouncedSearchState.categoryIds.length > 0 ||
+        debouncedSearchState.minPrice ||
+        debouncedSearchState.maxPrice ||
+        debouncedSearchState.difficulty !== "All" ||
+        debouncedSearchState.dateFrom ||
+        debouncedSearchState.dateTo ||
+        debouncedSearchState.sort !== "popular"
+    );
+    const branch = trimmedQuery
+      ? "semantic"
+      : hasPublicSearchFilters
+        ? "filtered-public-search"
+        : "public-list";
+    const searchKey = JSON.stringify({
+      branch,
+      query: trimmedQuery,
+      q: trimmedLocation || undefined,
+      categoryIds: debouncedSearchState.categoryIds,
+      minPrice: debouncedSearchState.minPrice,
+      maxPrice: debouncedSearchState.maxPrice,
+      difficulty: debouncedSearchState.difficulty,
+      dateFrom: debouncedSearchState.dateFrom,
+      dateTo: debouncedSearchState.dateTo,
+      sort: debouncedSearchState.sort,
+      page: 0,
+      size: PAGE_SIZE,
+    });
+
+    if (searchKey === lastSearchKeyRef.current) {
+      return;
+    }
+
+    lastSearchKeyRef.current = searchKey;
     const requestSeq = requestSeqRef.current + 1;
     requestSeqRef.current = requestSeq;
     setPage(0);
     setLastPage(true);
     setTotalElements(0);
 
-    const handle = window.setTimeout(() => {
-      void fetchTemplatesPage(0, "replace", requestSeq);
-    }, 260);
+    console.log("[HOME_API_CALL]", {
+      type: branch === "public-list" ? "public-list" : branch === "semantic" ? "semantic" : "search",
+      key: searchKey,
+      q: trimmedLocation || undefined,
+      page: 0,
+      reason: "debounced-search-params",
+    });
 
-    return () => {
-      window.clearTimeout(handle);
-    };
+    void fetchTemplatesPage(0, "replace", requestSeq);
   }, [
-    queryInput,
+    debouncedSearchState,
     selectedAddressId,
-    categoryIds,
-    minPrice,
-    maxPrice,
-    difficulty,
-    dateFrom,
-    dateTo,
-    sort,
-    hasActiveFilters,
   ]);
 
   const handleLoadMore = () => {
@@ -367,13 +545,18 @@ export default function HomePage() {
 
   const handleLocationSelect = (address: AddressSuggestion) => {
     setLocationInput(address.displayName);
-    setSelectedAddressId(address.id);
+    setSelectedAddressId(null);
+    lastSuggestionQueryRef.current = normalizeSuggestionQuery(address.displayName);
+    setHeroLocationSuggestions([]);
     setHeroLocationOpen(false);
   };
 
   const handleLocationInputChange = (value: string) => {
     setLocationInput(value);
     setSelectedAddressId(null);
+    if (value.trim().length >= MIN_LOCATION_QUERY_LENGTH) {
+      setHeroLocationOpen(true);
+    }
   };
 
   const handleToggleCategory = (id: string) => {
@@ -386,6 +569,8 @@ export default function HomePage() {
     setQueryInput("");
     setLocationInput("");
     setSelectedAddressId(null);
+    setHeroLocationSuggestions([]);
+    setHeroLocationOpen(false);
     setDateFrom("");
     setDateTo("");
     setDifficulty("All");
@@ -435,6 +620,7 @@ export default function HomePage() {
                 onLocationSelect={handleLocationSelect}
                 onDateFromChange={setDateFrom}
                 onDateToChange={setDateTo}
+                suggestionsEnabled={false}
                 compact
               />
             ) : null
@@ -490,14 +676,14 @@ export default function HomePage() {
                       value={locationInput}
                       placeholder="Any destination"
                       onFocus={() => {
-                        if (heroLocationSuggestions.length > 0) setHeroLocationOpen(true);
+                        if (heroSimpleLocationSuggestions.length > 0) setHeroLocationOpen(true);
                       }}
                       onChange={(event) => handleLocationInputChange(event.target.value)}
                     />
                     {heroLocationLoading && <em className={styles.heroFieldLoading}>...</em>}
-                    {heroLocationOpen && heroLocationSuggestions.length > 0 && (
+                    {heroLocationOpen && heroSimpleLocationSuggestions.length > 0 && (
                       <div className={styles.heroLocationMenu}>
-                        {heroLocationSuggestions.map((item) => (
+                        {heroSimpleLocationSuggestions.map((item) => (
                           <button
                             type="button"
                             key={item.id}

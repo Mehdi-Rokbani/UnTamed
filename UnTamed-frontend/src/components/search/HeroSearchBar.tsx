@@ -15,6 +15,7 @@ type Props = {
   onDateToChange: (value: string) => void;
   /** Compact mode: used when embedded in the sticky header */
   compact?: boolean;
+  suggestionsEnabled?: boolean;
 };
 
 export function HeroSearchBar({
@@ -29,6 +30,7 @@ export function HeroSearchBar({
   onDateFromChange,
   onDateToChange,
   compact = false,
+  suggestionsEnabled = true,
 }: Props) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [open, setOpen]               = useState(false);
@@ -50,8 +52,15 @@ export function HeroSearchBar({
 
   /* Address suggestions */
   useEffect(() => {
+    if (!suggestionsEnabled) {
+      setSuggestions([]);
+      setOpen(false);
+      setLoading(false);
+      return;
+    }
+
     const trimmed = locationInput.trim();
-    if (!trimmed) { setSuggestions([]); setOpen(false); return; }
+    if (trimmed.length < 2) { setSuggestions([]); setOpen(false); return; }
 
     const handle = window.setTimeout(async () => {
       try {
@@ -67,7 +76,7 @@ export function HeroSearchBar({
     }, 280);
 
     return () => window.clearTimeout(handle);
-  }, [locationInput]);
+  }, [locationInput, suggestionsEnabled]);
 
   return (
     <div
