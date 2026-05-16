@@ -63,6 +63,9 @@ export type BookingWithDetails = Booking & {
 
   // Session info
   sessionStartAt: string | null;
+  meetingPoint?: string | null;
+  activityTags?: string[];
+  categoryIds?: string[];
   guestNames?: string[];
 
   // Address / location info
@@ -120,6 +123,9 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
       totalPrice:       null,
       currency:         "TND",
       sessionStartAt:   null,
+      meetingPoint:     null,
+      activityTags:     [],
+      categoryIds:      [],
       guestNames:       [],
       displayName:      null,
       governorate:      null,
@@ -180,9 +186,28 @@ export type StripeCreatePaymentResponse = {
   sessionId: string;
 };
 
+export type StripeElementsPaymentResponse = {
+  clientSecret: string;
+  bookingId: string;
+  amount: number;
+  currency: string;
+  expiresAt?: string | null;
+  paymentAttemptId?: string | null;
+  providerRef?: string | null;
+};
+
 export async function createStripePayment(bookingId: string): Promise<StripeCreatePaymentResponse> {
   const { data } = await http.post<StripeCreatePaymentResponse>(
     `/api/payments/stripe/create/${bookingId}`,
+    null,
+    { withCredentials: true }
+  );
+  return data;
+}
+
+export async function createStripeElementsPayment(bookingId: string): Promise<StripeElementsPaymentResponse> {
+  const { data } = await http.post<StripeElementsPaymentResponse>(
+    `/api/payments/stripe/elements/create/${bookingId}`,
     null,
     { withCredentials: true }
   );

@@ -2,6 +2,7 @@ package com.untamed.untamedbackend.payment.stripe;
 
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
+import com.stripe.model.PaymentIntent;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import com.untamed.untamedbackend.booking.BookingService;
@@ -49,7 +50,80 @@ public class StripeWebhookController {
             handleCheckoutSessionCompleted(event);
         }
 
+        if ("payment_intent.succeeded".equals(event.getType())) {
+            handlePaymentIntentSucceeded(event);
+        }
+
+        if ("payment_intent.payment_failed".equals(event.getType())
+                || "payment_intent.canceled".equals(event.getType())) {
+            handlePaymentIntentFailed(event);
+        }
+
         return ResponseEntity.ok("received");
+    }
+
+    private void handlePaymentIntentSucceeded(Event event) {
+        PaymentIntent paymentIntent = deserializePaymentIntent(event);
+        if (paymentIntent == null) {
+            return;
+        }
+
+        Optional<PaymentAttempt> optionalAttempt =
+                attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, paymentIntent.getId());
+
+        if (optionalAttempt.isEmpty()) {
+            System.out.println("No payment attempt found for Stripe payment intent: " + paymentIntent.getId());
+            return;
+        }
+
+        PaymentAttempt attempt = optionalAttempt.get();
+
+        if (attempt.getStatus() != PaymentAttemptStatus.SUCCEEDED) {
+            attempt.setStatus(PaymentAttemptStatus.SUCCEEDED);
+            attempt.setUpdatedAt(Instant.now());
+            attempts.save(attempt);
+        }
+
+        bookingService.markCompleted(attempt.getBookingId());
+        guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+
+        System.out.println("PaymentIntent succeeded, booking completed, and guest passes generated: "
+                + attempt.getBookingId());
+    }
+
+    private void handlePaymentIntentFailed(Event event) {
+        PaymentIntent paymentIntent = deserializePaymentIntent(event);
+        if (paymentIntent == null) {
+            return;
+        }
+
+        Optional<PaymentAttempt> optionalAttempt =
+                attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, paymentIntent.getId());
+
+        if (optionalAttempt.isEmpty()) {
+            System.out.println("No payment attempt found for failed Stripe payment intent: " + paymentIntent.getId());
+            return;
+        }
+
+        PaymentAttempt attempt = optionalAttempt.get();
+        attempt.setStatus(PaymentAttemptStatus.FAILED);
+        attempt.setUpdatedAt(Instant.now());
+        attempts.save(attempt);
+
+        bookingService.handlePaymentFailed(attempt.getBookingId());
+
+        System.out.println("PaymentIntent failed/cancelled, booking payment state reset if needed: "
+                + attempt.getBookingId());
+    }
+
+    private PaymentIntent deserializePaymentIntent(Event event) {
+        try {
+            return (PaymentIntent) event.getDataObjectDeserializer()
+                    .deserializeUnsafe();
+        } catch (Exception e) {
+            System.out.println("Could not deserialize Stripe payment intent: " + e.getMessage());
+            return null;
+        }
     }
 
     private void handleCheckoutSessionCompleted(Event event) {

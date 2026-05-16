@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -610,6 +611,7 @@ public class BookingService {
 
         List<Booking> bookings = bookingRepository
                 .findBySessionIdAndStatusOrderByCreatedAtAsc(sessionId, BookingStatus.COMPLETED);
+        ActivityTemplate template = activityTemplateRepository.findById(session.getTemplateId()).orElse(null);
 
         return bookings.stream().map(booking -> {
             User user = userRepository.findById(booking.getUserId()).orElse(null);
@@ -623,6 +625,15 @@ public class BookingService {
                     booking.getNumberOfPeople(),
                     booking.getStatus(),
                     booking.getCreatedAt(),
+                    totalAmountMinor(template, booking),
+                    "TND",
+                    booking.getRefundStatus(),
+                    booking.getRefundPercent(),
+                    booking.getRefundAmount(),
+                    booking.getRefundCurrency(),
+                    booking.getCancelledBy(),
+                    booking.getCancellationReason(),
+                    booking.getCancelledAt(),
                     List.of()
             );
         }).toList();
@@ -639,6 +650,7 @@ public class BookingService {
         }
 
         List<Booking> bookings = bookingRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        ActivityTemplate template = activityTemplateRepository.findById(session.getTemplateId()).orElse(null);
 
         return bookings.stream().map(booking -> {
             User user = userRepository.findById(booking.getUserId()).orElse(null);
@@ -652,9 +664,30 @@ public class BookingService {
                     booking.getNumberOfPeople(),
                     booking.getStatus(),
                     booking.getCreatedAt(),
+                    totalAmountMinor(template, booking),
+                    "TND",
+                    booking.getRefundStatus(),
+                    booking.getRefundPercent(),
+                    booking.getRefundAmount(),
+                    booking.getRefundCurrency(),
+                    booking.getCancelledBy(),
+                    booking.getCancellationReason(),
+                    booking.getCancelledAt(),
                     List.of()
             );
         }).toList();
+    }
+
+    private int totalAmountMinor(ActivityTemplate template, Booking booking) {
+        if (template == null || template.getPrice() == null || booking == null) {
+            return 0;
+        }
+
+        return template.getPrice()
+                .multiply(BigDecimal.valueOf(Math.max(0, booking.getNumberOfPeople())))
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
     }
 
     public CancelBookingResponse cancelPendingBookingByGuide(String bookingId, String guideId) {
@@ -1227,6 +1260,9 @@ public class BookingService {
             String guideId = null;
             String activityImageUrl = null;
             Instant sessionStartAt = null;
+            String meetingPoint = null;
+            List<String> activityTags = List.of();
+            List<String> categoryIds = List.of();
             String displayName = null;
             String governorate = null;
             String locality = null;
@@ -1243,6 +1279,7 @@ public class BookingService {
 
             if (session != null) {
                 sessionStartAt = session.getStartAt();
+                meetingPoint = session.getMeetingPoint();
                 activityTemplateId = session.getTemplateId();
 
                 ActivityTemplate template = templatesById.get(activityTemplateId);
@@ -1250,6 +1287,8 @@ public class BookingService {
                 if (template != null) {
                     guideId = template.getGuideId();
                     activityTitle = template.getTitle();
+                    activityTags = template.getTags() == null ? List.of() : template.getTags();
+                    categoryIds = template.getCategoryIds() == null ? List.of() : template.getCategoryIds();
 
                     pricePerPerson = template.getPrice();
                     totalPrice = pricePerPerson != null
@@ -1309,6 +1348,9 @@ public class BookingService {
                     activityTitle,
                     activityImageUrl,
                     sessionStartAt,
+                    meetingPoint,
+                    activityTags,
+                    categoryIds,
                     displayName,
                     governorate,
                     locality,

@@ -1,19 +1,17 @@
 export type DailyWeather = {
   time: string[];
   weathercode: number[];
+  weather_code?: number[];
   temperature_2m_max: number[];
   temperature_2m_min: number[];
   precipitation_probability_max: number[];
   windspeed_10m_max: number[];
+  wind_speed_10m_max?: number[];
 };
 
 export type WeatherForecastResponse = {
   daily: DailyWeather;
 };
-
-function toDateOnly(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 /**
  * Fetch a 16-day daily forecast from open-meteo.
@@ -23,24 +21,19 @@ function toDateOnly(d: Date): string {
  * open-meteo free tier supports up to 16 forecast days.
  */
 export async function getDailyForecast(lat: number, lon: number, days = 16) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + Math.min(days, 16) - 1);
+  const safeDays = Math.min(Math.max(Math.trunc(days) || 16, 1), 16);
 
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
     daily: [
-      "weathercode",
+      "weather_code",
       "temperature_2m_max",
       "temperature_2m_min",
       "precipitation_probability_max",
-      "windspeed_10m_max",
+      "wind_speed_10m_max",
     ].join(","),
-    start_date: toDateOnly(today),
-    end_date: toDateOnly(endDate),
+    forecast_days: String(safeDays),
     timezone: "auto",
   });
 
@@ -52,5 +45,15 @@ export async function getDailyForecast(lat: number, lon: number, days = 16) {
     throw new Error("Failed to load weather forecast");
   }
 
-  return (await res.json()) as WeatherForecastResponse;
+  const data = (await res.json()) as WeatherForecastResponse;
+  const daily = data.daily;
+
+  return {
+    ...data,
+    daily: {
+      ...daily,
+      weathercode: daily.weathercode ?? daily.weather_code ?? [],
+      windspeed_10m_max: daily.windspeed_10m_max ?? daily.wind_speed_10m_max ?? [],
+    },
+  };
 }

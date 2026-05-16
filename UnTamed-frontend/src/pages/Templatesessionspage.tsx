@@ -24,6 +24,7 @@ import {
 import { removeGuideBooking } from "../api/guide.api";
 import { BackButton } from "../components/BackButton";
 import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
+import { formatTndMinor } from "../utils/money";
 import styles from "../style/templateSessions.module.css";
 
 const Icon = {
@@ -184,18 +185,18 @@ function formatDateTime(iso: string) {
 }
 
 function formatMoneyMinor(amount?: number | null, currency?: string | null) {
-  if (amount == null || !Number.isFinite(amount)) return "-";
-  const code = currency || "TND";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount / 100);
-  } catch {
-    return `${(amount / 100).toFixed(2)} ${code}`;
-  }
+  void currency;
+  return formatTndMinor(amount);
+}
+
+function guideRefundAmount(p: GuideParticipantDto) {
+  if ((p.refundAmount ?? 0) > 0) return p.refundAmount ?? 0;
+  if (p.status === "COMPLETED") return p.totalAmount ?? 0;
+  return 0;
+}
+
+function guideRefundPolicyLabel(p: GuideParticipantDto) {
+  return p.status === "COMPLETED" ? "100% refund" : "No refund needed";
 }
 
 function isSessionStarted(sessionStartAt?: string | null) {
@@ -847,6 +848,7 @@ export default function TemplateSessionsPage() {
   async function confirmModeration() {
     if (!moderationTarget || !participantsModal) return;
     const reason = moderationReason.trim();
+    const refundAmount = guideRefundAmount(moderationTarget);
     if (!reason) {
       setModerationError("Please add a reason.");
       return;
@@ -859,7 +861,12 @@ export default function TemplateSessionsPage() {
       const details = await getGuideSessionDetails(participantsModal.session.id);
       setParticipantsModal(details);
       await refresh({ silent: true });
-      showToast("success", "Booking removed.");
+      showToast(
+        "success",
+        refundAmount > 0
+          ? `Booking removed. Refund of ${formatTndMinor(refundAmount)} has been initiated.`
+          : "Booking removed. No payment was captured."
+      );
       setModerationTarget(null);
       setModerationReason("");
     } catch (e) {
@@ -1679,7 +1686,7 @@ export default function TemplateSessionsPage() {
             <div className={styles.modalHeader}>
               <div>
                 <h2 className={styles.modalTitle}>
-                  {moderationTarget.status === "COMPLETED" ? "Remove participant?" : "Cancel pending booking?"}
+                  Remove participant booking?
                 </h2>
                 <p className={styles.modalSub}>{moderationTarget.username ?? moderationTarget.email ?? moderationTarget.userId}</p>
               </div>
@@ -1694,9 +1701,23 @@ export default function TemplateSessionsPage() {
             </div>
             <div className={styles.modalBody}>
               <div className={moderationTarget.status === "COMPLETED" ? styles.confirmBoxDanger : styles.confirmBox}>
-                {moderationTarget.status === "COMPLETED"
-                  ? "This participant will receive a full refund."
-                  : "No refund is needed because payment was not captured."}
+                <div>
+                  <span>Booking total</span>
+                  <strong>{formatTndMinor(moderationTarget.totalAmount ?? 0)}</strong>
+                </div>
+                <div>
+                  <span>Refund policy</span>
+                  <strong>{guideRefundPolicyLabel(moderationTarget)}</strong>
+                </div>
+                <div>
+                  <span>Estimated refund amount</span>
+                  <strong>{formatTndMinor(guideRefundAmount(moderationTarget))}</strong>
+                </div>
+                <p>
+                  {moderationTarget.status === "COMPLETED"
+                    ? "Stripe refund will be triggered for this paid booking."
+                    : "No refund needed because payment was not captured."}
+                </p>
               </div>
               <label className={styles.formField}>
                 <span className={styles.formLabel}>Reason</span>
@@ -1720,7 +1741,7 @@ export default function TemplateSessionsPage() {
                 disabled={moderationBusy}
                 onClick={() => void confirmModeration()}
               >
-                {moderationBusy ? "Removing..." : moderationTarget.status === "COMPLETED" ? "Remove & refund" : "Cancel pending"}
+                {moderationBusy ? "Removing..." : "Cancel it"}
               </button>
             </div>
           </div>

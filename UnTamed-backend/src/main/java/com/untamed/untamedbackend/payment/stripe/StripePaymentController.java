@@ -22,6 +22,15 @@ public class StripePaymentController {
         return stripePaymentService.create(userId, bookingId);
     }
 
+    @PostMapping("/elements/create/{bookingId}")
+    public StripeElementsPaymentResponse createElementsPayment(
+            @PathVariable String bookingId,
+            Authentication authentication
+    ) {
+        String userId = bookingService.requireAuthenticatedDbUserId(authentication);
+        return stripePaymentService.createElementsPayment(userId, bookingId);
+    }
+
     @PostMapping("/cancel/{bookingId}")
     public void cancelPayment(
             @PathVariable String bookingId,

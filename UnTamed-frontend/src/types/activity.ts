@@ -210,6 +210,8 @@ export type GuideParticipantDto = {
   numberOfPeople: number;
   status: BookingStatus;
   createdAt: string;
+  totalAmount?: number;
+  currency?: string | null;
   refundStatus?: RefundStatus;
   refundPercent?: number;
   refundAmount?: number;

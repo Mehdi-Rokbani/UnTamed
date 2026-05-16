@@ -40,6 +40,15 @@ export type Participant = {
   email: string | null;
   profileImageUrl: string | null;
   numberOfPeople: number;
-  status: "PENDING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+  status: "PENDING" | "PAYING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
   createdAt: string;
+  totalAmount?: number;
+  currency?: string | null;
+  refundStatus?: string;
+  refundPercent?: number;
+  refundAmount?: number;
+  refundCurrency?: string | null;
+  cancelledBy?: string | null;
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
 };

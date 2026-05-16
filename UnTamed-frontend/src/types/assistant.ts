@@ -13,7 +13,7 @@ export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
 
 export type GenerateActivityDraftResponse = {
-  warnings(warnings: any, arg1: number): unknown;
+  warnings: string[];
   title: string;
   description: string;
   difficulty: Difficulty;
@@ -46,4 +46,36 @@ export type GenerateActivityDraftResponse = {
 
   rationale: string | null;
   confidenceScore?: number;
+};
+
+export type ChatAssistantMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatAssistantRecommendation = {
+  id: string;
+  title: string;
+  difficulty?: string | null;
+  price?: number | string | null;
+  location?: string | null;
+  imageUrl?: string | null;
+  reason?: string | null;
+};
+
+export type ChatAssistantRequest = {
+  message: string;
+  activityTemplateId?: string | null;
+  sessionId?: string | null;
+  pageContext?: string | null;
+  history?: ChatAssistantMessage[];
+};
+
+export type ChatAssistantResponse = {
+  answer: string;
+  suggestedQuestions: string[];
+  fallback: boolean;
+  model: string;
+  source: string;
+  recommendations?: ChatAssistantRecommendation[];
 };

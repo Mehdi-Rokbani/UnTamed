@@ -32,17 +32,7 @@ public class StripeRefundService {
         }
 
         try {
-            SessionRetrieveParams retrieveParams = SessionRetrieveParams.builder()
-                    .addExpand("payment_intent")
-                    .build();
-
-            Session checkoutSession = Session.retrieve(
-                    attempt.getProviderRef(),
-                    retrieveParams,
-                    null
-            );
-
-            String paymentIntentId = checkoutSession.getPaymentIntent();
+            String paymentIntentId = resolvePaymentIntentId(attempt.getProviderRef());
 
             if (paymentIntentId == null || paymentIntentId.isBlank()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Stripe payment intent is missing.");
@@ -66,5 +56,23 @@ public class StripeRefundService {
                     "Stripe refund failed"
             );
         }
+    }
+
+    private String resolvePaymentIntentId(String providerRef) throws StripeException {
+        if (providerRef != null && providerRef.startsWith("pi_")) {
+            return providerRef;
+        }
+
+        SessionRetrieveParams retrieveParams = SessionRetrieveParams.builder()
+                .addExpand("payment_intent")
+                .build();
+
+        Session checkoutSession = Session.retrieve(
+                providerRef,
+                retrieveParams,
+                null
+        );
+
+        return checkoutSession.getPaymentIntent();
     }
 }

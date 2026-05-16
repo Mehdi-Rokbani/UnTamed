@@ -42,6 +42,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -187,6 +189,7 @@ public class ActivitySessionService {
                 ));
 
         List<Booking> bookings = bookingRepo.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        ActivityTemplate template = templateRepo.findById(session.getTemplateId()).orElse(null);
         List<GuestPass> passes = guestPassRepo.findBySessionIdOrderByPassNumberAsc(sessionId);
         Map<String, List<GuidePassAttendanceDto>> passesByBooking = passes.stream()
                 .collect(Collectors.groupingBy(
@@ -207,6 +210,15 @@ public class ActivitySessionService {
                             booking.getNumberOfPeople(),
                             booking.getStatus(),
                             booking.getCreatedAt(),
+                            totalAmountMinor(template, booking),
+                            "TND",
+                            booking.getRefundStatus(),
+                            booking.getRefundPercent(),
+                            booking.getRefundAmount(),
+                            booking.getRefundCurrency(),
+                            booking.getCancelledBy(),
+                            booking.getCancellationReason(),
+                            booking.getCancelledAt(),
                             passesByBooking.getOrDefault(booking.getId(), List.of())
                     );
                 })
@@ -228,6 +240,18 @@ public class ActivitySessionService {
                 countStatus(bookings, BookingStatus.EXPIRED),
                 buildAttendanceSummary(passes)
         );
+    }
+
+    private int totalAmountMinor(ActivityTemplate template, Booking booking) {
+        if (template == null || template.getPrice() == null || booking == null) {
+            return 0;
+        }
+
+        return template.getPrice()
+                .multiply(BigDecimal.valueOf(Math.max(0, booking.getNumberOfPeople())))
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
     }
 
     private GuidePassAttendanceDto toGuidePassAttendanceDto(GuestPass pass) {

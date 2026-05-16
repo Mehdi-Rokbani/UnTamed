@@ -20,6 +20,7 @@ import { getParticipantsPreview } from "../api/session.api";
 import type { ParticipantsPreviewResponse } from "../types/participants";
 import { WeatherWidget } from "../components/Weatherwidget";
 import { BackButton } from "../components/BackButton";
+import ChatAssistantWidget from "../components/assistant/ChatAssistantWidget";
 
 type LoadState = "loading" | "error" | "done" | "notfound";
 type BookingStep = "idle" | "selecting" | "confirming" | "success";
@@ -110,6 +111,47 @@ function formatSessionDateLabel(startAt: string, endAt: string) {
 
 function formatSessionTimeLabel(startAt: string, endAt: string) {
   return `${formatTime(startAt)} - ${formatTime(endAt)}`;
+}
+
+function weatherCodeLabel(code: number) {
+  if ([0, 1].includes(code)) return "clear";
+  if ([2, 3].includes(code)) return "cloudy";
+  if ([45, 48].includes(code)) return "foggy";
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "rainy";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snowy";
+  if ([95, 96, 99].includes(code)) return "stormy";
+  return "variable";
+}
+
+function summarizeSessionWeather(
+  weather: SessionWeather | null,
+  selectedSession: PublicSession | null,
+  weatherLoading: boolean,
+  weatherError: string | null,
+  latitude: number | null,
+  longitude: number | null
+) {
+  if (!selectedSession) return "No selected session yet, so session weather has not been loaded.";
+  if (latitude == null || longitude == null) return "Weather unavailable because this activity has no valid coordinates.";
+  if (weatherLoading) return "Weather forecast is still loading for the selected session.";
+  if (!weather || weather.days.length === 0) {
+    return weatherError
+      ? `Weather forecast unavailable for the selected session: ${weatherError}.`
+      : "Weather forecast unavailable for the selected session.";
+  }
+  const first = weather.days[0];
+  const last = weather.days[weather.days.length - 1];
+  const maxTemp = Math.round(Math.max(...weather.days.map((day) => day.tempMax)));
+  const minTemp = Math.round(Math.min(...weather.days.map((day) => day.tempMin)));
+  const maxRain = Math.round(Math.max(...weather.days.map((day) => day.precipitationMax)));
+  const maxWind = Math.round(Math.max(...weather.days.map((day) => day.windMax)));
+  const rangeLabel = weather.days.length === 1 ? first.date : `${first.date} to ${last.date}`;
+  return `Selected session forecast for ${rangeLabel}: ${weatherCodeLabel(first.weatherCode)}, ${minTemp}-${maxTemp} C, precipitation probability up to ${maxRain}%, wind up to ${maxWind} km/h.`;
+}
+
+function parseCoordinate(value: unknown, min: number, max: number) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
 function formatDurationLabel(startAt: string, endAt: string) {
@@ -754,10 +796,9 @@ export default function ActivityDetailsPage() {
   const upcomingSessionsCount = Number(tplAny?.upcomingSessionsCount ?? 0);
   const addressDisplayName = tplAny?.addressDisplayName ?? null;
   const governorate = tplAny?.governorate ?? null;
-  const latitude = tplAny?.latitude ?? null;
-  const longitude = tplAny?.longitude ?? null;
+  const latitude = parseCoordinate(tplAny?.latitude, -90, 90);
+  const longitude = parseCoordinate(tplAny?.longitude, -180, 180);
   const guide = tplAny?.guide ?? null;
-
   const loadAll = useCallback(async () => {
     if (!id) {
       setState("notfound");
@@ -848,6 +889,18 @@ export default function ActivityDetailsPage() {
 
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
   const spotsLeft = useMemo(() => (selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null), [selectedSession]);
+  const selectedSessionLabel = useMemo(() => {
+    if (!selectedSession) return null;
+    return `${formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt)}, ${formatSessionTimeLabel(selectedSession.startAt, selectedSession.endAt)}`;
+  }, [selectedSession]);
+  const availabilityLabel = useMemo(() => {
+    if (!selectedSession || spotsLeft == null) return null;
+    return `${spotsLeft} of ${selectedSession.capacity} seats available`;
+  }, [selectedSession, spotsLeft]);
+  const weatherSummary = useMemo(
+    () => summarizeSessionWeather(weather, selectedSession, weatherLoading, weatherError, latitude, longitude),
+    [weather, selectedSession, weatherLoading, weatherError, latitude, longitude]
+  );
 
   useEffect(() => {
     if (spotsLeft == null || spotsLeft <= 0) return;
@@ -867,9 +920,16 @@ export default function ActivityDetailsPage() {
     let cancelled = false;
 
     async function loadWeather() {
-      if (!selectedSession || latitude == null || longitude == null) {
+      if (!selectedSession) {
         setWeather(null);
         setWeatherError(null);
+        setWeatherLoading(false);
+        return;
+      }
+
+      if (latitude == null || longitude == null) {
+        setWeather(null);
+        setWeatherError("Weather unavailable for this location");
         setWeatherLoading(false);
         return;
       }
@@ -911,7 +971,7 @@ export default function ActivityDetailsPage() {
 
         if (matchedDays.length === 0) {
           setWeather(null);
-          setWeatherError("Forecast not available yet");
+          setWeatherError("selected session date is outside the 16-day Open-Meteo forecast range");
           return;
         }
 
@@ -1415,7 +1475,7 @@ export default function ActivityDetailsPage() {
                     <div>
                       <div className={styles.locationName}>{addressDisplayName}</div>
                       {governorate && <div className={styles.locationSub}>{governorate}</div>}
-                      {latitude && longitude && (
+                      {latitude != null && longitude != null && (
                         <a href={`https://www.google.com/maps?q=${latitude},${longitude}`} target="_blank" rel="noopener noreferrer" className={styles.mapLink}>
                           View on Google Maps <IcoLink />
                         </a>
@@ -1755,6 +1815,21 @@ export default function ActivityDetailsPage() {
             </aside>
           </div>
         </div>
+        {user && (
+          <ChatAssistantWidget
+            activityTemplateId={templateId}
+            sessionId={selectedSessionId}
+            activityTitle={templateTitle}
+            difficulty={templateDifficulty}
+            tags={templateTags}
+            price={templatePrice}
+            location={addressDisplayName ?? governorate ?? null}
+            selectedSessionLabel={selectedSessionLabel}
+            availabilityLabel={availabilityLabel}
+            weatherSummary={weatherSummary}
+            mode="activity"
+          />
+        )}
       </main>
     </>
   );

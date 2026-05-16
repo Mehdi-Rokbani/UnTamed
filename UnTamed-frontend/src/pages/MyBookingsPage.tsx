@@ -1,7 +1,7 @@
 // src/pages/MyBookingsPage.tsx
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { QRCodeCanvas } from "qrcode.react";
 import L from "leaflet";
@@ -17,6 +17,7 @@ import type { GuestPass } from "../api/guestPass.api";
 import * as ReviewApi from "../api/review.api";
 import * as GuideReviewApi from "../api/guideReview.api";
 import type { GuideReviewEligibility } from "../api/guideReview.api";
+import { formatTnd, formatTndMinor } from "../utils/money";
 import styles from "../style/my-bookings.module.css";
 
 import "leaflet/dist/leaflet.css";
@@ -427,18 +428,8 @@ function ActivityDetailsUnavailable({ className }: { className?: string }) {
 }
 
 function formatMoneyMinor(amount?: number | null, currency?: string | null): string {
-  if (amount == null || !Number.isFinite(amount)) return "-";
-  const code = currency || "TND";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount / 100);
-  } catch {
-    return `${(amount / 100).toFixed(2)} ${code}`;
-  }
+  void currency;
+  return formatTndMinor(amount);
 }
 
 function refundBadgeLabel(status?: RefundStatus | null): string {
@@ -872,40 +863,71 @@ function CancelBookingModal({
   onDismiss: () => void;
   onConfirm: () => void;
 }) {
-  const refundAmount = preview ? formatMoneyMinor(preview.refundAmount, preview.currency) : "-";
+  const total = getTotalPrice(b);
+  const totalMinor = total == null ? null : Math.round(total * 100);
+  const fallbackRefundAmount =
+    preview && totalMinor != null
+      ? Math.round(totalMinor * (preview.refundPercent / 100))
+      : 0;
+  const refundMinor = preview?.refundAmount ?? fallbackRefundAmount;
+  const refundAmount = preview ? formatTndMinor(refundMinor) : "-";
+  const totalAmount = total != null ? formatTnd(total) : "Price unavailable";
+  const hasRefund = refundMinor > 0;
+  const refundPolicy =
+    !preview
+      ? "-"
+      : b.status !== "COMPLETED"
+        ? "No refund needed"
+        : preview.refundPercent === 100
+          ? "100% refund"
+          : preview.refundPercent === 50
+            ? "50% refund"
+            : "No refund";
+  const stripeRefundText = hasRefund ? "Stripe refund will be triggered." : "No Stripe refund will be triggered.";
+  const noRefundWarning =
+    preview && b.status === "COMPLETED" && preview.refundPercent === 0
+      ? "This booking is not refundable because the session starts in less than 24 hours."
+      : null;
   return (
     <div className={styles.modalOverlay} role="dialog" aria-modal aria-labelledby="cancel-booking-title">
       <div className={styles.bookingModal}>
         <div className={styles.modalDangerIcon}><IcoAlert /></div>
-        <h3 id="cancel-booking-title" className={styles.modalTitle}>Cancel this booking?</h3>
+        <h3 id="cancel-booking-title" className={styles.modalTitle}>Cancel booking?</h3>
         <p className={styles.modalBody}>{b.activityTitle ?? "This booking"} - {fmtDate(b.sessionStartAt)}</p>
         {previewLoading && <div className={styles.warningBox}>Checking refund eligibility...</div>}
         {previewError && <div className={styles.warningBox}>{previewError}</div>}
         {preview && (
           <div className={styles.refundPreviewBox}>
             <div>
-              <span>Refund</span>
+              <span>Booking total</span>
+              <strong>{totalAmount}</strong>
+            </div>
+            <div>
+              <span>Refund policy</span>
+              <strong>{refundPolicy}</strong>
+            </div>
+            <div>
+              <span>Refund percentage</span>
               <strong>{preview.refundPercent}%</strong>
             </div>
             <div>
-              <span>Amount</span>
+              <span>Estimated refund amount</span>
               <strong>{refundAmount}</strong>
             </div>
             <span className={`${styles.refundBadge} ${refundBadgeTone(preview.refundStatus)}`}>
               {refundBadgeLabel(preview.refundStatus)}
             </span>
             <p>{preview.reason}</p>
+            <p>{stripeRefundText}</p>
             <p className={preview.refundPercent > 0 ? styles.refundPositive : styles.refundWarning}>
-              {preview.refundPercent > 0
-                ? `You will receive a refund of ${refundAmount}.`
-                : "This booking is not refundable."}
+              {preview.refundPercent > 0 ? `You will receive a refund of ${refundAmount}.` : noRefundWarning ?? "No refund needed."}
             </p>
           </div>
         )}
         <div className={styles.modalActions}>
           <button className={styles.modalSecondary} onClick={onDismiss} disabled={busy} type="button">Keep it</button>
           <button className={styles.modalDanger} onClick={onConfirm} disabled={busy || previewLoading || !preview} type="button">
-            {busy ? "Cancelling..." : "Yes, cancel"}
+            {busy ? "Cancelling..." : "Cancel it"}
           </button>
         </div>
       </div>
@@ -1721,6 +1743,7 @@ function PageToast({
 }
 
 export default function MyBookingsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [bookings,     setBookings]     = useState<BookingWithDetails[]>([]);
   const [state,        setState]        = useState<LoadState>("loading");
@@ -2059,9 +2082,7 @@ export default function MyBookingsPage() {
           return;
         }
       }
-      const res = await BookingApi.createStripePayment(id);
-      if (!res.checkoutUrl) throw new Error("Missing checkout URL");
-      window.location.href = res.checkoutUrl;
+      navigate(`/checkout/${id}`);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Could not start payment");
       setBusyId(null);
@@ -2087,12 +2108,21 @@ export default function MyBookingsPage() {
 
   async function confirmCancel() {
     if (!cancelTarget) return;
+    const preview = cancelPreview;
+    const targetBooking = bookings.find((b) => b.id === cancelTarget) ?? null;
     setBusyId(cancelTarget);
     try {
       await BookingApi.cancelBooking(cancelTarget);
       await load();
       if (selectedId === cancelTarget) deselectBooking();
-      setToast({ tone: "success", message: "Booking cancelled. Refund details are updated in your booking." });
+      const refundAmount = preview?.refundAmount ?? 0;
+      const message =
+        refundAmount > 0
+          ? `Booking cancelled. Refund of ${formatTndMinor(refundAmount)} has been initiated.`
+          : targetBooking?.status === "COMPLETED"
+            ? "Booking cancelled. No refund was issued."
+            : "Booking cancelled. No payment was captured.";
+      setToast({ tone: "success", message });
     } catch (e: unknown) {
       setToast({ tone: "error", message: e instanceof Error ? e.message : "Could not cancel booking" });
     } finally {

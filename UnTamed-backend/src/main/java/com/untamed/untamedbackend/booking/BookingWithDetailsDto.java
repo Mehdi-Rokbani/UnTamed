@@ -23,6 +23,9 @@ public record BookingWithDetailsDto(
 
         // Session
         Instant sessionStartAt,
+        String meetingPoint,
+        List<String> activityTags,
+        List<String> categoryIds,
 
         // Address
         String displayName,

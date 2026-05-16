@@ -1,0 +1,469 @@
+.page {
+  min-height: 100vh;
+  background: #f4efe4;
+  color: #1d2a22;
+}
+
+.shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 56px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  color: #53685b;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.backLink,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(30, 74, 52, 0.22);
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #1e4a34;
+  text-decoration: none;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(29, 42, 34, 0.08);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.86fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.checkoutAside {
+  display: grid;
+  gap: 18px;
+}
+
+.summaryCard,
+.paymentCard,
+.timerCard,
+.stateBox {
+  background: #fffdf8;
+  border: 1px solid rgba(30, 74, 52, 0.14);
+  border-radius: 18px;
+  box-shadow: 0 18px 46px rgba(29, 42, 34, 0.12);
+}
+
+.summaryCard {
+  overflow: hidden;
+}
+
+.paymentCard,
+.timerCard,
+.stateBox {
+  padding: 24px;
+}
+
+.stateBox h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
+.stateBox p {
+  margin: 0 0 18px;
+  color: #657268;
+}
+
+.imageFrame {
+  position: relative;
+  aspect-ratio: 16 / 8.5;
+  background:
+    linear-gradient(135deg, rgba(30, 74, 52, 0.96), rgba(80, 113, 67, 0.86)),
+    radial-gradient(circle at 24% 20%, rgba(244, 239, 228, 0.24), transparent 32%);
+  overflow: hidden;
+}
+
+.imageFrame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.imageFrame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 45%, rgba(15, 36, 27, 0.58));
+  pointer-events: none;
+}
+
+.imageFallback {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #f4efe4;
+  font-weight: 900;
+  font-size: 2rem;
+}
+
+.locationBadge {
+  position: absolute;
+  left: 18px;
+  bottom: 16px;
+  z-index: 1;
+  max-width: calc(100% - 36px);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.92);
+  color: #1e4a34;
+  font-size: 0.86rem;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(15, 36, 27, 0.16);
+  overflow-wrap: anywhere;
+}
+
+.summaryHeader,
+.guests,
+.summaryList,
+.priceList {
+  margin-inline: 24px;
+}
+
+.summaryHeader {
+  padding-top: 22px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #c8662d;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.summaryHeader h1,
+.paymentHeader h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  line-height: 1.12;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tagRow span,
+.tagRow strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.tagRow span {
+  background: #edf3ea;
+  color: #355744;
+}
+
+.tagRow strong {
+  background: rgba(200, 102, 45, 0.12);
+  color: #9b4b1f;
+}
+
+.summaryList,
+.priceList {
+  display: grid;
+  gap: 12px;
+  padding: 22px 0;
+}
+
+.summaryList {
+  border-bottom: 1px solid rgba(30, 74, 52, 0.12);
+}
+
+.priceList {
+  border-top: 1px solid rgba(30, 74, 52, 0.12);
+}
+
+.summaryList div,
+.priceList div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.summaryList dt,
+.priceList dt {
+  color: #657268;
+  font-weight: 800;
+}
+
+.summaryList dd,
+.priceList dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.totalLine {
+  padding-top: 12px;
+  border-top: 1px dashed rgba(30, 74, 52, 0.24);
+  color: #1e4a34;
+  font-size: 1.08rem;
+}
+
+.guests {
+  padding: 4px 0 22px;
+}
+
+.guests h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.guests ul {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.guests li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.guests li span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #1e4a34;
+  color: #fffdf8;
+  font-size: 0.78rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.guests li strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.timerCard {
+  display: grid;
+  gap: 12px;
+  border-color: rgba(30, 74, 52, 0.18);
+}
+
+.timerCardWarning {
+  border-color: rgba(200, 102, 45, 0.42);
+  background: #fff8ee;
+}
+
+.timerCardExpired {
+  border-color: rgba(180, 35, 24, 0.32);
+  background: #fff7f5;
+}
+
+.timerTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #53685b;
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.timerTopline strong {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(200, 102, 45, 0.14);
+  color: #9b4b1f;
+  font-size: 0.74rem;
+}
+
+.timerCardExpired .timerTopline strong {
+  background: rgba(180, 35, 24, 0.12);
+  color: #9f1f16;
+}
+
+.countdown {
+  color: #1e4a34;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timerCardWarning .countdown {
+  color: #9b4b1f;
+}
+
+.timerCardExpired .countdown {
+  color: #9f1f16;
+}
+
+.progressTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(30, 74, 52, 0.12);
+  overflow: hidden;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1e4a34;
+  transition: width 0.3s ease;
+}
+
+.timerCardWarning .progressTrack span {
+  background: #c8662d;
+}
+
+.timerCardExpired .progressTrack span {
+  background: #9f1f16;
+}
+
+.timerCard p,
+.paymentHeader p,
+.secureNote {
+  margin: 0;
+  color: #657268;
+  line-height: 1.5;
+}
+
+.timerMuted {
+  color: #657268;
+  font-weight: 800;
+}
+
+.paymentHeader {
+  margin-bottom: 18px;
+}
+
+.paymentHeader h2 {
+  font-size: 1.55rem;
+}
+
+.paymentHeader p {
+  margin-top: 8px;
+}
+
+.totalPill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  margin-bottom: 18px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: #edf3ea;
+  color: #1e4a34;
+  font-weight: 950;
+}
+
+.paymentForm {
+  display: grid;
+  gap: 18px;
+}
+
+.payButton {
+  min-height: 50px;
+  border: 0;
+  border-radius: 12px;
+  background: #1e4a34;
+  color: #ffffff;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(30, 74, 52, 0.22);
+}
+
+.payButton:disabled {
+  cursor: not-allowed;
+  background: #9aa69f;
+  box-shadow: none;
+}
+
+.formError,
+.warningBox {
+  border-radius: 12px;
+  background: rgba(180, 35, 24, 0.09);
+  color: #9f1f16;
+}
+
+.formError {
+  margin: 0;
+  padding: 12px 14px;
+  font-weight: 800;
+}
+
+.warningBox {
+  padding: 14px 16px;
+  font-weight: 900;
+}
+
+.secureNote {
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    width: min(100% - 20px, 640px);
+    padding-top: 18px;
+  }
+
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .backLink {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkoutAside {
+    gap: 14px;
+  }
+
+  .paymentCard,
+  .timerCard {
+    padding: 20px;
+  }
+
+  .summaryHeader,
+  .guests,
+  .summaryList,
+  .priceList {
+    margin-inline: 18px;
+  }
+}

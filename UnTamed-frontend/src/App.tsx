@@ -26,6 +26,7 @@ import TemplateSessionsPage from "./pages/Templatesessionspage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancel";
+import UntamedCheckoutPage from "./pages/UntamedCheckoutPage";
 import GuideCheckInPage from "./pages/GuideCheckInPage";
 import GuestPassPage from "./pages/GuestPassPage";
 import GuideSessionAttendancePage from "./pages/GuideSessionAttendancePage";
@@ -78,6 +79,15 @@ export default function App() {
           element={
             <RequireAuth>
               <MyBookingsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/checkout/:bookingId"
+          element={
+            <RequireAuth>
+              <UntamedCheckoutPage />
             </RequireAuth>
           }
         />
@@ -180,6 +190,8 @@ export default function App() {
         {/* Stripe payment result pages */}
         <Route path="/payment-success" element={<PaymentSuccess />} />
         <Route path="/payment-cancel" element={<PaymentCancel />} />
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/cancel" element={<PaymentCancel />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

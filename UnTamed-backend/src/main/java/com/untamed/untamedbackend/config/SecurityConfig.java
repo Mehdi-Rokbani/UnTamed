@@ -64,6 +64,9 @@ public class SecurityConfig {
                         // Stripe payment creation must be authenticated
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create/**").authenticated()
 
+                        // Adventurer/guide assistant chat requires a logged-in user.
+                        .requestMatchers(HttpMethod.POST, "/api/assistant/chat").authenticated()
+
                         // GUIDE-only endpoints
                         .requestMatchers(HttpMethod.GET, "/api/templates/mine").hasRole("GUIDE")
                         .requestMatchers(HttpMethod.POST, "/api/templates/**").hasRole("GUIDE")

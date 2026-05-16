@@ -40,7 +40,7 @@ public class RefundPolicyService {
                     .refundable(false)
                     .refundPercent(0)
                     .refundAmount(0)
-                    .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                    .currency(currency(paymentAttempt))
                     .refundStatus(RefundStatus.NONE)
                     .reason("No refund is needed because this booking has not been paid.")
                     .build();
@@ -67,7 +67,7 @@ public class RefundPolicyService {
                 .refundable(percent > 0)
                 .refundPercent(percent)
                 .refundAmount(amount)
-                .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                .currency(currency(paymentAttempt))
                 .refundStatus(status)
                 .reason(reason)
                 .build();
@@ -85,7 +85,7 @@ public class RefundPolicyService {
                     .refundable(false)
                     .refundPercent(0)
                     .refundAmount(0)
-                    .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                    .currency(currency(paymentAttempt))
                     .refundStatus(RefundStatus.NONE)
                     .reason("No refund is needed because this booking has not been paid.")
                     .build();
@@ -97,7 +97,7 @@ public class RefundPolicyService {
                 .refundable(true)
                 .refundPercent(100)
                 .refundAmount(amount)
-                .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                .currency(currency(paymentAttempt))
                 .refundStatus(RefundStatus.REFUND_PENDING)
                 .reason("Guide removed the participant before the session starts. Full refund applies.")
                 .build();
@@ -115,7 +115,7 @@ public class RefundPolicyService {
                     .refundable(false)
                     .refundPercent(0)
                     .refundAmount(0)
-                    .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                    .currency(currency(paymentAttempt))
                     .refundStatus(RefundStatus.NONE)
                     .reason("No refund is needed because this booking has not been paid.")
                     .build();
@@ -127,7 +127,7 @@ public class RefundPolicyService {
                 .refundable(true)
                 .refundPercent(100)
                 .refundAmount(amount)
-                .currency(paymentAttempt != null ? paymentAttempt.getCurrency() : null)
+                .currency(currency(paymentAttempt))
                 .refundStatus(RefundStatus.REFUND_PENDING)
                 .reason("Guide cancelled the session before it starts. Full refund applies.")
                 .build();
@@ -153,5 +153,11 @@ public class RefundPolicyService {
         }
 
         return Math.round(attempt.getAmount() * (percent / 100.0f));
+    }
+
+    private String currency(PaymentAttempt attempt) {
+        return attempt != null && attempt.getCurrency() != null && !attempt.getCurrency().isBlank()
+                ? attempt.getCurrency()
+                : "TND";
     }
 }

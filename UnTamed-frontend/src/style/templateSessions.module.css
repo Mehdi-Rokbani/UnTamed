@@ -1502,6 +1502,30 @@ textarea.formInput {
   color: var(--red-text);
 }
 
+.confirmBox div,
+.confirmBoxDanger div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.confirmBox span,
+.confirmBoxDanger span {
+  color: var(--ink-soft);
+}
+
+.confirmBox strong,
+.confirmBoxDanger strong {
+  text-align: right;
+  color: inherit;
+}
+
+.confirmBox p,
+.confirmBoxDanger p {
+  margin: 8px 0 0;
+}
+
 .modalBtnDanger {
   height: 34px;
   padding: 0 14px;

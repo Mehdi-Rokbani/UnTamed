@@ -1,7 +1,10 @@
 package com.untamed.untamedbackend.payment.stripe;
 
 import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
 import com.stripe.model.checkout.Session;
+import com.stripe.net.RequestOptions;
+import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingService;
@@ -43,7 +46,7 @@ public class StripePaymentService {
 
         try {
             long amount = computeAmountInCents(booking);
-            String currency = "usd";
+            String currency = "tnd";
 
             String idempotencyKey = "stripe:" + bookingId + ":" + UUID.randomUUID();
 
@@ -116,8 +119,124 @@ public class StripePaymentService {
         }
     }
 
+    public StripeElementsPaymentResponse createElementsPayment(String userId, String bookingId) {
+        Booking booking = bookingService.markPaying(bookingId, userId);
+
+        PaymentAttempt reusable = findReusablePaymentIntentAttempt(bookingId);
+        if (reusable != null) {
+            try {
+                PaymentIntent intent = PaymentIntent.retrieve(reusable.getProviderRef());
+                if (intent.getClientSecret() != null && isReusablePaymentIntentStatus(intent.getStatus())) {
+                    return new StripeElementsPaymentResponse(
+                            intent.getClientSecret(),
+                            booking.getId(),
+                            reusable.getAmount(),
+                            reusable.getCurrency(),
+                            booking.getExpiresAt(),
+                            reusable.getId(),
+                            reusable.getProviderRef()
+                    );
+                }
+
+                reusable.setStatus(PaymentAttemptStatus.FAILED);
+                reusable.setUpdatedAt(Instant.now());
+                attempts.save(reusable);
+            } catch (StripeException e) {
+                reusable.setStatus(PaymentAttemptStatus.FAILED);
+                reusable.setUpdatedAt(Instant.now());
+                attempts.save(reusable);
+            }
+        }
+
+        long amount = computeAmountInCents(booking);
+        String currency = "tnd";
+        String idempotencyKey = "stripe-elements:" + bookingId + ":" + UUID.randomUUID();
+
+        PaymentAttempt attempt = PaymentAttempt.builder()
+                .bookingId(bookingId)
+                .userId(userId)
+                .provider(PaymentProvider.STRIPE)
+                .status(PaymentAttemptStatus.CREATED)
+                .amount((int) amount)
+                .currency(currency.toUpperCase())
+                .idempotencyKey(idempotencyKey)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        attempt = attempts.save(attempt);
+
+        try {
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(amount)
+                    .setCurrency(currency)
+                    .setAutomaticPaymentMethods(
+                            PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
+                                    .setEnabled(true)
+                                    .build()
+                    )
+                    .putMetadata("bookingId", bookingId)
+                    .putMetadata("userId", userId)
+                    .putMetadata("attemptId", attempt.getId())
+                    .build();
+
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey(idempotencyKey)
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params, requestOptions);
+
+            attempt.setProviderRef(intent.getId());
+            attempt.setStatus(PaymentAttemptStatus.PENDING);
+            attempt.setUpdatedAt(Instant.now());
+            attempts.save(attempt);
+
+            return new StripeElementsPaymentResponse(
+                    intent.getClientSecret(),
+                    booking.getId(),
+                    attempt.getAmount(),
+                    attempt.getCurrency(),
+                    booking.getExpiresAt(),
+                    attempt.getId(),
+                    attempt.getProviderRef()
+            );
+        } catch (StripeException e) {
+            attempt.setStatus(PaymentAttemptStatus.FAILED);
+            attempt.setUpdatedAt(Instant.now());
+            attempts.save(attempt);
+
+            bookingService.handlePaymentFailed(bookingId);
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Stripe payment intent creation failed"
+            );
+        } catch (RuntimeException e) {
+            bookingService.handlePaymentFailed(bookingId);
+            throw e;
+        }
+    }
+
     public void cancelPayment(String userId, String bookingId) {
         bookingService.handlePaymentFailed(bookingId, userId);
+    }
+
+    private PaymentAttempt findReusablePaymentIntentAttempt(String bookingId) {
+        return attempts.findFirstByBookingIdAndProviderAndStatusOrderByCreatedAtDesc(
+                        bookingId,
+                        PaymentProvider.STRIPE,
+                        PaymentAttemptStatus.PENDING
+                )
+                .filter(attempt -> attempt.getProviderRef() != null)
+                .filter(attempt -> attempt.getProviderRef().startsWith("pi_"))
+                .orElse(null);
+    }
+
+    private boolean isReusablePaymentIntentStatus(String status) {
+        return "requires_payment_method".equals(status)
+                || "requires_confirmation".equals(status)
+                || "requires_action".equals(status)
+                || "processing".equals(status);
     }
 
     private long computeAmountInCents(Booking booking) {
