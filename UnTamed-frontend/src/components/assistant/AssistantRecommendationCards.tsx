@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import type { ChatAssistantRecommendation } from "../../types/assistant";
 import styles from "../../style/chat-assistant-widget.module.css";
 
@@ -26,6 +27,24 @@ function iconFor(item: ChatAssistantRecommendation) {
   return "A";
 }
 
+function RecommendationThumb({ item }: { item: ChatAssistantRecommendation }) {
+  const [failed, setFailed] = useState(false);
+
+  if (item.imageUrl && !failed) {
+    return (
+      <img
+        className={styles.recommendationImage}
+        src={item.imageUrl}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return <span className={styles.recommendationIcon} aria-hidden="true">{iconFor(item)}</span>;
+}
+
 export default function AssistantRecommendationCards({ recommendations = [], onNavigate }: AssistantRecommendationCardsProps) {
   const navigate = useNavigate();
   if (!recommendations.length) return null;
@@ -45,14 +64,14 @@ export default function AssistantRecommendationCards({ recommendations = [], onN
               navigate(`/activities/${item.id}`);
             }}
           >
-            <span className={styles.recommendationIcon} aria-hidden="true">{iconFor(item)}</span>
+            <RecommendationThumb item={item} />
             <span className={styles.recommendationBody}>
               <strong>{item.title}</strong>
               <span className={styles.recommendationMeta}>
                 {item.difficulty && <em>{item.difficulty}</em>}
                 {priceLabel && <span>{priceLabel}</span>}
               </span>
-              {item.location && <span className={styles.recommendationLocation}>Pin {item.location}</span>}
+              {item.location && <span className={styles.recommendationLocation}>{item.location}</span>}
             </span>
           </button>
         );

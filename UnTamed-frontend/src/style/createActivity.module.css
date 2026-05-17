@@ -44,15 +44,18 @@
    AI ENTRY PAGE
 ══════════════════════════════════════════ */
 .aiEntryPage {
-  min-height: 100vh;
+  min-height: calc(100svh - var(--header-h));
+  margin-top: var(--header-h);
   background: var(--cream);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 80px 24px 48px;
+  justify-content: flex-start;
+  padding: clamp(18px, 3.6svh, 34px) 24px 18px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
+  box-sizing: border-box;
 }
 
 /* Atmospheric orbs */
@@ -89,18 +92,18 @@
 
 .aiEntryCard {
   width: 100%;
-  max-width: 620px;
+  max-width: 720px;
   background: var(--white);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-elevated);
-  padding: 40px;
+  padding: 30px 36px;
   position: relative;
   z-index: 1;
   animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .aiBackButton {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   color: var(--gray-600);
   font-weight: 800;
 }
@@ -114,13 +117,13 @@
 .aiCardHeader {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 .aiIconBadge {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   background: linear-gradient(135deg, var(--orange) 0%, var(--orange-light) 100%);
   display: flex;
   align-items: center;
@@ -131,28 +134,28 @@
 }
 .aiCardTitle {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--text-dark);
   margin: 0 0 3px;
   line-height: 1.2;
 }
 .aiCardSubtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
   margin: 0;
   font-family: var(--font-body);
 }
 
 /* ── AI Main Input ── */
-.aiMainInputGroup { margin-bottom: 18px; }
+.aiMainInputGroup { margin-bottom: 14px; }
 
 .aiLabel {
   display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-mid);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-family: var(--font-body);
   letter-spacing: 0.01em;
 }
@@ -161,13 +164,14 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   font-family: var(--font-body);
 }
 
 .aiMainTextarea {
   width: 100%;
-  padding: 14px 16px;
+  min-height: 88px;
+  padding: 12px 15px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 15px;
@@ -178,7 +182,7 @@
   resize: none;
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
-  line-height: 1.6;
+  line-height: 1.35;
 }
 .aiMainTextarea:focus {
   border-color: var(--orange);
@@ -190,11 +194,11 @@
 .exampleChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
+  margin-top: 8px;
 }
 .exampleChip {
-  padding: 5px 12px;
+  padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 99px;
   font-size: 12px;
@@ -218,13 +222,13 @@
 .aiExtrasGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px 12px;
+  margin-bottom: 16px;
 }
 .aiExtraField {}
 .aiExtraInput {
   width: 100%;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 13.5px;
@@ -244,7 +248,7 @@
 /* ── AI Actions ── */
 .aiActions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -252,7 +256,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 13px 28px;
+  padding: 11px 24px;
   background: linear-gradient(135deg, var(--orange) 0%, var(--orange-light) 100%);
   color: white;
   border: none;
@@ -279,7 +283,7 @@
 }
 
 .aiSkipBtn {
-  padding: 13px 20px;
+  padding: 11px 18px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
@@ -310,11 +314,11 @@
 
 /* ── AI Skeleton ── */
 .aiSkeleton {
-  padding: 20px;
+  padding: 14px;
   background: var(--ai-tint);
   border: 1.5px dashed var(--ai-border);
   border-radius: var(--radius-md);
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   animation: fadeIn 0.3s ease;
 }
 .skeletonLine {
@@ -335,20 +339,20 @@
 .aiStepHints {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 28px;
+  gap: 10px;
+  margin-top: 10px;
   z-index: 1;
   position: relative;
 }
 .aiStepHint {
-  font-size: 12.5px;
+  font-size: 12px;
   font-family: var(--font-body);
   color: var(--text-muted);
   font-weight: 500;
 }
 .aiStepArrow {
   color: var(--border);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 /* ══════════════════════════════════════════
@@ -362,6 +366,7 @@
   min-height: 100vh;
   background: var(--cream);
   padding-top: var(--header-h);
+  box-sizing: border-box;
   transition: padding-top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   isolation: isolate;                          /* ← FIX: contain all child stacking contexts */
 }
@@ -552,13 +557,13 @@
   background: var(--cream);
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--header-h));
-  overflow-y: auto;
+  min-height: calc(100vh - var(--header-h));
+  overflow: visible;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;                          /* ← FIX: establish own stacking context */
   z-index: 1;                                  /* ← FIX: explicitly below left panel */
-  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .activityForm {
@@ -1263,6 +1268,11 @@
 }
 
 @media (max-width: 860px) {
+  .aiEntryPage {
+    height: auto;
+    justify-content: flex-start;
+    padding: 16px 16px 28px;
+  }
   .createActivityPage { grid-template-columns: 1fr; }
   .leftPanel {
     position: static;
@@ -1285,7 +1295,7 @@
   .activityForm  { padding: 24px 0 32px; }
   .formGrid      { grid-template-columns: 1fr; }
   .difficultyGroup { grid-template-columns: repeat(3, 1fr); }
-  .aiEntryCard   { padding: 28px 24px; }
+  .aiEntryCard   { max-width: 620px; padding: 24px 20px; }
   .aiExtrasGrid  { grid-template-columns: 1fr 1fr; }
 }
 

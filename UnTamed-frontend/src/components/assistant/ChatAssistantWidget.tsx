@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { chatWithAssistant } from "../../api/assistant.api";
 import type { ChatAssistantMessage, ChatAssistantRecommendation } from "../../types/assistant";
 import AssistantLottieMascot from "./AssistantLottieMascot";
@@ -31,24 +31,39 @@ type StoredAssistantState = {
   messages: LocalMessage[];
 };
 
-const ACTIVITY_SUGGESTIONS = ["Pack list", "Beginner?", "Rain forecast?", "Easier options", "Getting there"];
-const GENERAL_SUGGESTIONS = ["Find activity", "Day trip pack", "Easy options", "How booking works"];
+const ACTIVITY_SUGGESTIONS = ["Pack list", "Beginner?", "Weather risk", "Easier options", "Compare"];
+const GENERAL_SUGGESTIONS = ["Find easy activity", "Cheap options", "Day-trip pack", "How booking works"];
 
 const PROMPT_BY_LABEL: Record<string, string> = {
   "Pack list": "What should I bring for this activity?",
   "Beginner?": "Is this beginner friendly?",
   "Rain forecast?": "How should I prepare for the weather?",
+  "Weather risk": "Is there any weather risk for this activity?",
   "Easier options": "Recommend something easier than this.",
+  "Compare": "Compare this with the previous one.",
   "Getting there": "What should I know before getting there?",
   "Find activity": "Help me find an activity.",
+  "Find easy activity": "Recommend something easy.",
   "Day trip pack": "What should I pack for a day trip?",
+  "Day-trip pack": "What should I pack for a day trip?",
   "Easy options": "Recommend something easy.",
+  "Cheap options": "Find me a cheap activity.",
   "How booking works": "How does booking work?",
+  "Compare options": "Compare these options.",
+  "Easier only": "Show me easier options only.",
+  "Cheaper options": "Give me cheaper alternatives.",
+  "What to pack?": "What should I pack?",
 };
 
 const STORAGE_KEY = "untamed.activityAssistant.history";
+const ACTIVITY_CONTEXT_KEY = "untamed.activityAssistant.activityContext";
 const HISTORY_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_STORED_MESSAGES = 30;
+
+type StoredActivityContext = {
+  current?: string;
+  previous?: string;
+};
 
 function buildId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -115,7 +130,21 @@ export default function ChatAssistantWidget({
   const [suggestions, setSuggestions] = useState(resolvedMode === "activity" ? ACTIVITY_SUGGESTIONS : GENERAL_SUGGESTIONS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previousActivitySummary, setPreviousActivitySummary] = useState<string | null>(null);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const messageEndRef = useRef<HTMLDivElement>(null);
+
+  const currentActivitySummary = useMemo(() => {
+    if (resolvedMode !== "activity" || !activityTitle) return null;
+    return [
+      `Title: ${activityTitle}`,
+      difficulty ? `Difficulty: ${difficulty}` : null,
+      typeof price === "number" && Number.isFinite(price) ? `Price: ${price} TND` : null,
+      location ? `Location: ${location}` : null,
+      tags?.length ? `Tags: ${tags.slice(0, 8).join(", ")}` : null,
+    ].filter(Boolean).join("\n");
+  }, [activityTitle, difficulty, location, price, resolvedMode, tags]);
 
   const pageContext = useMemo(() => {
     const parts = [
@@ -128,9 +157,10 @@ export default function ChatAssistantWidget({
       selectedSessionLabel ? `Selected session: ${selectedSessionLabel}` : null,
       availabilityLabel ? `Selected session availability: ${availabilityLabel}` : null,
       resolvedMode === "activity" ? `Displayed weather summary for selected session: ${weatherSummary || "forecast unavailable"}` : null,
+      previousActivitySummary ? `Previous activity context:\n${previousActivitySummary}` : null,
     ].filter(Boolean);
     return parts.join("\n");
-  }, [activityTitle, availabilityLabel, difficulty, location, price, resolvedMode, selectedSessionLabel, tags, weatherSummary]);
+  }, [activityTitle, availabilityLabel, difficulty, location, previousActivitySummary, price, resolvedMode, selectedSessionLabel, tags, weatherSummary]);
 
   const canSend = input.trim().length > 0 && input.trim().length <= 1200 && !loading;
   const contextTitle = resolvedMode === "activity" && activityTitle ? activityTitle : "Untamed general assistant";
@@ -139,6 +169,22 @@ export default function ChatAssistantWidget({
   useEffect(() => {
     saveStoredMessages(messages);
   }, [messages]);
+
+  useEffect(() => {
+    if (!currentActivitySummary) return;
+    try {
+      const raw = window.sessionStorage.getItem(ACTIVITY_CONTEXT_KEY);
+      const stored = raw ? JSON.parse(raw) as StoredActivityContext : {};
+      if (stored.current && stored.current !== currentActivitySummary) {
+        stored.previous = stored.current;
+      }
+      stored.current = currentActivitySummary;
+      window.sessionStorage.setItem(ACTIVITY_CONTEXT_KEY, JSON.stringify(stored));
+      setPreviousActivitySummary(stored.previous && stored.previous !== currentActivitySummary ? stored.previous : null);
+    } catch {
+      setPreviousActivitySummary(null);
+    }
+  }, [currentActivitySummary]);
 
   useEffect(() => {
     if (!open) return;
@@ -152,6 +198,11 @@ export default function ChatAssistantWidget({
   useEffect(() => {
     if (open) window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    messageEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, loading, open]);
 
   function openWidget() {
     setOpen(true);
@@ -211,6 +262,7 @@ export default function ChatAssistantWidget({
       };
       setMessages((current) => [...current, assistantMessage]);
       setSuggestions(response.suggestedQuestions?.length ? response.suggestedQuestions : resolvedMode === "activity" ? ACTIVITY_SUGGESTIONS : GENERAL_SUGGESTIONS);
+      setShowAllSuggestions(false);
       if (!open) setHasUnread(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Assistant failed to answer.";
@@ -269,7 +321,7 @@ export default function ChatAssistantWidget({
             {messages.map((message) => (
               <div key={message.id} className={`${styles.messageRow} ${message.role === "user" ? styles.messageUser : styles.messageAssistant}`}>
                 <div className={styles.messageBubble}>
-                  <p>{renderMessageContent(message)}</p>
+                  <div className={styles.messageContent}>{renderMessageContent(message)}</div>
                   {message.fallback && <span className={styles.fallbackBadge}>Fallback</span>}
                   {message.createdAt && <span className={styles.messageTime}>{formatMessageTime(message.createdAt)}</span>}
                   {message.role === "assistant" && (
@@ -290,14 +342,20 @@ export default function ChatAssistantWidget({
                 </div>
               </div>
             )}
+            <div ref={messageEndRef} />
           </div>
 
           <div className={styles.suggestions}>
-            {suggestions.slice(0, 5).map((question) => (
+            {(showAllSuggestions ? suggestions.slice(0, 6) : suggestions.slice(0, 3)).map((question) => (
               <button key={question} type="button" onClick={() => handleSuggestionClick(question)} disabled={loading}>
                 {shortChipLabel(question)}
               </button>
             ))}
+            {suggestions.length > 3 && (
+              <button type="button" onClick={() => setShowAllSuggestions((value) => !value)} disabled={loading}>
+                {showAllSuggestions ? "Less" : "More"}
+              </button>
+            )}
           </div>
 
           {error && <div className={styles.errorText}>{error}</div>}
@@ -354,23 +412,76 @@ function summarizeWeatherBadge(weatherSummary?: string | null) {
   return null;
 }
 
-function renderMessageContent(message: LocalMessage) {
+function renderMessageContent(message: LocalMessage): ReactNode {
   const hasRecommendations = message.role === "assistant" && (message.recommendations?.length ?? 0) > 0;
-  if (!hasRecommendations) return message.content;
+  if (!hasRecommendations) return formatAssistantText(message.content, message.role === "assistant");
 
   const normalized = message.content.toLowerCase();
   const likelyRawList = /\n?\s*\d+\.\s+\*?\*?[a-z0-9]/i.test(message.content) || normalized.includes("**");
   if (likelyRawList || message.content.length > 140) {
     return "Here are real options from Untamed:";
   }
-  return message.content.trim() || "Here are real options from Untamed:";
+  return formatAssistantText(message.content.trim() || "Here are real options from Untamed:", true);
+}
+
+function formatAssistantText(content: string, allowFormatting: boolean): ReactNode {
+  if (!allowFormatting) return content;
+
+  const lines = content.split(/\r?\n/);
+  const nodes: ReactNode[] = [];
+  let bullets: ReactNode[] = [];
+
+  const flushBullets = () => {
+    if (!bullets.length) return;
+    nodes.push(<ul key={`ul-${nodes.length}`}>{bullets}</ul>);
+    bullets = [];
+  };
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line) {
+      flushBullets();
+      return;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      bullets.push(<li key={`li-${index}`}>{formatInlineMarkdown(bullet[1])}</li>);
+      return;
+    }
+
+    flushBullets();
+    const heading = line.match(/^\*\*(.+?)\*\*:?\s*$/);
+    if (heading) {
+      nodes.push(<strong className={styles.messageHeading} key={`h-${index}`}>{heading[1]}</strong>);
+    } else {
+      nodes.push(<span key={`line-${index}`}>{formatInlineMarkdown(line)}</span>);
+    }
+  });
+
+  flushBullets();
+  return nodes.length ? nodes : content;
+}
+
+function formatInlineMarkdown(value: string): ReactNode[] {
+  return value.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }
 
 function shortChipLabel(question: string) {
+  if (question.includes("Find easy")) return "Find easy";
+  if (question.includes("Cheap") || question.includes("cheaper")) return "Cheap";
   if (question.includes("bring") || question.includes("pack")) return "Pack list";
   if (question.includes("beginner") || question.includes("easier")) return "Beginner?";
-  if (question.includes("weather") || question.includes("Rain")) return "Rain forecast?";
+  if (question.includes("weather") || question.includes("Rain") || question.includes("Weather")) return "Weather risk";
   if (question.includes("Compare")) return "Compare";
+  if (question.includes("Guest")) return "Passes";
+  if (question.includes("Refund")) return "Refunds";
+  if (question.includes("Review")) return "Reviews";
   if (question.includes("booking")) return "Booking";
   if (question.length > 18) return `${question.slice(0, 17)}...`;
   return question;

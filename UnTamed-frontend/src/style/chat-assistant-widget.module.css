@@ -1,7 +1,7 @@
 .widgetShell {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
+  right: 24px;
+  bottom: 18px;
   z-index: 1040;
   display: flex;
   flex-direction: column;
@@ -16,8 +16,8 @@
 }
 
 .panel {
-  width: min(390px, calc(100vw - 32px));
-  height: min(590px, calc(100vh - 112px));
+  width: min(380px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 150px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -35,7 +35,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 13px 14px;
+  padding: 10px 12px;
   color: #fffaf1;
   background: radial-gradient(circle at 14% 0%, rgba(244, 192, 106, 0.28), transparent 34%), linear-gradient(135deg, #123d28, #1f6040);
 }
@@ -49,18 +49,18 @@
 
 .headerMascot {
   flex: 0 0 auto;
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255, 250, 241, 0.12);
 }
 
 .header h2 {
   margin: 1px 0 0;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.1;
 }
 
 .header p {
-  margin: 3px 0 0;
+  margin: 2px 0 0;
   color: rgba(255, 250, 241, 0.78);
   font-size: 11px;
   font-weight: 700;
@@ -89,7 +89,7 @@
 }
 
 .iconButton {
-  height: 30px;
+  height: 28px;
   border-radius: 999px;
   padding: 0 10px;
   font-size: 11px;
@@ -97,8 +97,8 @@
 }
 
 .closeButton {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   font-weight: 900;
 }
@@ -107,9 +107,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
   overflow-y: auto;
-  padding: 14px;
+  padding: 12px;
   background:
     linear-gradient(180deg, rgba(255, 249, 237, 0.96), rgba(250, 241, 222, 0.96)),
     radial-gradient(circle at 12% 10%, rgba(244, 192, 106, 0.12), transparent 32%);
@@ -173,7 +173,7 @@
 }
 
 .messageBubble {
-  max-width: 86%;
+  max-width: 88%;
   border-radius: 18px;
   padding: 10px 12px 8px;
   font-size: 13px;
@@ -181,9 +181,26 @@
   box-shadow: 0 6px 18px rgba(18, 49, 33, 0.07);
 }
 
-.messageBubble p {
+.messageContent {
+  display: grid;
+  gap: 5px;
   margin: 0;
   white-space: pre-wrap;
+}
+
+.messageContent ul {
+  margin: 1px 0 2px;
+  padding-left: 18px;
+}
+
+.messageContent li {
+  margin: 2px 0;
+}
+
+.messageHeading {
+  display: block;
+  margin-top: 2px;
+  color: #163b28;
 }
 
 .messageAssistant .messageBubble {
@@ -194,13 +211,14 @@
 }
 
 .messageUser .messageBubble {
+  max-width: 82%;
   color: #fffaf1;
   background: linear-gradient(135deg, #1a4d2e, #123d28);
   border-bottom-right-radius: 7px;
 }
 
 .messageTime {
-  display: block;
+  display: none;
   margin-top: 5px;
   color: rgba(101, 118, 105, 0.72);
   font-size: 10px;
@@ -224,7 +242,7 @@
 
 .recommendationList {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-top: 10px;
 }
@@ -232,10 +250,12 @@
 .recommendationCard {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
   border: 1px solid rgba(26, 77, 46, 0.14);
   border-radius: 14px;
-  padding: 8px;
+  padding: 7px;
   color: #243528;
   background: #fffdf8;
   text-align: left;
@@ -252,15 +272,24 @@
 }
 
 .recommendationIcon {
-  width: 28px;
-  height: 28px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #1a4d2e;
   background: linear-gradient(135deg, #eef7ed, #fff0c2);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
+}
+
+.recommendationImage {
+  width: 48px;
+  height: 48px;
+  display: block;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #eef7ed;
 }
 
 .recommendationBody {
@@ -273,7 +302,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: #183d29;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.25;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -300,7 +329,7 @@
 .recommendationLocation {
   overflow: hidden;
   color: #657669;
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -332,18 +361,21 @@
 .suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 10px 14px 8px;
+  align-items: center;
+  max-height: 44px;
+  overflow: hidden;
+  gap: 5px;
+  padding: 7px 12px 5px;
   background: #fff9ed;
 }
 
 .suggestions button {
   border: 1px solid rgba(26, 77, 46, 0.14);
   border-radius: 999px;
-  padding: 7px 10px;
+  padding: 5px 8px;
   color: #1a4d2e;
   background: #fffdf8;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   cursor: pointer;
 }
@@ -368,7 +400,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 6px;
+  padding: 8px 12px 5px;
   border-top: 1px solid rgba(26, 77, 46, 0.1);
   background: #fffdf8;
 }
@@ -410,7 +442,7 @@
 }
 
 .poweredBy {
-  padding: 0 14px 10px;
+  padding: 0 14px 8px;
   color: #809186;
   background: #fffdf8;
   font-size: 10px;
@@ -588,7 +620,7 @@
 
 @media (min-width: 375px) {
   .recommendationList {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -600,8 +632,9 @@
   }
 
   .panel {
-    width: 100%;
-    height: min(75vh, 620px);
+    width: calc(100vw - 24px);
+    max-height: 78vh;
+    height: min(78vh, 620px);
     border-radius: 24px 24px 18px 18px;
     transform-origin: 50% 100%;
   }
@@ -610,6 +643,10 @@
     width: 96px;
     height: 96px;
     align-self: flex-end;
+  }
+
+  .suggestions {
+    max-height: 68px;
   }
 
   .launchLabel {

@@ -60,8 +60,8 @@ public class ChatAssistantContextBuilder {
         boolean sessionContextFound = appendSessionContext(context, trimToNull(request.sessionId()));
         boolean userInsightFound = appendUserPreferenceContext(context, trimToNull(userId), insight);
         appendPageContext(context, trimToNull(request.pageContext()));
-        List<ActivityOption> alternatives = findAlternativeOptionsForRequest(activityTemplateId, message, insight);
-        boolean alternativesFound = appendAlternativeActivitiesContext(context, alternatives, StringUtils.hasText(activityTemplateId) && isAlternativeIntent(message));
+        List<ActivityOption> alternatives = findActivityOptionsForRequest(activityTemplateId, message, insight);
+        boolean alternativesFound = appendAlternativeActivitiesContext(context, alternatives, isRecommendationIntent(message));
 
         log.debug(
                 "Chat assistant context built: activityContextFound={}, sessionContextFound={}, userInsightFound={}, alternativesFound={}, categoryCount={}",
@@ -159,10 +159,13 @@ public class ChatAssistantContextBuilder {
                 return false;
             }
 
-            context.append("\n\nCurrent user preference context. Use only to personalize general advice; do not reveal private data.\n");
+            context.append("\n\nCurrent user profile context. Use this to answer direct questions about the user's level, preferences, interests, budget style, and activity history. Do not reveal private data.\n");
             if (user != null) {
-                appendLine(context, "Profile level", user.getLevel() != null ? user.getLevel().name() : null);
-                appendLine(context, "Profile preferences", joinLimited(user.getPreferences()));
+                appendLine(context, "Level", user.getLevel() != null ? user.getLevel().name() : null);
+                appendLine(context, "Level title", user.getLevelTitle());
+                appendLine(context, "Level number", String.valueOf(user.getLevelNumber()));
+                appendLine(context, "Level progress percent", String.valueOf(user.getLevelProgressPercent()));
+                appendLine(context, "Preferences", joinLimited(user.getPreferences()));
                 appendLine(context, "Confirmed trips count", String.valueOf(user.getConfirmedTripsCount()));
             }
 
@@ -230,16 +233,18 @@ public class ChatAssistantContextBuilder {
         }
     }
 
-    private List<ActivityOption> findAlternativeOptionsForRequest(String currentTemplateId, String message, UserInsight insight) {
-        if (!StringUtils.hasText(currentTemplateId) || !isAlternativeIntent(message)) {
+    private List<ActivityOption> findActivityOptionsForRequest(String currentTemplateId, String message, UserInsight insight) {
+        if (!isRecommendationIntent(message)) {
             return List.of();
         }
         try {
-            ActivityTemplate current = activityTemplateRepository.findById(currentTemplateId).orElse(null);
-            if (current == null) {
-                return List.of();
+            if (StringUtils.hasText(currentTemplateId)) {
+                ActivityTemplate current = activityTemplateRepository.findById(currentTemplateId).orElse(null);
+                if (current != null) {
+                    return findAlternativeOptions(current, message, insight);
+                }
             }
-            return findAlternativeOptions(current, message, insight);
+            return findGeneralActivityOptions(message, insight);
         } catch (RuntimeException ignored) {
             return List.of();
         }
@@ -355,6 +360,120 @@ public class ChatAssistantContextBuilder {
                 .toList();
     }
 
+    private List<ActivityOption> findGeneralActivityOptions(String message, UserInsight insight) {
+        String normalized = normalize(message);
+        boolean wantsEasy = containsAny(normalized, "easy", "beginner", "beginner-friendly", "my level", "fit my level", "fits my level");
+        boolean wantsMedium = containsAny(normalized, "medium", "moderate");
+        boolean wantsHard = containsAny(normalized, "hard", "challenging", "advanced");
+        boolean wantsCheap = containsAny(normalized, "cheap", "budget", "low price", "affordable", "less expensive");
+        List<String> keywordTokens = extractSearchTokens(normalized);
+
+        Map<String, ActivitySession> nextSessions = futurePublishedSessionsByTemplate();
+        Set<String> preferredCategories = insight != null
+                ? new HashSet<>(safeList(insight.getTopCategoryIds()))
+                : Set.of();
+        Set<String> preferredDifficulties = insight != null && insight.getDifficultyScores() != null
+                ? insight.getDifficultyScores().entrySet().stream()
+                        .filter(entry -> entry.getValue() != null && entry.getValue() > 0)
+                        .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder()))
+                        .limit(2)
+                        .map(entry -> normalize(entry.getKey()))
+                        .collect(Collectors.toSet())
+                : Set.of();
+
+        List<ActivityOption> options = new ArrayList<>();
+        for (ActivityTemplate candidate : activityTemplateRepository.findAll()) {
+            if (candidate == null || !StringUtils.hasText(candidate.getId()) || candidate.isArchived()) {
+                continue;
+            }
+            ActivitySession nextSession = nextSessions.get(candidate.getId());
+            if (nextSession == null) {
+                continue;
+            }
+
+            double score = 1.0;
+            List<String> reasons = new ArrayList<>();
+            Difficulty difficulty = candidate.getDifficulty();
+            String difficultyName = difficulty != null ? normalize(difficulty.name()) : "";
+
+            if (wantsEasy) {
+                if (difficulty == Difficulty.EASY) {
+                    score += 8;
+                    reasons.add("beginner-friendly difficulty");
+                } else if (difficulty == Difficulty.MEDIUM) {
+                    score += 2;
+                    reasons.add("moderate option with a future session");
+                } else {
+                    score -= 5;
+                }
+            }
+            if (wantsMedium && difficulty == Difficulty.MEDIUM) {
+                score += 6;
+                reasons.add("medium difficulty match");
+            }
+            if (wantsHard && difficulty == Difficulty.HARD) {
+                score += 6;
+                reasons.add("challenging difficulty match");
+            }
+            if (!preferredDifficulties.isEmpty() && preferredDifficulties.contains(difficultyName)) {
+                score += 2;
+                reasons.add("matches your usual difficulty");
+            }
+
+            if (wantsCheap && candidate.getPrice() != null) {
+                score += Math.max(0, 6 - Math.min(6, candidate.getPrice().doubleValue() / 30.0));
+                reasons.add("budget-conscious option");
+            }
+
+            String searchable = buildSearchableText(candidate);
+            for (String token : keywordTokens) {
+                if (searchable.contains(token)) {
+                    score += 4;
+                    reasons.add("matches " + token);
+                }
+            }
+
+            long preferenceMatches = safeList(candidate.getCategoryIds()).stream().filter(preferredCategories::contains).count();
+            if (preferenceMatches > 0) {
+                score += 2;
+                reasons.add("matches your preferred categories");
+            }
+
+            if (score <= 0) {
+                continue;
+            }
+
+            String reason = reasons.isEmpty()
+                    ? "available with a future session"
+                    : reasons.stream().distinct().limit(2).collect(Collectors.joining(" and "));
+            options.add(new ActivityOption(candidate, nextSession, score, reason));
+        }
+
+        Comparator<ActivityOption> comparator = Comparator.comparingDouble(ActivityOption::score).reversed();
+        if (wantsCheap) {
+            comparator = comparator.thenComparing(option -> option.template().getPrice(), Comparator.nullsLast(Comparator.naturalOrder()));
+        }
+
+        return options.stream()
+                .sorted(comparator)
+                .limit(5)
+                .toList();
+    }
+
+    private Map<String, ActivitySession> futurePublishedSessionsByTemplate() {
+        return activitySessionRepository
+                .findByStatusAndStartAtAfter(ActivityStatus.PUBLISHED, Instant.now())
+                .stream()
+                .filter(session -> StringUtils.hasText(session.getTemplateId()))
+                .sorted(Comparator.comparing(ActivitySession::getStartAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toMap(
+                        ActivitySession::getTemplateId,
+                        Function.identity(),
+                        (first, ignored) -> first,
+                        LinkedHashMap::new
+                ));
+    }
+
     private String resolveCategoryNames(List<String> categoryIds) {
         if (categoryIds == null || categoryIds.isEmpty()) {
             return null;
@@ -421,23 +540,94 @@ public class ChatAssistantContextBuilder {
                 .orElse(null);
     }
 
-    private boolean isAlternativeIntent(String message) {
+    private boolean isRecommendationIntent(String message) {
         String normalized = normalize(message);
         return containsAny(
                 normalized,
+                "find activity",
+                "find me",
                 "easier",
+                "easy",
                 "beginner",
+                "beginner-friendly",
                 "less difficult",
                 "safer",
                 "cheaper",
+                "cheap",
+                "budget",
                 "similar",
                 "alternative",
                 "recommend another",
                 "recommend me",
+                "recommend something",
+                "show me",
                 "something else",
                 "more suitable",
-                "fits me better"
+                "fits me better",
+                "fit my level",
+                "fits my level",
+                "activities fit my level",
+                "activity fits my level"
         );
+    }
+
+    private List<String> extractSearchTokens(String normalizedMessage) {
+        if (!StringUtils.hasText(normalizedMessage)) {
+            return List.of();
+        }
+        List<String> known = List.of(
+                "hiking",
+                "camping",
+                "climbing",
+                "desert",
+                "beach",
+                "water",
+                "waterfall",
+                "mountain",
+                "sea",
+                "coastal",
+                "forest",
+                "history",
+                "heritage",
+                "culture",
+                "birdwatching",
+                "tunis",
+                "tozeur",
+                "nabeul",
+                "bizerte",
+                "jendouba",
+                "zaghouan",
+                "sousse",
+                "sfax",
+                "gabes",
+                "kef",
+                "siliana",
+                "mahdia",
+                "monastir",
+                "kairouan",
+                "kasserine",
+                "gafsa",
+                "medenine",
+                "tataouine"
+        );
+        return known.stream()
+                .filter(normalizedMessage::contains)
+                .distinct()
+                .toList();
+    }
+
+    private String buildSearchableText(ActivityTemplate template) {
+        List<String> parts = new ArrayList<>();
+        parts.add(template.getTitle());
+        parts.add(template.getDescription());
+        parts.add(joinLimited(template.getTags()));
+        parts.add(joinLimited(template.getSemanticHints()));
+        parts.add(resolveCategoryNames(template.getCategoryIds()));
+        parts.add(resolveLocationName(template));
+        return parts.stream()
+                .filter(StringUtils::hasText)
+                .map(this::normalize)
+                .collect(Collectors.joining(" "));
     }
 
     private boolean containsAny(String value, String... needles) {
