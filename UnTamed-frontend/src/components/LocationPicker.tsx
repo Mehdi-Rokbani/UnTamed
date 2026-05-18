@@ -10,9 +10,10 @@ type Props = {
   value: AddressResponse | null;
   onChange: (v: AddressResponse | null) => void;
   label?: string;
+  placeholder?: string;
 };
 
-export default function LocationPicker({ value, onChange, label = "Location" }: Props) {
+export default function LocationPicker({ value, onChange, label = "Location", placeholder = "Start typing an address..." }: Props) {
   const [query, setQuery] = useState<string>(value?.displayName ?? "");
   const debounced = useDebounce(query, 350);
 
@@ -196,7 +197,7 @@ export default function LocationPicker({ value, onChange, label = "Location" }: 
                 if (uniqueResults.length > 0 && !value) setOpen(true);
                 loadPopularIfEmpty();
               }}
-              placeholder="Start typing an address..."
+              placeholder={placeholder}
               className={`${styles["locationInput"]} ${value ? styles["location-input--selected"] : ""}`}
               aria-autocomplete="list"
               aria-expanded={open}

@@ -4,9 +4,13 @@ package com.untamed.untamedbackend.controller;
 import com.untamed.untamedbackend.dto.AddressResponse;
 import com.untamed.untamedbackend.repository.AddressRepository;
 import com.untamed.untamedbackend.service.GeoService;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/geo")
@@ -58,6 +62,20 @@ public class GeoController {
             @RequestParam(defaultValue = "18") int zoom
     ) {
         return geoService.reverse(lat, lon, zoom);
+    }
+
+    @GetMapping(value = "/static-map", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> staticMap(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam(required = false) String label,
+            @RequestParam(defaultValue = "activity") String variant
+    ) {
+        byte[] image = geoService.staticMap(lat, lon, label, variant);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(12, TimeUnit.HOURS).cachePublic())
+                .body(image);
     }
 
     // Keep your old DB-only search if you still want it

@@ -10,8 +10,10 @@ import type {
   GuideSessionDetailsResponse,
   GuideTemplateSessionsDashboardResponse,
   GuideTemplateSessionsSummary,
+  MeetingPointLocation,
   RefundStatus,
 } from "../types/activity";
+import type { AddressResponse } from "../types/geo";
 import {
   createSession,
   updateSession,
@@ -24,6 +26,7 @@ import {
 import { removeGuideBooking } from "../api/guide.api";
 import { BackButton } from "../components/BackButton";
 import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
+import LocationPicker from "../components/LocationPicker";
 import { formatTndMinor } from "../utils/money";
 import styles from "../style/templateSessions.module.css";
 
@@ -350,10 +353,46 @@ function dashboardSessionToActivitySession(
     bookedCount: session.bookedCount,
     status: session.status,
     meetingPoint: session.meetingPoint ?? null,
+    meetingPointLocation: session.meetingPointLocation ?? null,
     sessionNote: session.sessionNote ?? null,
     template: null,
     rating: null,
   };
+}
+
+function meetingPointToAddress(value?: MeetingPointLocation | null): AddressResponse | null {
+  if (!value) return null;
+
+  return {
+    id: value.placeId ?? `${value.latitude}:${value.longitude}`,
+    provider: "locationiq",
+    providerPlaceId: value.placeId ?? `${value.latitude}:${value.longitude}`,
+    displayName: value.address || value.label,
+    governorate: null,
+    delegation: null,
+    locality: null,
+    latitude: value.latitude,
+    longitude: value.longitude,
+    usesCount: null,
+  };
+}
+
+function addressToMeetingPoint(value: AddressResponse): MeetingPointLocation {
+  return {
+    label: value.displayName,
+    address: value.displayName,
+    latitude: value.latitude,
+    longitude: value.longitude,
+    placeId: value.providerPlaceId ?? value.id ?? null,
+    source: "LOCATIONIQ",
+  };
+}
+
+function meetingPointDisplay(session: Pick<ActivitySessionResponse, "meetingPoint" | "meetingPointLocation">) {
+  return session.meetingPointLocation?.label
+    || session.meetingPointLocation?.address
+    || session.meetingPoint
+    || "";
 }
 
 export default function TemplateSessionsPage() {
@@ -398,6 +437,7 @@ export default function TemplateSessionsPage() {
   const [formEndAt, setFormEndAt] = useState("");
   const [formCapacity, setFormCapacity] = useState(10);
   const [formMeetingPoint, setFormMeetingPoint] = useState("");
+  const [formMeetingPointLocation, setFormMeetingPointLocation] = useState<MeetingPointLocation | null>(null);
   const [formSessionNote, setFormSessionNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [savingForm, setSavingForm] = useState(false);
@@ -523,6 +563,7 @@ export default function TemplateSessionsPage() {
     setFormEndAt("");
     setFormCapacity(10);
     setFormMeetingPoint("");
+    setFormMeetingPointLocation(null);
     setFormSessionNote("");
     setFormError(null);
   }
@@ -540,6 +581,7 @@ export default function TemplateSessionsPage() {
     setFormEndAt(toLocalDateTimeInputValue(end));
     setFormCapacity(10);
     setFormMeetingPoint("");
+    setFormMeetingPointLocation(null);
     setFormSessionNote("");
     setFormError(null);
     setModal({ kind: "add" });
@@ -549,7 +591,8 @@ export default function TemplateSessionsPage() {
     setFormStartAt(toLocalDateTimeInputValue(new Date(session.startAt)));
     setFormEndAt(toLocalDateTimeInputValue(new Date(session.endAt)));
     setFormCapacity(session.capacity);
-    setFormMeetingPoint(session.meetingPoint ?? "");
+    setFormMeetingPoint(meetingPointDisplay(session));
+    setFormMeetingPointLocation(session.meetingPointLocation ?? null);
     setFormSessionNote(session.sessionNote ?? "");
     setFormError(null);
     setModal({ kind: "edit", session });
@@ -597,8 +640,12 @@ export default function TemplateSessionsPage() {
       return "Capacity cannot be lower than booked seats.";
     }
 
+    if (!formMeetingPointLocation) {
+      return "Choose a meeting point from the map or address search.";
+    }
+
     if (formMeetingPoint.length > 300) {
-      return "Meeting point must be 300 characters or less.";
+      return "Meeting point display text must be 300 characters or less.";
     }
 
     if (formSessionNote.length > 1000) {
@@ -631,6 +678,7 @@ export default function TemplateSessionsPage() {
         endAt: endAt.toISOString(),
         capacity: formCapacity,
         meetingPoint: formMeetingPoint.trim() || null,
+        meetingPointLocation: formMeetingPointLocation,
         sessionNote: formSessionNote.trim() || null,
       });
 
@@ -666,6 +714,7 @@ export default function TemplateSessionsPage() {
         endAt: endAt.toISOString(),
         capacity: formCapacity,
         meetingPoint: formMeetingPoint.trim(),
+        meetingPointLocation: formMeetingPointLocation,
         sessionNote: formSessionNote.trim(),
       });
 
@@ -1107,14 +1156,14 @@ export default function TemplateSessionsPage() {
                             {formatTime(s.startAt)} — {formatTime(s.endAt)}
                           </span>
 
-                          {s.meetingPoint && (
+                          {meetingPointDisplay(s) && (
                             <>
                               <span className={styles.rowTimeDivider} />
                               <span className={styles.rowMeetingIcon}>
                                 <Icon.MapPin />
                               </span>
                               <span className={styles.rowMeetingText}>
-                                {s.meetingPoint}
+                                {meetingPointDisplay(s)}
                               </span>
                             </>
                           )}
@@ -1612,19 +1661,21 @@ export default function TemplateSessionsPage() {
                 </div>
 
                 <div className={styles.formField}>
-                  <label className={styles.formLabel}>
-                    Meeting Point{" "}
-                    <span className={styles.formLabelHint}>optional</span>
-                  </label>
-
-                  <input
-                    className={styles.formInput}
-                    type="text"
-                    maxLength={300}
-                    value={formMeetingPoint}
-                    onChange={(e) => setFormMeetingPoint(e.target.value)}
-                    placeholder="Example: Main entrance"
+                  <LocationPicker
+                    label="Meeting Point"
+                    placeholder="Search the exact meeting address..."
+                    value={meetingPointToAddress(formMeetingPointLocation)}
+                    onChange={(value) => {
+                      const next = value ? addressToMeetingPoint(value) : null;
+                      setFormMeetingPointLocation(next);
+                      setFormMeetingPoint(next?.label ?? "");
+                    }}
                   />
+                  {formMeetingPoint && !formMeetingPointLocation && (
+                    <span className={styles.formHint}>
+                      Existing text meeting point: {formMeetingPoint}
+                    </span>
+                  )}
                 </div>
 
                 <div className={styles.formField}>
@@ -1657,6 +1708,7 @@ export default function TemplateSessionsPage() {
                   savingForm ||
                   !formStartAt ||
                   !formEndAt ||
+                  !formMeetingPointLocation ||
                   formCapacity < 3 ||
                   new Date(formEndAt) <= new Date(formStartAt)
                 }

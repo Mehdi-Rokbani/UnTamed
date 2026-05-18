@@ -1,5 +1,6 @@
 package com.untamed.untamedbackend.model;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -62,6 +63,9 @@ public class ActivitySession {
 
     @Size(max = 300)
     private String meetingPoint;
+
+    @Valid
+    private MeetingPoint meetingPointLocation;
 
     @Size(max = 1000)
     private String sessionNote;

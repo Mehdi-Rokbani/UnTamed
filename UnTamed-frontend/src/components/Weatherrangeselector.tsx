@@ -7,6 +7,9 @@ import {
   type JSX,
 } from "react";
 import { getDailyForecast } from "../api/weather.api";
+import LocationPicker from "./LocationPicker";
+import type { MeetingPointLocation } from "../types/activity";
+import type { AddressResponse } from "../types/geo";
 import styles from "../style/WeatherRangeSelector.module.css";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
@@ -42,6 +45,8 @@ export interface WeatherRangeSelectorProps {
   onCapacityChange: (value: number) => void;
   meetingPoint: string;
   onMeetingPointChange: (value: string) => void;
+  meetingPointLocation?: MeetingPointLocation | null;
+  onMeetingPointLocationChange?: (value: MeetingPointLocation | null) => void;
   sessionNote: string;
   onSessionNoteChange: (value: string) => void;
 }
@@ -77,6 +82,32 @@ function combine(dateOnly: string, time: string): string { return `${dateOnly}T$
 function extractDate(dt: string): string { return dt ? dt.slice(0,10) : ""; }
 function extractTime(dt: string, fallback: string): string {
   if (!dt || !dt.includes("T")) return fallback; return dt.slice(11,16)||fallback;
+}
+function meetingPointToAddress(value?: MeetingPointLocation | null): AddressResponse | null {
+  if (!value) return null;
+
+  return {
+    id: value.placeId ?? `${value.latitude}:${value.longitude}`,
+    provider: "locationiq",
+    providerPlaceId: value.placeId ?? `${value.latitude}:${value.longitude}`,
+    displayName: value.address || value.label,
+    governorate: null,
+    delegation: null,
+    locality: null,
+    latitude: value.latitude,
+    longitude: value.longitude,
+    usesCount: null,
+  };
+}
+function addressToMeetingPoint(value: AddressResponse): MeetingPointLocation {
+  return {
+    label: value.displayName,
+    address: value.displayName,
+    latitude: value.latitude,
+    longitude: value.longitude,
+    placeId: value.providerPlaceId ?? value.id ?? null,
+    source: "LOCATIONIQ",
+  };
 }
 function formatLabel(dateStr: string): string {
   const d = parseDateOnly(dateStr);
@@ -443,6 +474,7 @@ export default function WeatherRangeSelector({
   onStartAtChange, onEndAtChange,
   capacity, onCapacityChange,
   meetingPoint, onMeetingPointChange,
+  meetingPointLocation, onMeetingPointLocationChange,
   sessionNote, onSessionNoteChange,
 }: WeatherRangeSelectorProps) {
 
@@ -909,20 +941,23 @@ export default function WeatherRangeSelector({
           </label>
 
           {/* Meeting point */}
-          <label className={styles.detailField}>
-            <span className={styles.detailFieldLabel}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-              </svg>
-              Meeting point
-            </span>
-            <input
-              type="text" className={styles.inputField}
-              value={meetingPoint}
-              onChange={e => onMeetingPointChange(e.target.value)}
+          <div className={`${styles.detailField} ${styles.detailFieldFull}`}>
+            <LocationPicker
+              label="Session meeting point"
+              value={meetingPointToAddress(meetingPointLocation)}
+              onChange={(value) => {
+                const next = value ? addressToMeetingPoint(value) : null;
+                onMeetingPointLocationChange?.(next);
+                onMeetingPointChange(next?.label ?? "");
+              }}
               placeholder="Trailhead, café, parking lot…"
             />
-          </label>
+            {meetingPoint && !meetingPointLocation && (
+              <div className={styles.emptyHint}>
+                Existing text meeting point: {meetingPoint}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Session note — full width below the grid */}

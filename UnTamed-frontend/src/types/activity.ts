@@ -33,6 +33,15 @@ export type AddressPickDto = {
   longitude?: number | null;
 };
 
+export type MeetingPointLocation = {
+  label: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string | null;
+  source: "LOCATIONIQ";
+};
+
 /** ---------------------------
  *  TEMPLATE
  *  ---------------------------
@@ -113,6 +122,7 @@ export type ActivitySessionCreatePayload = {
   endAt: string;
   capacity: number;
   meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
   sessionNote?: string | null;
 };
 
@@ -122,6 +132,7 @@ export type ActivitySessionUpdatePayload = {
   capacity?: number | null;
   status?: ActivityStatus | null;
   meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
   sessionNote?: string | null;
 };
 
@@ -159,6 +170,7 @@ export type ActivitySessionResponse = {
   bookedCount: number;
   status: ActivityStatus;
   meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
   sessionNote?: string | null;
 
   template?: ActivityTemplateMini | null;
@@ -290,6 +302,7 @@ export type GuideTemplateSessionDashboard = {
   availableSpots: number;
   status: ActivityStatus;
   meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
   sessionNote?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -332,6 +345,9 @@ export type PublicSession = {
   endAt: string;
   capacity: number;
   bookedCount: number;
+  meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
+  sessionNote?: string | null;
 };
 
 export type TemplateWithAddress = ActivityTemplateResponse & {
@@ -362,6 +378,8 @@ export type PublicTemplateCard = {
   difficulty: Difficulty;
   price: number;
   tags: string[];
+  categoryIds?: string[];
+  categoryNames?: string[];
   coverImageUrl?: string | null;
   rating: RatingSummary;
   nextSession?: PublicNextSession | null;

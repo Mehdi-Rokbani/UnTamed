@@ -6,6 +6,7 @@ import type {
   ActivityTemplateCreatePayload,
   ActivityTemplateResponse,
   ActivitySessionCreatePayload,
+  MeetingPointLocation,
 } from "../types/activity";
 import type { AddressResponse } from "../types/geo";
 import type { Category } from "../types/category";
@@ -262,6 +263,7 @@ export default function CreateActivityPage() {
   const [endAt, setEndAt] = useState("");
   const [capacity, setCapacity] = useState<number>(3);
   const [meetingPoint, setMeetingPoint] = useState("");
+  const [meetingPointLocation, setMeetingPointLocation] = useState<MeetingPointLocation | null>(null);
   const [sessionNote, setSessionNote] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -353,6 +355,7 @@ export default function CreateActivityPage() {
     !!startAt && !!endAt &&
     new Date(startAt).getTime() > Date.now() &&
     new Date(endAt).getTime() > new Date(startAt).getTime() &&
+    meetingPointLocation !== null &&
     capacity >= 3;
   const step5Valid = categoryIds.length > 0;
   const step6Valid = images.length > 0;
@@ -570,6 +573,7 @@ export default function CreateActivityPage() {
       endAt: new Date(endAt).toISOString(),
       capacity,
       meetingPoint: meetingPoint.trim() || undefined,
+      meetingPointLocation,
       sessionNote: sessionNote.trim() || undefined,
     };
     try {
@@ -588,6 +592,7 @@ export default function CreateActivityPage() {
     setStep(1);
     setTitle(""); setDescription(""); setDifficulty("EASY"); setPrice(0); setTags([]); setSafetyNotes([]);
     setStartAt(""); setEndAt(""); setCapacity(3); setMeetingPoint(""); setSessionNote("");
+    setMeetingPointLocation(null);
     setCategoryIds([]); setLocation(null); setCreatedTemplate(null); setImages([]);
     setAiIdea(""); setAiPlace(""); setAiAudience(""); setAiVibe(""); setAiNotes("");
     setAiDurationPreference(""); setAiBudgetStyle("");
@@ -1006,6 +1011,8 @@ export default function CreateActivityPage() {
                 onCapacityChange={(value) => { setCapacity(value); handleFieldEdit("capacity"); }}
                 meetingPoint={meetingPoint}
                 onMeetingPointChange={(value) => { setMeetingPoint(value); handleFieldEdit("meetingPoint"); }}
+                meetingPointLocation={meetingPointLocation}
+                onMeetingPointLocationChange={(value) => { setMeetingPointLocation(value); handleFieldEdit("meetingPoint"); }}
                 sessionNote={sessionNote}
                 onSessionNoteChange={(value) => { setSessionNote(value); handleFieldEdit("sessionNote"); }}
               />

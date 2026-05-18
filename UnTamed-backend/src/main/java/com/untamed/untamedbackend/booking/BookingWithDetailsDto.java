@@ -1,5 +1,7 @@
 package com.untamed.untamedbackend.booking;
 
+import com.untamed.untamedbackend.dto.MeetingPointDto;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +26,7 @@ public record BookingWithDetailsDto(
         // Session
         Instant sessionStartAt,
         String meetingPoint,
+        MeetingPointDto meetingPointLocation,
         List<String> activityTags,
         List<String> categoryIds,
 

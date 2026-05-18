@@ -53,6 +53,11 @@ export function CheckoutSummaryCard({
   amount?: number | null;
 }) {
   const location = [booking.governorate, booking.locality].filter(Boolean).join(", ") || booking.displayName || "Location to be announced";
+  const meetingPoint =
+    booking.meetingPointLocation?.label ||
+    booking.meetingPointLocation?.address ||
+    booking.meetingPoint ||
+    "To be shared by the guide";
   const tags = [
     ...(booking.activityTags ?? []),
     ...(booking.categoryIds ?? []),
@@ -87,7 +92,7 @@ export function CheckoutSummaryCard({
         </div>
         <div>
           <dt>Meeting point</dt>
-          <dd>{booking.meetingPoint || "To be shared by the guide"}</dd>
+          <dd>{meetingPoint}</dd>
         </div>
         <div>
           <dt>Participants</dt>

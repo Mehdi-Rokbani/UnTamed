@@ -430,8 +430,8 @@ button:disabled {
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 140px 240px;
-  gap: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 170px) minmax(360px, max-content);
+  column-gap: 16px;
   padding: 0 18px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -455,9 +455,9 @@ button:disabled {
 
 .sessionRow {
   display: grid;
-  grid-template-columns: 1fr 140px 240px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 170px) minmax(360px, max-content);
   align-items: center;
-  gap: 0;
+  column-gap: 16px;
   padding: 0 18px;
   border-bottom: 1px solid var(--border-lt);
   min-height: 64px;
@@ -652,8 +652,10 @@ button:disabled {
 .rowCapacity {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
-  padding: 12px 16px 12px 0;
+  min-width: 150px;
+  padding: 12px 8px 12px 0;
 }
 
 .capacityNums {
@@ -732,8 +734,9 @@ button:disabled {
 .rowActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
   padding: 12px 0;
 }
 
@@ -753,6 +756,7 @@ button:disabled {
   cursor: pointer;
   transition: all 0.1s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actBtn:hover:not(:disabled) {
@@ -787,6 +791,7 @@ button:disabled {
   cursor: pointer;
   transition: background 0.1s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actBtnPrimary:hover:not(:disabled) {
@@ -809,6 +814,7 @@ button:disabled {
   cursor: pointer;
   transition: all 0.1s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actBtnSecondary:hover:not(:disabled) {
@@ -1696,7 +1702,17 @@ textarea.formInput {
 
   .tableHeader,
   .sessionRow {
-    grid-template-columns: 1fr 110px 200px;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 140px) minmax(260px, 1fr);
+    column-gap: 12px;
+  }
+
+  .rowCapacity {
+    min-width: 120px;
+  }
+
+  .rowActions {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .metricsBar {
@@ -1750,11 +1766,13 @@ textarea.formInput {
     flex-direction: row;
     align-items: center;
     gap: 10px;
+    min-width: 0;
   }
 
   .rowActions {
     justify-content: flex-start;
     padding: 0 0 2px;
+    flex-wrap: wrap;
   }
 
   .capacityBar {
@@ -1850,6 +1868,7 @@ textarea.formInput {
   cursor: pointer;
   transition: all 0.1s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actBtnDangerText:hover:not(:disabled) {

@@ -82,6 +82,34 @@ public class GeoService {
 
     }
 
+    public byte[] staticMap(double lat, double lon, String label, String variant) {
+        validateCoordinate(lat, -90, 90, "lat");
+        validateCoordinate(lon, -180, 180, "lon");
+
+        // Keep accepting label for the public API, but do not forward arbitrary user text
+        // into the provider URL unless the provider supports safe labeling later.
+        sanitizeLabel(label);
+
+        byte[] image = locationIq.staticMap(lat, lon).block();
+        if (image == null || image.length == 0) {
+            throw new IllegalArgumentException("Static map unavailable");
+        }
+        return image;
+    }
+
+    private void validateCoordinate(double value, double min, double max, String name) {
+        if (!Double.isFinite(value) || value < min || value > max) {
+            throw new IllegalArgumentException("Invalid " + name);
+        }
+    }
+
+    private String sanitizeLabel(String label) {
+        if (label == null) return null;
+        String trimmed = label.trim();
+        if (trimmed.isBlank()) return null;
+        return trimmed.length() > 80 ? trimmed.substring(0, 80) : trimmed;
+    }
+
         private Address upsertFromAutocomplete(LocationIqAutocompleteItem it) {
         String placeId = it.placeId;
         Address a = addressRepo.findByProviderAndProviderPlaceId(PROVIDER, placeId)

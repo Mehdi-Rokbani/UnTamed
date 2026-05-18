@@ -1,5 +1,6 @@
 package com.untamed.untamedbackend.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -13,5 +14,6 @@ public record ActivitySessionCreateRequest(
         @NotNull Instant endAt,
         @Min(1) int capacity,
         @Size(max = 300) String meetingPoint,
+        @Valid MeetingPointDto meetingPointLocation,
         @Size(max = 1000) String sessionNote
 ) {}

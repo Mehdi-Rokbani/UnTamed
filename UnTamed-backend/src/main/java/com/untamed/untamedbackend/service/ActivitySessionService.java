@@ -15,6 +15,7 @@ import com.untamed.untamedbackend.dto.GuideAttendanceSummaryDto;
 import com.untamed.untamedbackend.dto.GuidePassAttendanceDto;
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
 import com.untamed.untamedbackend.dto.GuideSessionDetailsResponse;
+import com.untamed.untamedbackend.dto.MeetingPointDto;
 import com.untamed.untamedbackend.dto.RatingSummaryDto;
 import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.guestpass.AttendanceStatus;
@@ -25,6 +26,7 @@ import com.untamed.untamedbackend.model.ActivityImage;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.model.ActivityTemplate;
+import com.untamed.untamedbackend.model.MeetingPoint;
 import com.untamed.untamedbackend.model.RatingSummary;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
@@ -315,6 +317,8 @@ public class ActivitySessionService {
 
         validateCreateRequest(req);
 
+        MeetingPoint meetingPointLocation = toMeetingPoint(req.meetingPointLocation());
+
         ActivitySession s = ActivitySession.builder()
                 .templateId(t.getId())
                 .guideId(t.getGuideId())
@@ -323,7 +327,10 @@ public class ActivitySessionService {
                 .capacity(req.capacity())
                 .bookedCount(0)
                 .status(ActivityStatus.DRAFT)
-                .meetingPoint(normalize(req.meetingPoint()))
+                .meetingPoint(meetingPointLocation != null
+                        ? meetingPointDisplay(meetingPointLocation)
+                        : normalize(req.meetingPoint()))
+                .meetingPointLocation(meetingPointLocation)
                 .sessionNote(normalize(req.sessionNote()))
                 .build();
 
@@ -392,8 +399,13 @@ public class ActivitySessionService {
             s.setCapacity(req.capacity());
         }
 
-        if (req.meetingPoint() != null) {
+        if (req.meetingPointLocation() != null) {
+            MeetingPoint meetingPointLocation = toMeetingPoint(req.meetingPointLocation());
+            s.setMeetingPointLocation(meetingPointLocation);
+            s.setMeetingPoint(meetingPointDisplay(meetingPointLocation));
+        } else if (req.meetingPoint() != null) {
             s.setMeetingPoint(normalize(req.meetingPoint()));
+            s.setMeetingPointLocation(null);
         }
 
         if (req.sessionNote() != null) {
@@ -420,7 +432,7 @@ public class ActivitySessionService {
 
         return updateSession(
                 sessionId,
-                new ActivitySessionUpdateRequest(null, null, null, status, null, null),
+                new ActivitySessionUpdateRequest(null, null, null, status, null, null, null),
                 authEmail
         );
     }
@@ -914,6 +926,81 @@ public class ActivitySessionService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private MeetingPoint toMeetingPoint(MeetingPointDto dto) {
+        if (dto == null) {
+            return null;
+        }
+
+        String label = normalize(dto.label());
+        String address = normalize(dto.address());
+        String source = normalize(dto.source());
+
+        if (label == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point label is required.");
+        }
+
+        if (label.length() > 120) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point label must be 120 characters or less.");
+        }
+
+        if (address == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point address is required.");
+        }
+
+        if (address.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point address must be 500 characters or less.");
+        }
+
+        if (dto.latitude() == null || dto.latitude() < -90.0 || dto.latitude() > 90.0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point latitude must be between -90 and 90.");
+        }
+
+        if (dto.longitude() == null || dto.longitude() < -180.0 || dto.longitude() > 180.0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point longitude must be between -180 and 180.");
+        }
+
+        if (!"LOCATIONIQ".equals(source)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting point source must be LOCATIONIQ.");
+        }
+
+        return MeetingPoint.builder()
+                .label(label)
+                .address(address)
+                .latitude(dto.latitude())
+                .longitude(dto.longitude())
+                .placeId(normalize(dto.placeId()))
+                .source(source)
+                .build();
+    }
+
+    private MeetingPointDto toMeetingPointDto(MeetingPoint meetingPoint) {
+        if (meetingPoint == null) {
+            return null;
+        }
+
+        return new MeetingPointDto(
+                meetingPoint.getLabel(),
+                meetingPoint.getAddress(),
+                meetingPoint.getLatitude(),
+                meetingPoint.getLongitude(),
+                meetingPoint.getPlaceId(),
+                meetingPoint.getSource()
+        );
+    }
+
+    private String meetingPointDisplay(MeetingPoint meetingPoint) {
+        if (meetingPoint == null) {
+            return null;
+        }
+
+        String label = normalize(meetingPoint.getLabel());
+        if (label != null) {
+            return label;
+        }
+
+        return normalize(meetingPoint.getAddress());
+    }
+
     private User getGuideByEmail(String authEmail) {
         User u = userRepo.findByEmail(authEmail)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -972,6 +1059,7 @@ public class ActivitySessionService {
                 s.getBookedCount(),
                 s.getStatus(),
                 s.getMeetingPoint(),
+                toMeetingPointDto(s.getMeetingPointLocation()),
                 s.getSessionNote(),
                 tplMini,
                 ratingDto

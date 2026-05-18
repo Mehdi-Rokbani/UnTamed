@@ -7,5 +7,8 @@ public record PublicSessionDto(
         Instant startAt,
         Instant endAt,
         int capacity,
-        int bookedCount
+        int bookedCount,
+        String meetingPoint,
+        MeetingPointDto meetingPointLocation,
+        String sessionNote
 ) {}

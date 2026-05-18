@@ -5,6 +5,7 @@ import com.untamed.untamedbackend.model.*;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
+import com.untamed.untamedbackend.repository.CategoryRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class ActivityTemplatePublicService {
     private final ActivitySessionRepository sessionRepo;
     private final UserRepository userRepo;
     private final AddressRepository addressRepo;
+    private final CategoryRepository categoryRepo;
     private final MongoTemplate mongo;
 
     public List<PublicTemplateCardResponse> list() {
@@ -95,9 +97,26 @@ public class ActivityTemplatePublicService {
                         s.getStartAt(),
                         s.getEndAt(),
                         s.getCapacity(),
-                        s.getBookedCount()
+                        s.getBookedCount(),
+                        s.getMeetingPoint(),
+                        toMeetingPointDto(s.getMeetingPointLocation()),
+                        s.getSessionNote()
                 ))
                 .toList();
+    }
+
+    private MeetingPointDto toMeetingPointDto(MeetingPoint meetingPoint) {
+        if (meetingPoint == null) {
+            return null;
+        }
+        return new MeetingPointDto(
+                meetingPoint.getLabel(),
+                meetingPoint.getAddress(),
+                meetingPoint.getLatitude(),
+                meetingPoint.getLongitude(),
+                meetingPoint.getPlaceId(),
+                meetingPoint.getSource()
+        );
     }
 
     public List<PublicTemplateCardResponse> search(TemplateSearchCriteria c) {
@@ -359,6 +378,14 @@ public class ActivityTemplatePublicService {
             }
         }
 
+        List<String> categoryIds = t.getCategoryIds() == null ? List.of() : t.getCategoryIds();
+        List<String> categoryNames = categoryIds.isEmpty()
+                ? List.of()
+                : categoryRepo.findAllById(categoryIds).stream()
+                .map(Category::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .toList();
+
         return new PublicTemplateCardResponse(
                 t.getId(),
                 t.getTitle(),
@@ -366,6 +393,8 @@ public class ActivityTemplatePublicService {
                 t.getDifficulty(),
                 t.getPrice(),
                 t.getTags() == null ? List.of() : t.getTags(),
+                categoryIds,
+                categoryNames,
                 coverUrl,
                 ratingDto,
                 next,

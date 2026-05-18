@@ -1,5 +1,6 @@
 // src/api/booking.api.ts
 import { http } from "./http";
+import type { MeetingPointLocation } from "../types/activity";
 
 export type BookingStatus = "PENDING" | "PAYING" | "COMPLETED" | "EXPIRED" | "CANCELLED";
 export type RefundStatus =
@@ -64,6 +65,7 @@ export type BookingWithDetails = Booking & {
   // Session info
   sessionStartAt: string | null;
   meetingPoint?: string | null;
+  meetingPointLocation?: MeetingPointLocation | null;
   activityTags?: string[];
   categoryIds?: string[];
   guestNames?: string[];
@@ -124,6 +126,7 @@ export async function listMyBookingsWithDetails(): Promise<BookingWithDetails[]>
       currency:         "TND",
       sessionStartAt:   null,
       meetingPoint:     null,
+      meetingPointLocation: null,
       activityTags:     [],
       categoryIds:      [],
       guestNames:       [],

@@ -14,6 +14,7 @@ public record ActivitySessionResponse(
         int bookedCount,
         ActivityStatus status,
         String meetingPoint,
+        MeetingPointDto meetingPointLocation,
         String sessionNote,
 
         // include template data + rating so upcoming sessions show rating

@@ -14,6 +14,7 @@ public record GuideTemplateSessionDashboardDto(
         int availableSpots,
         ActivityStatus status,
         String meetingPoint,
+        MeetingPointDto meetingPointLocation,
         String sessionNote,
         Instant createdAt,
         Instant updatedAt,

@@ -16,12 +16,16 @@ import java.util.List;
 public class LocationIqClient {
 
     private final WebClient webClient;
+    private final WebClient staticMapClient;
     private final LocationIqProperties props;
 
     public LocationIqClient(LocationIqProperties props) {
         this.props = props;
         this.webClient = WebClient.builder()
                 .baseUrl(props.getBaseUrl())
+                .build();
+        this.staticMapClient = WebClient.builder()
+                .baseUrl(props.getStaticMapBaseUrl())
                 .build();
     }
 
@@ -58,5 +62,21 @@ public class LocationIqClient {
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToMono(com.untamed.untamedbackend.dto.LocationIqReverseResponse.class);
+    }
+
+    public Mono<byte[]> staticMap(double lat, double lon) {
+        String url = "/v3/staticmap"
+                + "?key=" + props.getApiKey()
+                + "&center=" + lat + "," + lon
+                + "&zoom=14"
+                + "&size=640x280"
+                + "&format=png"
+                + "&maptype=streets";
+
+        return staticMapClient.get()
+                .uri(url)
+                .accept(MediaType.IMAGE_PNG)
+                .retrieve()
+                .bodyToMono(byte[].class);
     }
 }

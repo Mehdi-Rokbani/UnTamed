@@ -10,6 +10,7 @@ import {
   getPublicTemplateById,
   listPublicTemplateSessions,
 } from "../api/activity.api";
+import { geoStaticMapUrl } from "../api/geo.api";
 import { getDailyForecast } from "../api/weather.api";
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/auth.store";
@@ -18,7 +19,6 @@ import * as ReviewApi from "../api/review.api";
 import ReviewList from "../components/review/ReviewList";
 import { getParticipantsPreview } from "../api/session.api";
 import type { ParticipantsPreviewResponse } from "../types/participants";
-import { WeatherWidget } from "../components/Weatherwidget";
 import { BackButton } from "../components/BackButton";
 import ChatAssistantWidget from "../components/assistant/ChatAssistantWidget";
 
@@ -169,6 +169,64 @@ function formatDurationLabel(startAt: string, endAt: string) {
   if (hours > 0) parts.push(`${hours}h`);
   if (minutes > 0 && days === 0) parts.push(`${minutes}m`);
   return parts.join(" ") || "—";
+}
+
+function firstAddressPart(value: string | null | undefined) {
+  return value?.split(",").map((part) => part.trim()).find(Boolean) ?? null;
+}
+
+function getSessionMeetingPointFull(session: PublicSession | null | undefined) {
+  const location = session?.meetingPointLocation;
+  const label = location?.label?.trim();
+  const address = location?.address?.trim();
+  const legacy = session?.meetingPoint?.trim();
+  return label || address || legacy || "Meeting point to be confirmed";
+}
+
+function getSessionMeetingPointShort(session: PublicSession | null | undefined) {
+  const location = session?.meetingPointLocation;
+  const label = location?.label?.trim();
+  const address = firstAddressPart(location?.address);
+  const legacy = session?.meetingPoint?.trim();
+  return label || address || legacy || "TBD by guide";
+}
+
+function getSessionMeetingPointCoords(session: PublicSession | null | undefined) {
+  const location = session?.meetingPointLocation;
+  if (!location) return null;
+  const latitude = parseCoordinate(location.latitude, -90, 90);
+  const longitude = parseCoordinate(location.longitude, -180, 180);
+  if (latitude == null || longitude == null) return null;
+  return { latitude, longitude };
+}
+
+function getSessionNote(session: PublicSession | null | undefined) {
+  const note = session?.sessionNote?.trim();
+  return note || null;
+}
+
+function getAvailableSeats(session: PublicSession | null | undefined) {
+  if (!session) return null;
+  return Math.max(0, Number(session.capacity ?? 0) - Number(session.bookedCount ?? 0));
+}
+
+function formatAvailability(session: PublicSession | null | undefined) {
+  const availableSeats = getAvailableSeats(session);
+  if (availableSeats == null || availableSeats <= 0) return "Sold out";
+  return `${availableSeats} spot${availableSeats === 1 ? "" : "s"} left`;
+}
+
+function formatSelectedDateSummary(session: PublicSession | null | undefined) {
+  if (!session) return "Select a date to continue";
+  return `${formatSessionDateLabel(session.startAt, session.endAt)} · ${formatSessionTimeLabel(session.startAt, session.endAt)} · ${formatAvailability(session)}`;
+}
+
+function titleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function buildMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps?q=${latitude},${longitude}`;
 }
 
 const CARD_GRADIENTS = [
@@ -495,6 +553,125 @@ const IcoFire = () => (
   </svg>
 );
 
+const WeatherIcon = ({ condition }: { condition: string }) => {
+  if (["rainy", "stormy"].includes(condition)) {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M7 18a5 5 0 1 1 1.2-9.85A7 7 0 0 1 21 12a4 4 0 0 1-4 4H7z" />
+        <path d="M8 20v1M12 19v2M16 20v1" />
+      </svg>
+    );
+  }
+  if (["cloudy", "foggy", "variable"].includes(condition)) {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M12 5V3M6.4 7.4 5 6M4 13H2M18.7 7.4 20 6" />
+        <path d="M10 17a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 21 12.5 3.5 3.5 0 0 1 17.5 16H10z" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+};
+
+function CompactWeatherCard({
+  selectedSession,
+  weather,
+  loading,
+  error,
+}: {
+  selectedSession: PublicSession | null;
+  weather: SessionWeather | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const day = weather?.days?.[0] ?? null;
+  const condition = day ? weatherCodeLabel(day.weatherCode) : "variable";
+  const temp = day ? Math.round((day.tempMax + day.tempMin) / 2) : null;
+
+  return (
+    <div className={`${styles.weatherBadge} ${!selectedSession || !day ? styles.weatherBadgeMuted : ""}`}>
+      <div className={styles.weatherBadgeHead}>
+        <div>
+          <div className={styles.weatherBadgeLabel}>Weather forecast</div>
+          <div className={styles.weatherBadgeDate}>
+            {selectedSession ? `For ${formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt)}` : "Select a date"}
+          </div>
+        </div>
+        <div className={styles.weatherIconWrap}>
+          {loading ? <div className={styles.spinner} style={{ width: 16, height: 16 }} /> : <WeatherIcon condition={condition} />}
+        </div>
+      </div>
+
+      {selectedSession && day && !loading ? (
+        <>
+          <div className={styles.weatherMainRow}>
+            <span className={styles.weatherTemp}>{temp}°</span>
+            <span className={styles.weatherCondition}>{titleCase(condition)}</span>
+          </div>
+          <div className={styles.weatherChips}>
+            <span>Wind {Math.round(day.windMax)} km/h</span>
+            <span>Rain {Math.round(day.precipitationMax)}%</span>
+            <span>{Math.round(day.tempMin)}-{Math.round(day.tempMax)}°</span>
+          </div>
+          <div className={styles.weatherBadgeSub}>May change closer to the date</div>
+        </>
+      ) : (
+        <div className={styles.weatherPlaceholder}>
+          {!selectedSession
+            ? "Select a date to see forecast"
+            : loading
+              ? "Loading forecast..."
+              : error
+                ? "Try again closer to the activity date"
+                : "Forecast unavailable"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StaticLocationPreview({
+  latitude,
+  longitude,
+  label,
+  variant,
+}: {
+  latitude?: number | null;
+  longitude?: number | null;
+  label?: string | null;
+  variant: "activity" | "meeting";
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  if (latitude == null || longitude == null) return null;
+
+  const shortLabel = firstAddressPart(label) ?? (variant === "activity" ? "Activity area" : "Meeting point");
+  const mapUrl = geoStaticMapUrl(latitude, longitude, shortLabel, variant);
+  const altText = variant === "activity" ? "Map preview of activity location" : "Map preview of session meeting point";
+
+  return (
+    <div className={`${styles.staticMapPreview} ${variant === "activity" ? styles.staticMapActivity : styles.staticMapMeeting}`}>
+      {!imageFailed ? (
+        <img src={mapUrl} alt={altText} className={styles.staticMapImage} onError={() => setImageFailed(true)} loading="lazy" />
+      ) : (
+        <>
+          <div className={styles.staticMapRoadA} />
+          <div className={styles.staticMapRoadB} />
+          <div className={styles.staticMapRoadC} />
+        </>
+      )}
+      <div className={styles.staticMapMarker}>
+        <IcoMapPin />
+      </div>
+      <div className={styles.staticMapLabel}>{shortLabel}</div>
+    </div>
+  );
+}
+
 const IcoClose = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="18" y1="6" x2="6" y2="18" />
@@ -754,7 +931,6 @@ export default function ActivityDetailsPage() {
   const [participantsModalOpen, setParticipantsModalOpen] = useState(false);
   const [participantsPreview, setParticipantsPreview] = useState<ParticipantsPreviewResponse | null>(null);
   const [participantsPreviewSessionId, setParticipantsPreviewSessionId] = useState<string | null>(null);
-  const [participantsLoading, setParticipantsLoading] = useState(false);
   const [people, setPeople] = useState(1);
   const [guestNames, setGuestNames] = useState<string[]>([]);
   const [bookingStep, setBookingStep] = useState<BookingStep>("idle");
@@ -787,6 +963,11 @@ export default function ActivityDetailsPage() {
   const templateDescription = tplAny?.description ?? "";
   const templateDifficulty = tplAny?.difficulty ?? "EASY";
   const templateTags: string[] = tplAny?.tags ?? [];
+  const categoryLabels = useMemo(() => {
+    const names: string[] = Array.isArray(tplAny?.categoryNames) ? tplAny.categoryNames : [];
+    const labels: string[] = names.length > 0 ? names : templateTags;
+    return Array.from(new Set(labels.map((label) => String(label ?? "").trim()).filter(Boolean))).slice(0, 8);
+  }, [tplAny, templateTags]);
   const templatePrice = Number(tplAny?.price ?? 0);
   const templateImages = tplAny?.images ?? [];
   const coverImageUrl = tplAny?.coverImageUrl ?? null;
@@ -867,7 +1048,6 @@ export default function ActivityDetailsPage() {
     let cancelled = false;
     (async () => {
       try {
-        setParticipantsLoading(true);
         const data = await getParticipantsPreview(selectedSessionId);
         if (!cancelled) {
           setParticipantsPreview(data);
@@ -879,7 +1059,6 @@ export default function ActivityDetailsPage() {
           setParticipantsPreviewSessionId(null);
         }
       } finally {
-        if (!cancelled) setParticipantsLoading(false);
       }
     })();
     return () => {
@@ -888,19 +1067,23 @@ export default function ActivityDetailsPage() {
   }, [selectedSessionId, participantsPreview, participantsPreviewSessionId]);
 
   const selectedSession = useMemo(() => sessions.find((s) => s.id === selectedSessionId) ?? null, [sessions, selectedSessionId]);
-  const spotsLeft = useMemo(() => (selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.bookedCount) : null), [selectedSession]);
+  const spotsLeft = useMemo(() => getAvailableSeats(selectedSession), [selectedSession]);
   const selectedSessionLabel = useMemo(() => {
     if (!selectedSession) return null;
     return `${formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt)}, ${formatSessionTimeLabel(selectedSession.startAt, selectedSession.endAt)}`;
   }, [selectedSession]);
   const availabilityLabel = useMemo(() => {
     if (!selectedSession || spotsLeft == null) return null;
-    return `${spotsLeft} of ${selectedSession.capacity} seats available`;
+    return formatAvailability(selectedSession);
   }, [selectedSession, spotsLeft]);
   const weatherSummary = useMemo(
     () => summarizeSessionWeather(weather, selectedSession, weatherLoading, weatherError, latitude, longitude),
     [weather, selectedSession, weatherLoading, weatherError, latitude, longitude]
   );
+  const selectedMeetingPoint = useMemo(() => getSessionMeetingPointFull(selectedSession), [selectedSession]);
+  const selectedMeetingPointCoords = useMemo(() => getSessionMeetingPointCoords(selectedSession), [selectedSession]);
+  const selectedSessionNote = useMemo(() => getSessionNote(selectedSession), [selectedSession]);
+  const selectedDateSummary = useMemo(() => formatSelectedDateSummary(selectedSession), [selectedSession]);
 
   useEffect(() => {
     if (spotsLeft == null || spotsLeft <= 0) return;
@@ -1063,7 +1246,6 @@ export default function ActivityDetailsPage() {
       setSelectedSessionId(refreshedSelected);
       if (refreshedSelected) {
         try {
-          setParticipantsLoading(true);
           const preview = await getParticipantsPreview(refreshedSelected);
           setParticipantsPreview(preview);
           setParticipantsPreviewSessionId(refreshedSelected);
@@ -1071,7 +1253,6 @@ export default function ActivityDetailsPage() {
           setParticipantsPreview(null);
           setParticipantsPreviewSessionId(null);
         } finally {
-          setParticipantsLoading(false);
         }
       }
     } catch (e: any) {
@@ -1253,6 +1434,15 @@ export default function ActivityDetailsPage() {
                     </>
                   )}
                 </div>
+                {categoryLabels.length > 0 && (
+                  <div className={`${styles.categoryPills} ${styles.titleCategoryPills}`}>
+                    {categoryLabels.map((label) => (
+                      <span key={label} className={styles.categoryPill}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {allImages.length > 1 ? (
@@ -1304,6 +1494,49 @@ export default function ActivityDetailsPage() {
                 </div>
               ) : null}
 
+              {selectedSession && (
+                <section className={`${styles.logisticsBlock} ${styles.mainLogisticsBlock}`}>
+                  <h2 className={styles.logisticsTitle}>Selected session logistics</h2>
+                  <div className={`${styles.logisticsItem} ${styles.logisticsMeeting}`}>
+                    {selectedMeetingPointCoords && (
+                      <StaticLocationPreview
+                        latitude={selectedMeetingPointCoords.latitude}
+                        longitude={selectedMeetingPointCoords.longitude}
+                        label={selectedMeetingPoint}
+                        variant="meeting"
+                      />
+                    )}
+                    <div className={styles.logisticsLabel}>
+                      <IcoMapPin /> Where to meet
+                    </div>
+                    <div className={styles.logisticsHelper}>Exact meeting point for your selected date.</div>
+                    <div className={styles.logisticsValue}>{selectedMeetingPoint}</div>
+                    {selectedSession.meetingPointLocation?.address &&
+                      selectedSession.meetingPointLocation.address !== selectedMeetingPoint && (
+                        <div className={styles.logisticsSubValue}>{selectedSession.meetingPointLocation.address}</div>
+                      )}
+                    {selectedMeetingPointCoords && (
+                      <a
+                        href={buildMapsUrl(selectedMeetingPointCoords.latitude, selectedMeetingPointCoords.longitude)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.logisticsMapLink}
+                      >
+                        Open in Maps <IcoLink />
+                      </a>
+                    )}
+                  </div>
+                  <div className={`${styles.logisticsItem} ${styles.logisticsInstructions}`}>
+                    <div className={styles.logisticsLabel}>
+                      <IcoBookmark /> Note from your guide
+                    </div>
+                    <div className={`${styles.logisticsNoteBlock} ${selectedSessionNote ? "" : styles.logisticsNoteEmpty}`}>
+                      {selectedSessionNote ?? "No special instructions for this session."}
+                    </div>
+                  </div>
+                </section>
+              )}
+
               <div className={styles.divider} />
 
               <section className={styles.datesSection}>
@@ -1323,11 +1556,13 @@ export default function ActivityDetailsPage() {
                 ) : (
                   <div className={styles.sessionGrid}>
                     {sessions.map((s) => {
-                      const left = Math.max(0, s.capacity - s.bookedCount);
+                      const left = getAvailableSeats(s) ?? 0;
                       const active = s.id === selectedSessionId;
                       const soldOut = left === 0;
                       const scarce = !soldOut && left <= 3;
                       const popular = s.id === mostBookedSessionId && s.bookedCount > 0;
+                      const sessionMeetingPoint = getSessionMeetingPointShort(s);
+                      const sessionNote = getSessionNote(s);
 
                       return (
                         <button
@@ -1354,13 +1589,13 @@ export default function ActivityDetailsPage() {
                             {soldOut ? (
                               <span className={styles.tagSoldOut}>Sold out</span>
                             ) : scarce ? (
-                              <span className={styles.tagScarce}>{left} spot{left > 1 ? "s" : ""} left</span>
+                              <span className={styles.tagScarce}>{formatAvailability(s)}</span>
                             ) : (
-                              <span className={styles.tagOk}>
-                                {left}/{s.capacity} spots
-                              </span>
+                              <span className={styles.tagOk}>{formatAvailability(s)}</span>
                             )}
                           </div>
+                          <div className={styles.sessionMeetLine}>Meet: {sessionMeetingPoint}</div>
+                          {sessionNote && <div className={styles.sessionNoteFlag}>Guide note available</div>}
                         </button>
                       );
                     })}
@@ -1467,19 +1702,28 @@ export default function ActivityDetailsPage() {
 
               {addressDisplayName && (
                 <section className={styles.section}>
-                  <h2 className={styles.sectionTitle}>Meeting point</h2>
-                  <div className={styles.locationCard}>
-                    <div className={styles.locationIconBox}>
-                      <IcoMapPin />
-                    </div>
-                    <div>
-                      <div className={styles.locationName}>{addressDisplayName}</div>
-                      {governorate && <div className={styles.locationSub}>{governorate}</div>}
-                      {latitude != null && longitude != null && (
-                        <a href={`https://www.google.com/maps?q=${latitude},${longitude}`} target="_blank" rel="noopener noreferrer" className={styles.mapLink}>
-                          View on Google Maps <IcoLink />
-                        </a>
-                      )}
+                  <div className={styles.locationHeader}>
+                    <h2 className={styles.sectionTitle}>Where this adventure takes place</h2>
+                    <span className={styles.locationBadge}>General area</span>
+                  </div>
+                  <p className={styles.sectionHelper}>
+                    General area for this activity. Exact meeting point appears after you select a date.
+                  </p>
+                  <div className={`${styles.locationCard} ${styles.locationCardActivity}`}>
+                    <StaticLocationPreview latitude={latitude} longitude={longitude} label={governorate ?? addressDisplayName} variant="activity" />
+                    <div className={styles.locationDetailsRow}>
+                      <div className={styles.locationIconBox}>
+                        <IcoMapPin />
+                      </div>
+                      <div>
+                        <div className={styles.locationName}>{addressDisplayName}</div>
+                        {governorate && <div className={styles.locationSub}>{governorate}</div>}
+                        {latitude != null && longitude != null && (
+                          <a href={buildMapsUrl(latitude, longitude)} target="_blank" rel="noopener noreferrer" className={styles.mapLink}>
+                            Open in Maps <IcoLink />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -1566,7 +1810,32 @@ export default function ActivityDetailsPage() {
                       {templatePrice > 0 && <span className={styles.sidebarPriceUnit}> / person</span>}
                     </div>
 
-                    <StarRating average={ratingAverage} count={ratingCount} />
+                    {templatePrice > 0 && selectedSession && (spotsLeft ?? 0) > 0 && (
+                      <div className={styles.priceSummary}>
+                        <div className={styles.priceSummaryRow}>
+                          <span>
+                            {templatePrice} TND x {people} {people === 1 ? "person" : "people"}
+                          </span>
+                          <span>{templatePrice * people} TND</span>
+                        </div>
+                        <div className={styles.priceSummaryTotal}>
+                          <span>Total</span>
+                          <span className={styles.priceSummaryTotalAmt}>{totalPrice} TND</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={styles.sidebarBookedRow}>
+                      {totalBooked > 0 ? (
+                        <span className={styles.bookedPill}>
+                          <IcoTrend /> {totalBooked} people booked this
+                        </span>
+                      ) : (
+                        <span className={styles.firstPill}>
+                          <IcoSparkle /> Be the first to book
+                        </span>
+                      )}
+                    </div>
                     <div className={styles.sidebarDivider} />
 
                     {isWarnCutoff && cutoffMs !== null && (
@@ -1581,50 +1850,6 @@ export default function ActivityDetailsPage() {
                     <div className={styles.sidebarFields}>
                       <div className={styles.sidebarField}>
                         <span className={styles.sidebarFieldLabel}>
-                          <IcoCalendar /> Dates
-                        </span>
-                        <span className={styles.sidebarFieldVal}>
-                          {selectedSession ? formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt) : "—"}
-                        </span>
-                      </div>
-
-                      {selectedSession && (
-                        <div className={styles.sidebarField}>
-                          <span className={styles.sidebarFieldLabel}>
-                            <IcoClock /> Time
-                          </span>
-                          <span className={styles.sidebarFieldVal}>{formatSessionTimeLabel(selectedSession.startAt, selectedSession.endAt)}</span>
-                        </div>
-                      )}
-
-                      {selectedSession && (
-                        <div className={styles.sidebarField}>
-                          <span className={styles.sidebarFieldLabel}>
-                            <IcoClock /> Duration
-                          </span>
-                          <span className={styles.sidebarFieldVal}>{formatDurationLabel(selectedSession.startAt, selectedSession.endAt)}</span>
-                        </div>
-                      )}
-
-                      <div className={styles.sidebarField}>
-                        <span className={styles.sidebarFieldLabel}>
-                          <IcoUsers /> Availability
-                        </span>
-                        <span className={styles.sidebarFieldVal}>
-                          {spotsLeft == null ? (
-                            "—"
-                          ) : spotsLeft === 0 ? (
-                            <span className={styles.tagSoldOut}>Sold out</span>
-                          ) : spotsLeft <= 3 ? (
-                            <span className={styles.tagScarce}>{spotsLeft} spots left</span>
-                          ) : (
-                            `${spotsLeft} spots`
-                          )}
-                        </span>
-                      </div>
-
-                      <div className={styles.sidebarField}>
-                        <span className={styles.sidebarFieldLabel}>
                           <IcoUsers /> Guests
                         </span>
                         <div className={styles.peopleStepper}>
@@ -1634,7 +1859,7 @@ export default function ActivityDetailsPage() {
                             onClick={() => setPeople((p) => Math.max(1, p - 1))}
                             disabled={people <= 1 || !selectedSession || (spotsLeft ?? 0) <= 0}
                           >
-                            −
+                            -
                           </button>
                           <span className={styles.stepperVal}>{people}</span>
                           <button
@@ -1647,6 +1872,11 @@ export default function ActivityDetailsPage() {
                           </button>
                         </div>
                       </div>
+                    </div>
+
+                    <div className={styles.selectedDateSummary}>
+                      <div className={styles.selectedDateLabel}>Your selected date</div>
+                      <div className={selectedSession ? styles.selectedDateValue : styles.selectedDateEmpty}>{selectedDateSummary}</div>
                     </div>
 
                     {people > 1 && (
@@ -1673,57 +1903,7 @@ export default function ActivityDetailsPage() {
                       </div>
                     )}
 
-                    {!selectedSession ? (
-                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
-                        <div className={styles.weatherLoading}>Select a session to see the forecast.</div>
-                      </div>
-                    ) : weatherLoading ? (
-                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
-                        <div className={styles.weatherLoading}>
-                          <div className={styles.spinner} style={{ width: 16, height: 16 }} />
-                          <span>Loading forecast...</span>
-                        </div>
-                      </div>
-                    ) : weather ? (
-                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
-                        <WeatherWidget
-                          weather={weather}
-                          location={addressDisplayName ?? governorate ?? undefined}
-                          activityDateLabel={formatSessionDateLabel(selectedSession.startAt, selectedSession.endAt)}
-                        />
-                      </div>
-                    ) : (
-                      <div className={styles.weatherSection} style={{ marginTop: 14 }}>
-                        <div className={styles.weatherLoading}>{weatherError ?? "Forecast not available yet."}</div>
-                      </div>
-                    )}
-
-                    {templatePrice > 0 && selectedSession && (spotsLeft ?? 0) > 0 && (
-                      <div className={styles.priceSummary}>
-                        <div className={styles.priceSummaryRow}>
-                          <span>
-                            {templatePrice} TND × {people} {people === 1 ? "person" : "people"}
-                          </span>
-                          <span>{templatePrice * people} TND</span>
-                        </div>
-                        <div className={styles.priceSummaryTotal}>
-                          <span>Total</span>
-                          <span className={styles.priceSummaryTotalAmt}>{totalPrice} TND</span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className={styles.sidebarBookedRow}>
-                      {totalBooked > 0 ? (
-                        <span className={styles.bookedPill}>
-                          <IcoTrend /> {totalBooked} people booked this
-                        </span>
-                      ) : (
-                        <span className={styles.firstPill}>
-                          <IcoSparkle /> Be the first to book
-                        </span>
-                      )}
-                    </div>
+                    <CompactWeatherCard selectedSession={selectedSession} weather={weather} loading={weatherLoading} error={weatherError} />
 
                     <button
                       className={`${styles.bookBtn} ${bookingStep === "confirming" ? styles.bookBtnLoading : ""}`}
@@ -1754,61 +1934,6 @@ export default function ActivityDetailsPage() {
                     {bookingError && <p className={styles.bookingError}>{bookingError}</p>}
                     {!bookingError && !isWithinCutoff && <p className={styles.noCharge}>You won't be charged yet</p>}
 
-                    <div className={styles.sidebarDivider} />
-
-                    <div className={styles.whoJoining}>
-                      {participantsLoading ? (
-                        <p className={styles.noCharge}>Loading participants...</p>
-                      ) : !participantsPreview || participantsPreview.totalConfirmed === 0 ? (
-                        <p className={styles.noCharge}>Be the first to join this adventure.</p>
-                      ) : (
-                        <div className={styles.whoJoiningInner}>
-                          <div className={styles.avatarStack}>
-                            {participantsPreview.participants.slice(0, 4).map((p) => (
-                              <Link
-                                key={p.userId}
-                                to={`/users/${p.userId}`}
-                                className={styles.avatar}
-                                title={p.username}
-                                aria-label={`View ${p.username}'s public profile`}
-                              >
-                                {p.profileImageUrl ? <img src={p.profileImageUrl} alt={p.username} /> : <span>{p.username.charAt(0).toUpperCase()}</span>}
-                              </Link>
-                            ))}
-                            {participantsPreview.totalConfirmed > 4 && <div className={styles.moreAvatar}>+{participantsPreview.totalConfirmed - 4}</div>}
-                          </div>
-
-                          <div className={styles.whoJoiningText}>
-                            <div className={styles.whoJoiningCount}>{participantsPreview.totalConfirmed} joined already</div>
-                            {participantsPreview.seatsLeft != null && (
-                              <div className={styles.whoJoiningSeats}>
-                                {participantsPreview.seatsLeft} seat{participantsPreview.seatsLeft !== 1 ? "s" : ""} left
-                              </div>
-                            )}
-                          </div>
-
-                          <button className={styles.viewAllBtn2} type="button" onClick={() => setParticipantsModalOpen(true)}>
-                            View all
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {guide && (
-                      <div className={styles.sidebarGuide}>
-                        <Link to={`/users/${guide.id}`} aria-label={`View ${guide.username}'s public profile`}>
-                          {guide.profileImageUrl ? (
-                            <img src={guide.profileImageUrl} alt={guide.username} className={styles.sidebarGuideImg} />
-                          ) : (
-                            <div className={styles.sidebarGuidePlaceholder}>{String(guide.username ?? "?")[0].toUpperCase()}</div>
-                          )}
-                        </Link>
-                        <div>
-                          <div className={styles.sidebarGuideLabel}>Guided by</div>
-                          <Link to={`/users/${guide.id}`} className={styles.sidebarGuideName}>{guide.username}</Link>
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
               </div>

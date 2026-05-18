@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.booking;
 
 import com.untamed.untamedbackend.dto.GuideParticipantDto;
+import com.untamed.untamedbackend.dto.MeetingPointDto;
 import com.untamed.untamedbackend.chat.ChatService;
 import com.untamed.untamedbackend.guestpass.GuestPass;
 import com.untamed.untamedbackend.guestpass.GuestPassRepository;
@@ -1261,6 +1262,7 @@ public class BookingService {
             String activityImageUrl = null;
             Instant sessionStartAt = null;
             String meetingPoint = null;
+            MeetingPointDto meetingPointLocation = null;
             List<String> activityTags = List.of();
             List<String> categoryIds = List.of();
             String displayName = null;
@@ -1280,6 +1282,7 @@ public class BookingService {
             if (session != null) {
                 sessionStartAt = session.getStartAt();
                 meetingPoint = session.getMeetingPoint();
+                meetingPointLocation = toMeetingPointDto(session.getMeetingPointLocation());
                 activityTemplateId = session.getTemplateId();
 
                 ActivityTemplate template = templatesById.get(activityTemplateId);
@@ -1349,6 +1352,7 @@ public class BookingService {
                     activityImageUrl,
                     sessionStartAt,
                     meetingPoint,
+                    meetingPointLocation,
                     activityTags,
                     categoryIds,
                     displayName,
@@ -1364,6 +1368,21 @@ public class BookingService {
                     reviewReason
             );
         }).toList();
+    }
+
+    private MeetingPointDto toMeetingPointDto(MeetingPoint meetingPoint) {
+        if (meetingPoint == null) {
+            return null;
+        }
+
+        return new MeetingPointDto(
+                meetingPoint.getLabel(),
+                meetingPoint.getAddress(),
+                meetingPoint.getLatitude(),
+                meetingPoint.getLongitude(),
+                meetingPoint.getPlaceId(),
+                meetingPoint.getSource()
+        );
     }
 
     private ReviewEligibilitySnapshot reviewEligibilityForDetails(

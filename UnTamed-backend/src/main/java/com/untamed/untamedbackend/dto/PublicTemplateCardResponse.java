@@ -12,6 +12,8 @@ public record PublicTemplateCardResponse(
         Difficulty difficulty,
         BigDecimal price,
         List<String> tags,
+        List<String> categoryIds,
+        List<String> categoryNames,
         String coverImageUrl,
         RatingSummaryDto rating,
         PublicNextSessionDto nextSession,

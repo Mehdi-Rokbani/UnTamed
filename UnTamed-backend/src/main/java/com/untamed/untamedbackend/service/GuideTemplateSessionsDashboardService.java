@@ -10,6 +10,7 @@ import com.untamed.untamedbackend.dto.GuideTemplateSessionBookingSummaryDto;
 import com.untamed.untamedbackend.dto.GuideTemplateSessionDashboardDto;
 import com.untamed.untamedbackend.dto.GuideTemplateSessionsDashboardResponse;
 import com.untamed.untamedbackend.dto.GuideTemplateSessionsSummaryDto;
+import com.untamed.untamedbackend.dto.MeetingPointDto;
 import com.untamed.untamedbackend.dto.PaginatedResponse;
 import com.untamed.untamedbackend.guestpass.AttendanceStatus;
 import com.untamed.untamedbackend.guestpass.GuestPass;
@@ -21,6 +22,7 @@ import com.untamed.untamedbackend.model.ActivityStatus;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.Address;
 import com.untamed.untamedbackend.model.Category;
+import com.untamed.untamedbackend.model.MeetingPoint;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
@@ -174,6 +176,7 @@ public class GuideTemplateSessionsDashboardService {
                 Math.max(0, session.getCapacity() - session.getBookedCount()),
                 session.getStatus(),
                 session.getMeetingPoint(),
+                toMeetingPointDto(session.getMeetingPointLocation()),
                 session.getSessionNote(),
                 session.getCreatedAt(),
                 session.getUpdatedAt(),
@@ -292,6 +295,21 @@ public class GuideTemplateSessionsDashboardService {
                 image.getAlt(),
                 image.isCover(),
                 image.getOrder()
+        );
+    }
+
+    private MeetingPointDto toMeetingPointDto(MeetingPoint meetingPoint) {
+        if (meetingPoint == null) {
+            return null;
+        }
+
+        return new MeetingPointDto(
+                meetingPoint.getLabel(),
+                meetingPoint.getAddress(),
+                meetingPoint.getLatitude(),
+                meetingPoint.getLongitude(),
+                meetingPoint.getPlaceId(),
+                meetingPoint.getSource()
         );
     }
 
