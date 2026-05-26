@@ -8,6 +8,7 @@ import L from "leaflet";
 import { Header } from "../components/Header";
 import { OpenSessionChatButton } from "../components/OpenSessionChatButton";
 import ReviewForm from "../components/review/ReviewForm";
+import { ReportModal } from "../components/report/ReportModal";
 import { useAuth } from "../auth/auth.store";
 import * as BookingApi from "../api/booking.api";
 import type { BookingWithDetails } from "../api/booking.api";
@@ -626,6 +627,7 @@ function PreviewBookingCard({
   guideReviewEligibility,
   guideReviewLoading,
   onGuideReview,
+  onReportSession,
 }: {
   b: BookingWithDetails;
   selected: boolean;
@@ -644,6 +646,7 @@ function PreviewBookingCard({
   guideReviewEligibility?: GuideReviewEligibility;
   guideReviewLoading: boolean;
   onGuideReview: (b: BookingWithDetails) => void;
+  onReportSession: (b: BookingWithDetails) => void;
 }) {
   const ds = getDisplayStatus(b);
   const cfg = getDisplayCfg(ds);
@@ -769,6 +772,7 @@ function PreviewBookingCard({
                 <Link to={`/users/${b.guideId}`}>View guide <IcoExtLink /></Link>
               )}
               {canViewPasses && <button type="button" onClick={() => onViewPasses(b)}>View passes</button>}
+              {b.sessionId && <button type="button" onClick={() => onReportSession(b)}>Report session</button>}
               {b.status === "COMPLETED" && (
                 <OpenSessionChatButton
                   sessionId={b.sessionId}
@@ -1048,11 +1052,12 @@ const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
   onCancel: (id: string) => void;
   onInc: (id: string) => void;
   onDec: (id: string, current: number) => void;
+  onReportSession: (b: BookingWithDetails) => void;
   busyId: string | null;
   isListMode: boolean;
   isFeatured: boolean;
 }>(function GroupedSidebarCard(
-  { group, selectedId, hoveredId, setRefForBookings, onSelect, onHover, onPay, onCancel, onInc, onDec, busyId, isListMode, isFeatured },
+  { group, selectedId, hoveredId, setRefForBookings, onSelect, onHover, onPay, onCancel, onInc, onDec, onReportSession, busyId, isListMode, isFeatured },
   ref
 ) {
   const sortedBookings = [...group.bookings].sort(sortBookingsBySession);
@@ -1247,6 +1252,7 @@ const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
           onCancel={onCancel}
           onInc={onInc}
           onDec={onDec}
+          onReportSession={onReportSession}
           busyId={busyId}
         />
       )}
@@ -1402,7 +1408,7 @@ const GroupedSidebarCard = forwardRef<HTMLButtonElement, {
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
 function DetailDrawer({
-  b, onClose, onPay, onCancel, onInc, onDec, busyId,
+  b, onClose, onPay, onCancel, onInc, onDec, onReportSession, busyId,
 }: {
   b: BookingWithDetails;
   onClose: () => void;
@@ -1410,6 +1416,7 @@ function DetailDrawer({
   onCancel: (id: string) => void;
   onInc: (id: string) => void;
   onDec: (id: string, current: number) => void;
+  onReportSession: (b: BookingWithDetails) => void;
   busyId: string | null;
 }) {
   const ds          = getDisplayStatus(b);
@@ -1546,6 +1553,11 @@ function DetailDrawer({
             </Link>
           ) : (
             <ActivityDetailsUnavailable className={styles.expandedAction} />
+          )}
+          {b.sessionId && (
+            <button className={styles.expandedAction} type="button" onClick={() => onReportSession(b)}>
+              Report session
+            </button>
           )}
         </div>
       </div>
@@ -1770,11 +1782,17 @@ export default function MyBookingsPage() {
   const [guideReviewTarget, setGuideReviewTarget] = useState<BookingWithDetails | null>(null);
   const [guideReviewEligibilityByBooking, setGuideReviewEligibilityByBooking] = useState<Record<string, GuideReviewEligibility>>({});
   const [guideReviewEligibilityLoading, setGuideReviewEligibilityLoading] = useState<Set<string>>(new Set());
+  const [reportTarget, setReportTarget] = useState<BookingWithDetails | null>(null);
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const mainGuestName = user?.username?.trim() || user?.email || "";
   const isAdventurer = user?.role === "ADVENTURER" || user?.role === "USER";
+
+  function openSessionReport(booking: BookingWithDetails) {
+    if (!booking.sessionId) return;
+    setReportTarget(booking);
+  }
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const totalCount     = bookings.length;
@@ -2309,6 +2327,18 @@ export default function MyBookingsPage() {
         />
       )}
 
+      {reportTarget?.sessionId && (
+        <ReportModal
+          open={Boolean(reportTarget)}
+          onClose={() => setReportTarget(null)}
+          targetType="SESSION"
+          targetId={reportTarget.sessionId}
+          targetLabel={reportTarget.activityTitle ?? "Booked session"}
+          contextLabel={fmtDate(reportTarget.sessionStartAt)}
+          onSubmitted={() => setToast({ tone: "success", message: "Session report submitted for review." })}
+        />
+      )}
+
       {cancelBooking && (
         <CancelBookingModal
           b={cancelBooking}
@@ -2484,6 +2514,7 @@ export default function MyBookingsPage() {
                           guideReviewEligibility={guideReviewEligibilityByBooking[booking.id]}
                           guideReviewLoading={guideReviewEligibilityLoading.has(booking.id)}
                           onGuideReview={openGuideReviewModal}
+                          onReportSession={openSessionReport}
                         />
                       ))}
                     </div>
@@ -2712,6 +2743,7 @@ export default function MyBookingsPage() {
                               onCancel={(id) => void openCancelPreview(id)}
                               onInc={onInc}
                               onDec={onDec}
+                              onReportSession={openSessionReport}
                               busyId={busyId}
                               isListMode={false}
                               isFeatured={false}

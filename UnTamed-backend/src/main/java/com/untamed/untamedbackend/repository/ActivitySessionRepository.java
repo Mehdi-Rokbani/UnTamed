@@ -34,6 +34,7 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
     boolean existsByTemplateId(String templateId);
 
     long countByTemplateId(String templateId);
+    long countByTemplateIdAndStatus(String templateId, ActivityStatus status);
 
     Optional<ActivitySession> findFirstByTemplateIdAndStatusAndStartAtAfterOrderByStartAtAsc(
             String templateId,
@@ -61,4 +62,6 @@ public interface ActivitySessionRepository extends MongoRepository<ActivitySessi
     List<ActivitySession> findByGuideIdAndStatusOrderByStartAtDesc(String guideId, ActivityStatus status);
 
     long countByGuideIdAndStatusAndStartAtAfter(String guideId, ActivityStatus status, Instant now);
+
+    long countByStatus(ActivityStatus status);
 }

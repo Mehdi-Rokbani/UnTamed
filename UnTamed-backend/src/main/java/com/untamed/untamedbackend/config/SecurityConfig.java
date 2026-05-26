@@ -89,6 +89,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/guides/*/reviews/eligibility").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/guides/*/reviews").authenticated()
 
+                        // ADMIN-only endpoints
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/guides/**").hasRole("GUIDE")
 

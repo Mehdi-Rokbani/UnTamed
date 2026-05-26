@@ -28,4 +28,6 @@ public interface ActivityTemplateRepository extends MongoRepository<ActivityTemp
     boolean existsByIdAndGuideIdAndArchivedFalse(String id, String guideId);
 
     long countByGuideIdAndArchivedFalse(String guideId);
+
+    long countByArchivedFalse();
 }

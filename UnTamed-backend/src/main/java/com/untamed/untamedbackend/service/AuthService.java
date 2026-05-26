@@ -31,15 +31,22 @@ public class AuthService {
         User user = repo.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
+        if (!encoder.matches(req.password(), user.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+
+        if (user.isSuspended()) {
+            throw new AccountSuspendedException(
+                    jwtService.generateSuspensionAppealToken(user),
+                    jwtService.getAppealExpirationSeconds()
+            );
+        }
+
         if (!user.isEnabled()) {
             throw new BadCredentialsException("Account disabled");
         }
         if (!user.isVerified()) {
             throw new BadCredentialsException("Email not verified");
-        }
-
-        if (!encoder.matches(req.password(), user.getPassword())) {
-            throw new BadCredentialsException("Invalid credentials");
         }
 
         String token = jwtService.generateToken(user);

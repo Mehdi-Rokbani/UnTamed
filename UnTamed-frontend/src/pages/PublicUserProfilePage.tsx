@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { Header } from "../components/Header";
+import { ReportModal } from "../components/report/ReportModal";
+import { useAuth } from "../auth/auth.store";
 import { getPublicUserProfile } from "../api/user.api";
 import { listGuideReviews } from "../api/guideReview.api";
 import type { GuideReview } from "../api/guideReview.api";
@@ -429,10 +431,13 @@ function Hero({ profile }: { profile: PublicUserProfile }) {
 
 export default function PublicUserProfilePage() {
   const { userId } = useParams();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<PublicUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notFound, setNotFound] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportPrompt, setReportPrompt] = useState("");
 
   const loadProfile = useCallback(async () => {
     if (!userId) {
@@ -495,15 +500,44 @@ export default function PublicUserProfilePage() {
 
   const isGuide = isGuideProfile(profile);
   const isAdventurer = isAdventurerProfile(profile);
+  const isOwnProfile = user?.id === profile.id;
+  const reportTargetType = isGuide ? "GUIDE" : "USER";
+
+  function openReport() {
+    if (!user) {
+      setReportPrompt("Please log in to report a profile.");
+      return;
+    }
+    setReportPrompt("");
+    setReportOpen(true);
+  }
 
   return (
     <div className={styles.page}>
       <Header />
+      {!isOwnProfile && (
+        <ReportModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType={reportTargetType}
+          targetId={profile.id}
+          targetLabel={profile.username}
+          contextLabel={isGuide ? "Guide profile" : "User profile"}
+        />
+      )}
       <main className={styles.shell}>
         <div className={styles.topNav}>
           <BackButton fallbackTo="/" label="Back" variant="ghost" />
         </div>
         <Hero profile={profile} />
+        {!isOwnProfile && (
+          <div className={styles.profileActions}>
+            <button type="button" className={styles.reportButton} onClick={openReport}>
+              {isGuide ? "Report guide" : "Report user"}
+            </button>
+            {reportPrompt && <span className={styles.reportPrompt}>{reportPrompt}</span>}
+          </div>
+        )}
 
         <div className={styles.layout}>
           <aside className={styles.sideColumn}>

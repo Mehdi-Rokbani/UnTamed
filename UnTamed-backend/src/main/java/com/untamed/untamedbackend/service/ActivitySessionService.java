@@ -76,6 +76,7 @@ public class ActivitySessionService {
     private final GuestPassRepository guestPassRepo;
     private final NotificationService notificationService;
     private final ChatService chatService;
+    private final GuideAccessService guideAccessService;
 
     // -------- Guide dashboard lists --------
 
@@ -906,7 +907,7 @@ public class ActivitySessionService {
 
     private boolean isTemplatePubliclyVisible(String templateId) {
         return templateRepo.findById(templateId)
-                .map(t -> !t.isArchived())
+                .map(t -> !t.isArchived() && guideAccessService.isPubliclyBookableGuide(t.getGuideId()))
                 .orElse(false);
     }
 
@@ -1002,20 +1003,7 @@ public class ActivitySessionService {
     }
 
     private User getGuideByEmail(String authEmail) {
-        User u = userRepo.findByEmail(authEmail)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "User not found"
-                ));
-
-        if (u.getRole() != Role.GUIDE) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Only GUIDE can manage activities."
-            );
-        }
-
-        return u;
+        return guideAccessService.requireActiveGuideByEmail(authEmail);
     }
 
     private ActivitySessionResponse toSessionResponse(ActivitySession s) {

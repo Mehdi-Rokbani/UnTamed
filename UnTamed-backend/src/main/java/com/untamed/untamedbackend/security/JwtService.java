@@ -15,20 +15,25 @@ import java.util.Date;
 @Service
 public class JwtService {
 
-    public enum TokenType { ACCESS, REFRESH }
+    public enum TokenType { ACCESS, REFRESH, APPEAL }
+
+    private static final String SUSPENSION_APPEAL_PURPOSE = "SUSPENSION_APPEAL";
 
     private final Key key;
     private final long accessExpirationMs;
     private final long refreshExpirationMs;
+    private final long appealExpirationMs;
 
     public JwtService(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long accessExpirationMs,
-            @Value("${jwt.refreshExpiration}") long refreshExpirationMs
+            @Value("${jwt.refreshExpiration}") long refreshExpirationMs,
+            @Value("${jwt.appealExpiration:900000}") long appealExpirationMs
     ) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessExpirationMs = accessExpirationMs;
         this.refreshExpirationMs = refreshExpirationMs;
+        this.appealExpirationMs = appealExpirationMs;
     }
 
     // Keep compatibility with old code that calls generateToken(user)
@@ -42,6 +47,14 @@ public class JwtService {
 
     public String generateRefreshToken(User user) {
         return buildToken(user, TokenType.REFRESH, refreshExpirationMs);
+    }
+
+    public String generateSuspensionAppealToken(User user) {
+        return buildToken(user, TokenType.APPEAL, appealExpirationMs);
+    }
+
+    public long getAppealExpirationSeconds() {
+        return Math.max(1, appealExpirationMs / 1000);
     }
 
     public String extractEmail(String token) {
@@ -62,7 +75,13 @@ public class JwtService {
 
             if (expectedType != null) {
                 String typ = c.get("typ", String.class);
-                return expectedType.name().equals(typ);
+                if (!expectedType.name().equals(typ)) {
+                    return false;
+                }
+                if (expectedType == TokenType.APPEAL) {
+                    return SUSPENSION_APPEAL_PURPOSE.equals(c.get("purpose", String.class));
+                }
+                return true;
             }
             return true;
         } catch (Exception e) {
@@ -79,6 +98,7 @@ public class JwtService {
                 .claim("userId", user.getId())
                 .claim("role", user.getRole().name())
                 .claim("typ", type.name())
+                .claim("purpose", type == TokenType.APPEAL ? SUSPENSION_APPEAL_PURPOSE : "AUTH")
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .signWith(key, SignatureAlgorithm.HS256)

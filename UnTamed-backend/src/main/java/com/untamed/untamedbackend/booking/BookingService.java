@@ -19,6 +19,7 @@ import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
 import com.untamed.untamedbackend.service.LevelingService;
 import com.untamed.untamedbackend.service.UserInsightService;
+import com.untamed.untamedbackend.service.GuideAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -58,6 +59,7 @@ public class BookingService {
     private final LevelingService levelingService;
     private final NotificationService notificationService;
     private final ChatService chatService;
+    private final GuideAccessService guideAccessService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -379,6 +381,9 @@ public class BookingService {
             throw conflict("Booking expired");
         }
 
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+        validateSessionBookable(session, userId);
+
         if (b.getStatus() == BookingStatus.PAYING) {
             return b;
         }
@@ -421,6 +426,39 @@ public class BookingService {
         createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " joined the group.");
 
         return savedBooking;
+    }
+
+    public Booking markCompletedFromPayment(String bookingId) {
+        Booking b = bookingRepository.findById(bookingId).orElse(null);
+
+        if (b == null) {
+            return null;
+        }
+
+        if (b.getStatus() == BookingStatus.COMPLETED) {
+            return b;
+        }
+
+        if (b.getStatus() == BookingStatus.CANCELLED || b.getStatus() == BookingStatus.EXPIRED) {
+            return b;
+        }
+
+        ActivitySession session = sessionSeatOps.getSessionOrThrow(b.getSessionId());
+
+        try {
+            validateSessionBookable(session, b.getUserId());
+        } catch (ResponseStatusException e) {
+            System.out.println(
+                    "Payment succeeded but booking was not completed because the session is unavailable. "
+                            + "Manual admin review required. bookingId=" + bookingId
+                            + ", sessionId=" + b.getSessionId()
+                            + ", reason=" + e.getReason()
+            );
+            // TODO: Admin Cancel Session / payment review workflow should decide cancellation or refund.
+            return b;
+        }
+
+        return markCompleted(bookingId);
     }
 
     public Booking handlePaymentFailed(String bookingId) {
@@ -478,10 +516,20 @@ public class BookingService {
             throw conflict(BookingErrors.SESSION_NOT_PUBLISHED);
         }
 
+        ActivityTemplate template = activityTemplateRepository.findById(session.getTemplateId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity template not found"));
+        if (template.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This session is currently unavailable.");
+        }
+
         validateSessionChangeAllowed(session);
 
         if (session.getGuideId() != null && session.getGuideId().equals(userId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, BookingErrors.GUIDE_CANNOT_BOOK_OWN);
+        }
+
+        if (!guideAccessService.isPubliclyBookableGuide(session.getGuideId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This session is currently unavailable.");
         }
     }
 
@@ -598,6 +646,12 @@ public class BookingService {
         }
 
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user ID not available.");
+    }
+
+    public String requireAuthenticatedActiveGuideId(Authentication auth) {
+        String userId = requireAuthenticatedDbUserId(auth);
+        guideAccessService.requireActiveGuideById(userId);
+        return userId;
     }
 
     public List<GuideParticipantDto> listParticipantsForGuide(String sessionId, String guideId) {

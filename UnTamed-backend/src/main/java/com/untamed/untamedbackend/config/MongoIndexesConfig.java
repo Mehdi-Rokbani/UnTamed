@@ -2,6 +2,9 @@ package com.untamed.untamedbackend.config;
 
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,9 +27,23 @@ import java.util.List;
 @Configuration
 public class MongoIndexesConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(MongoIndexesConfig.class);
+
     @Bean
-    ApplicationRunner ensureBookingIndexes(MongoTemplate mongoTemplate) {
+    ApplicationRunner ensureBookingIndexes(
+            MongoTemplate mongoTemplate,
+            @Value("${app.mongo.ensure-indexes.enabled:true}") boolean ensureIndexesEnabled,
+            @Value("${app.mongo.ensure-indexes.fail-fast:true}") boolean ensureIndexesFailFast,
+            @Value("${app.mongo.ensure-indexes.max-attempts:3}") int maxAttempts,
+            @Value("${app.mongo.ensure-indexes.retry-delay-ms:5000}") long retryDelayMs
+    ) {
         return args -> {
+            if (!ensureIndexesEnabled) {
+                log.info("Mongo index creation is disabled by app.mongo.ensure-indexes.enabled=false.");
+                return;
+            }
+
+            log.info("Starting Mongo index creation for booking constraints.");
 
             Index uniqUnpaidActiveBooking = new Index()
                     .on("userId", Direction.ASC)
@@ -40,7 +57,50 @@ public class MongoIndexesConfig {
                             ))
                     ));
 
-            mongoTemplate.indexOps(Booking.class).ensureIndex(uniqUnpaidActiveBooking);
+            RuntimeException lastFailure = null;
+            int safeMaxAttempts = Math.max(1, maxAttempts);
+
+            for (int attempt = 1; attempt <= safeMaxAttempts; attempt++) {
+                try {
+                    mongoTemplate.indexOps(Booking.class).ensureIndex(uniqUnpaidActiveBooking);
+                    log.info(
+                            "Mongo index creation completed for bookings on attempt {}/{}. Ensured index: uniq_unpaid_active_booking_user_session.",
+                            attempt,
+                            safeMaxAttempts
+                    );
+                    return;
+                } catch (RuntimeException e) {
+                    lastFailure = e;
+                    log.warn(
+                            "Mongo index creation attempt {}/{} failed. Atlas/network access may be unavailable or the primary may still be connecting.",
+                            attempt,
+                            safeMaxAttempts,
+                            e
+                    );
+                    if (attempt < safeMaxAttempts) {
+                        sleepBeforeRetry(retryDelayMs);
+                    }
+                }
+            }
+
+            log.error(
+                    "Mongo index creation failed for bookings after {} attempt(s). fail-fast={}",
+                    safeMaxAttempts,
+                    ensureIndexesFailFast,
+                    lastFailure
+            );
+            if (ensureIndexesFailFast && lastFailure != null) {
+                throw lastFailure;
+            }
         };
+    }
+
+    private void sleepBeforeRetry(long retryDelayMs) {
+        try {
+            Thread.sleep(Math.max(0, retryDelayMs));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while retrying Mongo index creation", e);
+        }
     }
 }

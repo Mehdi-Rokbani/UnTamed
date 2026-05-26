@@ -2,6 +2,7 @@ package com.untamed.untamedbackend.payment;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface PaymentAttemptRepository extends MongoRepository<PaymentAttempt, String> {
@@ -17,5 +18,7 @@ public interface PaymentAttemptRepository extends MongoRepository<PaymentAttempt
     Optional<PaymentAttempt> findByProviderAndProviderRef(PaymentProvider provider, String providerRef);
 
     boolean existsByIdempotencyKey(String idempotencyKey);
+
+    List<PaymentAttempt> findByStatus(PaymentAttemptStatus status);
 
 }

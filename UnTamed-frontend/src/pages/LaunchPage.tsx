@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
-import * as THREE from "three";
 import { listPublicTemplatesPage } from "../api/activity.api";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import styles from "../style/launch.module.css";
 import type { Difficulty, PublicTemplateCard } from "../types/activity";
+
+const HeroTerrainBackground = lazy(() => import("../components/launch/HeroTerrainBackground"));
+const PurposeDepthCanvas = lazy(() => import("../components/launch/PurposeDepthCanvas"));
 
 const motionEase = [0.22, 1, 0.36, 1] as const;
 
@@ -196,365 +198,6 @@ function mapActivityToFeatured(activity: PublicTemplateCard): FeaturedExperience
   };
 }
 
-// ─── seeded random (deterministic, no Math.random in render) ───────────────────
-function seededUnit(index: number, salt: number) {
-  const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function hasWebGLSupport() {
-  if (typeof window === "undefined") return true;
-  try {
-    const canvas = document.createElement("canvas");
-    return Boolean(
-      window.WebGLRenderingContext &&
-        (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
-    );
-  } catch {
-    return false;
-  }
-}
-
-// ─── Hero 3-D terrain (unchanged) ─────────────────────────────────────────────
-function terrainHeight(x: number, z: number) {
-  const broad = Math.sin(x * 0.18 + z * 0.09) * 2.9 + Math.cos(z * 0.2) * 2.4;
-  const ridge = Math.sin((x + z) * 0.42) * 1.35 + Math.cos((x - z) * 0.34) * 1.1;
-  const peaks = Math.pow(Math.max(0, Math.sin(x * 0.31) + Math.cos(z * 0.27)), 2.15) * 2.35;
-  const ripple = Math.sin(x * 1.35 + z * 0.62) * 0.28 + Math.cos(z * 1.08) * 0.22;
-  return broad + ridge + peaks + ripple;
-}
-
-function HeroTerrainBackground() {
-  const mountRef = useRef<HTMLDivElement>(null);
-  const [webglReady] = useState(() => hasWebGLSupport());
-
-  useEffect(() => {
-    if (!webglReady || !mountRef.current) return;
-    const mount = mountRef.current;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#102b1c");
-    scene.fog = new THREE.Fog("#102b1c", 30, 96);
-    const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 180);
-    camera.position.set(-5, 8.2, 24);
-    camera.lookAt(4, 2.4, -16);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setClearColor("#102b1c", 1);
-    mount.appendChild(renderer.domElement);
-
-    const terrainGeometry = new THREE.PlaneGeometry(92, 86, 118, 118);
-    terrainGeometry.rotateX(-Math.PI / 2);
-    const position = terrainGeometry.attributes.position as THREE.BufferAttribute;
-    for (let index = 0; index < position.count; index += 1) {
-      const x = position.getX(index);
-      const z = position.getZ(index);
-      const depthBoost = THREE.MathUtils.clamp((z + 43) / 72, 0.42, 1.18);
-      const centerLift = THREE.MathUtils.clamp(1 - Math.abs(x - 4) / 62, 0.58, 1);
-      position.setY(index, terrainHeight(x, z) * depthBoost * centerLift + Math.max(0, -z - 6) * 0.045);
-    }
-    terrainGeometry.computeVertexNormals();
-    const terrainMaterial = new THREE.MeshStandardMaterial({ color: "#2d5f3e", roughness: 0.86, metalness: 0.02, flatShading: true });
-    const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
-    terrain.position.set(13, -6.2, -16);
-    terrain.rotation.z = -0.12;
-    scene.add(terrain);
-    const wireMaterial = new THREE.MeshBasicMaterial({ color: "#ff8c42", wireframe: true, transparent: true, opacity: 0.28, depthWrite: false });
-    const wireTerrain = new THREE.Mesh(terrainGeometry, wireMaterial);
-    wireTerrain.position.copy(terrain.position);
-    wireTerrain.rotation.copy(terrain.rotation);
-    wireTerrain.scale.setScalar(1.002);
-    scene.add(wireTerrain);
-
-    const particleCount = 800;
-    const particlePositions = new Float32Array(particleCount * 3);
-    const particleColors = new Float32Array(particleCount * 3);
-    const particleSpeeds = new Float32Array(particleCount);
-    const color = new THREE.Color();
-    for (let index = 0; index < particleCount; index += 1) {
-      particlePositions[index * 3] = (seededUnit(index, 11) - 0.5) * 72;
-      particlePositions[index * 3 + 1] = seededUnit(index, 12) * 28 - 7;
-      particlePositions[index * 3 + 2] = seededUnit(index, 13) * -78 + 18;
-      particleSpeeds[index] = 0.014 + seededUnit(index, 14) * 0.034;
-      color.set(seededUnit(index, 15) > 0.72 ? "#ff8c42" : seededUnit(index, 16) > 0.5 ? "#f4ead7" : "#8fb989");
-      particleColors[index * 3] = color.r;
-      particleColors[index * 3 + 1] = color.g;
-      particleColors[index * 3 + 2] = color.b;
-    }
-    const particleGeometry = new THREE.BufferGeometry();
-    particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
-    particleGeometry.setAttribute("color", new THREE.BufferAttribute(particleColors, 3));
-    const particleMaterial = new THREE.PointsMaterial({ size: 0.095, transparent: true, opacity: 0.66, sizeAttenuation: true, depthWrite: false, vertexColors: true });
-    const particles = new THREE.Points(particleGeometry, particleMaterial);
-    scene.add(particles);
-
-    const ambient = new THREE.AmbientLight("#88ad87", 0.86);
-    const directional = new THREE.DirectionalLight("#f4ead7", 1.45);
-    directional.position.set(-12, 16, 12);
-    const rim = new THREE.DirectionalLight("#7dd29a", 1.85);
-    rim.position.set(14, 10, -24);
-    const orbitLight = new THREE.PointLight("#ff8c42", 8.4, 58);
-    scene.add(ambient, directional, rim, orbitLight);
-
-    const sunriseGeometry = new THREE.SphereGeometry(1.2, 32, 16);
-    const sunriseMaterial = new THREE.MeshBasicMaterial({ color: "#ff8c42", transparent: true, opacity: 0.5 });
-    const sunrise = new THREE.Mesh(sunriseGeometry, sunriseMaterial);
-    sunrise.position.set(-18, -0.4, -24);
-    scene.add(sunrise);
-
-    const mouse = { x: 0, y: 0 };
-    const onPointerMove = (event: PointerEvent) => {
-      const rect = mount.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-      mouse.y = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-    };
-    const resize = () => {
-      const width = mount.clientWidth || 1;
-      const height = mount.clientHeight || 1;
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height, false);
-    };
-
-    let animationFrame = 0;
-    const clock = new THREE.Clock();
-    const animate = () => {
-      const elapsed = clock.getElapsedTime();
-      const positions = particleGeometry.attributes.position as THREE.BufferAttribute;
-      for (let index = 0; index < particleCount; index += 1) {
-        const y = positions.getY(index) + particleSpeeds[index];
-        positions.setY(index, y > 18 ? -5 : y);
-        positions.setX(index, positions.getX(index) + Math.sin(elapsed * 0.5 + index) * 0.0015);
-      }
-      positions.needsUpdate = true;
-      orbitLight.position.set(Math.cos(elapsed * 0.42) * 21, 6.4 + Math.sin(elapsed * 0.34) * 3, -18 + Math.sin(elapsed * 0.42) * 17);
-      sunrise.material.opacity = 0.42 + Math.sin(elapsed * 0.8) * 0.12;
-      terrain.rotation.z = -0.12 + Math.sin(elapsed * 0.18) * 0.012;
-      wireTerrain.rotation.z = terrain.rotation.z;
-      camera.position.x = THREE.MathUtils.lerp(camera.position.x, -5 + mouse.x * 3.2, 0.035);
-      camera.position.y = THREE.MathUtils.lerp(camera.position.y, 8.2 - mouse.y * 1.35, 0.035);
-      camera.lookAt(4 + mouse.x * 1.4, 2.2 - mouse.y * 0.45, -16);
-      renderer.render(scene, camera);
-      animationFrame = window.requestAnimationFrame(animate);
-    };
-    resize();
-    mount.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("resize", resize);
-    animate();
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      mount.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("resize", resize);
-      renderer.dispose();
-      terrainGeometry.dispose();
-      terrainMaterial.dispose();
-      wireMaterial.dispose();
-      particleGeometry.dispose();
-      particleMaterial.dispose();
-      sunriseGeometry.dispose();
-      sunriseMaterial.dispose();
-      renderer.domElement.remove();
-    };
-  }, [webglReady]);
-
-  return <div ref={mountRef} className={styles.heroCanvas}>{!webglReady ? <div className={styles.canvasFallback} aria-hidden="true" /> : null}</div>;
-}
-
-// ─── Concept 3: 2-D Parallax Depth Layers — canvas background for Purpose section ──
-function PurposeDepthCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>(0);
-  const prefersReduced = useReducedMotion();
-
-  // Pre-bake star positions (seeded, stable across renders)
-  const stars = useMemo(() => {
-    return Array.from({ length: 90 }, (_, i) => ({
-      x: seededUnit(i, 0) * 1,        // stored as fraction 0-1, scaled on draw
-      y: seededUnit(i, 1) * 0.45,
-      r: seededUnit(i, 2) * 1.1 + 0.3,
-      phase: seededUnit(i, 3) * Math.PI * 2,
-    }));
-  }, []);
-
-  // Firefly particles
-  const fireflies = useMemo(() => {
-    return Array.from({ length: 22 }, (_, i) => ({
-      x: seededUnit(i, 10),   // fraction
-      y: 0.42 + seededUnit(i, 11) * 0.48,
-      speed: 0.00012 + seededUnit(i, 12) * 0.00018,
-      phase: seededUnit(i, 13) * Math.PI * 2,
-      amp: 0.04 + seededUnit(i, 14) * 0.06,
-      r: seededUnit(i, 15) * 1.4 + 0.8,
-    }));
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Layer definitions: 5 mountain silhouette layers, back → front
-    // Each layer has a color, a scroll speed multiplier, opacity, and
-    // a set of mountain peak x-fractions + heights (as fraction of canvas H)
-    const layers = [
-      {
-        color: "#1a4a26",  // lightest — farthest back
-        speed: 0.18,
-        opacity: 1,
-        peaks: [0, 0.72, 0.14, 0.52, 0.28, 0.60, 0.42, 0.45, 0.56, 0.58, 0.70, 0.54, 0.84, 0.63, 1.0, 0.72],
-      },
-      {
-        color: "#245c30",
-        speed: 0.40,
-        opacity: 0.97,
-        peaks: [0, 0.76, 0.10, 0.60, 0.22, 0.52, 0.36, 0.66, 0.50, 0.56, 0.64, 0.70, 0.78, 0.62, 0.92, 0.75, 1.0, 0.76],
-      },
-      {
-        color: "#2d6b39",
-        speed: 0.72,
-        opacity: 0.94,
-        peaks: [0, 0.80, 0.12, 0.68, 0.26, 0.60, 0.40, 0.72, 0.54, 0.64, 0.68, 0.74, 0.82, 0.68, 0.96, 0.78, 1.0, 0.80],
-      },
-      {
-        color: "#377a42",
-        speed: 1.10,
-        opacity: 0.92,
-        peaks: [0, 0.84, 0.16, 0.74, 0.32, 0.68, 0.48, 0.78, 0.64, 0.72, 0.80, 0.80, 1.0, 0.84],
-      },
-      {
-        color: "#3f8a4a",  // darkest — closest, richest green
-        speed: 1.60,
-        opacity: 0.88,
-        peaks: [0, 0.88, 0.20, 0.80, 0.40, 0.76, 0.60, 0.84, 0.80, 0.88, 1.0, 0.88],
-      },
-    ];
-
-    let t = 0;
-    let w = 0;
-    let h = 0;
-
-    const resize = () => {
-      w = canvas.offsetWidth || 800;
-      h = canvas.offsetHeight || 500;
-      canvas.width = Math.round(w * Math.min(window.devicePixelRatio, 2));
-      canvas.height = Math.round(h * Math.min(window.devicePixelRatio, 2));
-      ctx.scale(Math.min(window.devicePixelRatio, 2), Math.min(window.devicePixelRatio, 2));
-    };
-
-    const drawLayer = (layer: typeof layers[0], offset: number) => {
-      const { peaks, color, opacity } = layer;
-      const wrapOffset = ((offset % w) + w) % w;    // always positive
-
-      ctx.save();
-      ctx.globalAlpha = opacity;
-      ctx.fillStyle = color;
-
-      // Draw twice side-by-side to create seamless horizontal loop
-      for (let pass = 0; pass < 2; pass++) {
-        const ox = wrapOffset - w * pass;
-        ctx.beginPath();
-        ctx.moveTo(ox + peaks[0] * w, h);
-
-        for (let i = 0; i < peaks.length - 2; i += 2) {
-          const x0 = ox + peaks[i] * w;
-          const y0 = peaks[i + 1] * h;
-          const x1 = ox + peaks[i + 2] * w;
-          const y1 = peaks[i + 3] * h;
-          const mx = (x0 + x1) / 2;
-          const my = (y0 + y1) / 2;
-          // Gentle sine sway on the peak heights for organic life
-          const sway = Math.sin(t * 0.4 + i * 0.7 + pass) * (h * 0.008);
-          ctx.quadraticCurveTo(x0, y0 + sway, mx, my);
-        }
-
-        const lastPeakX = ox + peaks[peaks.length - 2] * w;
-        ctx.lineTo(lastPeakX, h);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      ctx.restore();
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-
-      // Sky gradient
-      const sky = ctx.createLinearGradient(0, 0, 0, h);
-      sky.addColorStop(0, "#020805");
-      sky.addColorStop(0.5, "#050e07");
-      sky.addColorStop(1, "#080f09");
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, w, h);
-
-      // Subtle moon glow top-right
-      const moonX = w * 0.82;
-      const moonY = h * 0.18;
-      const moonGlow = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, h * 0.22);
-      moonGlow.addColorStop(0, `rgba(255,200,100,${0.055 + Math.sin(t * 0.3) * 0.015})`);
-      moonGlow.addColorStop(1, "rgba(255,200,100,0)");
-      ctx.fillStyle = moonGlow;
-      ctx.fillRect(0, 0, w, h);
-
-      // Stars
-      stars.forEach((s) => {
-        const flicker = prefersReduced ? 0.55 : 0.3 + Math.sin(t * 1.2 + s.phase) * 0.25;
-        ctx.beginPath();
-        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,248,230,${flicker})`;
-        ctx.fill();
-      });
-
-      // Parallax mountain layers
-      layers.forEach((layer) => {
-        const offset = prefersReduced ? 0 : -((t * layer.speed * 18) % w);
-        drawLayer(layer, offset);
-      });
-
-      // Orange campfire glow at bottom-centre
-      const fireX = w * 0.5;
-      const fireY = h * 0.96;
-      const fireGlow = ctx.createRadialGradient(fireX, fireY, 0, fireX, fireY, w * 0.28);
-      const pulseIntensity = prefersReduced ? 0.18 : 0.14 + Math.sin(t * 2.2) * 0.05;
-      fireGlow.addColorStop(0, `rgba(255,140,66,${pulseIntensity})`);
-      fireGlow.addColorStop(0.5, `rgba(255,100,30,${pulseIntensity * 0.4})`);
-      fireGlow.addColorStop(1, "rgba(255,140,66,0)");
-      ctx.fillStyle = fireGlow;
-      ctx.fillRect(0, 0, w, h);
-
-      // Firefly particles
-      if (!prefersReduced) {
-        fireflies.forEach((ff) => {
-          ff.x = (ff.x + ff.speed) % 1;
-          const px = ff.x * w;
-          const py = ff.y * h + Math.sin(t * 1.1 + ff.phase) * ff.amp * h;
-          const alpha = 0.35 + Math.sin(t * 1.8 + ff.phase) * 0.3;
-          ctx.beginPath();
-          ctx.arc(px, py, ff.r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255,200,80,${Math.max(0, alpha)})`;
-          ctx.fill();
-        });
-      }
-
-      t += 0.016;
-      rafRef.current = requestAnimationFrame(draw);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    rafRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("resize", resize);
-    };
-  }, [stars, fireflies, prefersReduced]);
-
-  return <canvas ref={canvasRef} className={styles.purposeDepthCanvas} aria-hidden="true" />;
-}
-
 // ─── UI helpers (unchanged) ───────────────────────────────────────────────────
 function Reveal({
   children,
@@ -597,6 +240,18 @@ function SectionHeader({ eyebrow, title, copy }: { eyebrow: string; title: strin
       {copy ? <p>{copy}</p> : null}
     </motion.div>
   );
+}
+
+function HeroTerrainFallback() {
+  return (
+    <div className={styles.heroCanvas} aria-hidden="true">
+      <div className={styles.canvasFallback} />
+    </div>
+  );
+}
+
+function PurposeCanvasFallback() {
+  return <div className={styles.purposeDepthCanvas} aria-hidden="true" />;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -647,7 +302,9 @@ function LaunchPage() {
 
         {/* ── Hero ── */}
         <section className={styles.hero}>
-          <HeroTerrainBackground />
+          <Suspense fallback={<HeroTerrainFallback />}>
+            <HeroTerrainBackground />
+          </Suspense>
           <div className={styles.heroOverlay} aria-hidden="true" />
           <motion.div
             className={styles.heroText}
@@ -790,7 +447,9 @@ function LaunchPage() {
         <Reveal className={styles.purposeSection}>
           {/* Canvas replaces the old TentScene */}
           <div className={styles.purposeDepthWrap} aria-hidden="true">
-            <PurposeDepthCanvas />
+            <Suspense fallback={<PurposeCanvasFallback />}>
+              <PurposeDepthCanvas />
+            </Suspense>
           </div>
 
           {/* Gradient veil so text stays readable over the canvas */}

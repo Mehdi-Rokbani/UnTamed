@@ -69,6 +69,23 @@ export type LoginResponse =
   | { token: string; userResponse: AuthUser }
   | AuthUser;
 
+export type SuspendedLoginResponse = {
+  error: "ACCOUNT_SUSPENDED";
+  message: string;
+  appealToken: string;
+  expiresInSeconds: number;
+};
+
+export type SuspensionAppealRequest = {
+  appealToken: string;
+  description: string;
+};
+
+export type SuspensionAppealResponse = {
+  message: string;
+  reportId: string;
+};
+
 export type RegisterResponse = AuthUser;
 
 export type LoginRequest = {

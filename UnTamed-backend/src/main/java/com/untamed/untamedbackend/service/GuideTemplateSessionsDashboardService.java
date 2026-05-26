@@ -61,6 +61,7 @@ public class GuideTemplateSessionsDashboardService {
     private final GuestPassRepository guestPassRepository;
     private final CategoryRepository categoryRepository;
     private final AddressRepository addressRepository;
+    private final GuideAccessService guideAccessService;
 
     public GuideTemplateSessionsDashboardResponse getDashboard(
             String authEmail,
@@ -324,14 +325,7 @@ public class GuideTemplateSessionsDashboardService {
     }
 
     private User getGuideByEmail(String authEmail) {
-        User user = userRepository.findByEmail(authEmail)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        if (user.getRole() != Role.GUIDE) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only GUIDE can access this dashboard.");
-        }
-
-        return user;
+        return guideAccessService.requireActiveGuideByEmail(authEmail);
     }
 
     private <T> List<T> safeList(List<T> value) {

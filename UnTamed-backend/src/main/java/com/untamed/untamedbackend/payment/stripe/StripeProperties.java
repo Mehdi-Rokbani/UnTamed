@@ -12,5 +12,6 @@ public class StripeProperties {
 
     private String successUrl;
     private String cancelUrl;
+    private String currency;
 
 }

@@ -21,6 +21,7 @@ import { getParticipantsPreview } from "../api/session.api";
 import type { ParticipantsPreviewResponse } from "../types/participants";
 import { BackButton } from "../components/BackButton";
 import ChatAssistantWidget from "../components/assistant/ChatAssistantWidget";
+import { ReportModal } from "../components/report/ReportModal";
 
 type LoadState = "loading" | "error" | "done" | "notfound";
 type BookingStep = "idle" | "selecting" | "confirming" | "success";
@@ -951,6 +952,8 @@ export default function ActivityDetailsPage() {
   const [weather, setWeather] = useState<SessionWeather | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportPrompt, setReportPrompt] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -1213,6 +1216,16 @@ export default function ActivityDetailsPage() {
 
   const canWriteOrEditReview = !!user && !isGuideOwner && !!template && (reviewEligible || !!myReview);
 
+  function openActivityReport() {
+    if (!user) {
+      setReportPrompt("Please log in to report an activity.");
+      return;
+    }
+    if (!templateId) return;
+    setReportPrompt("");
+    setReportOpen(true);
+  }
+
   const openReviewModal = useCallback(() => {
     setReviewError(null);
     setReviewModalOpen(true);
@@ -1347,6 +1360,17 @@ export default function ActivityDetailsPage() {
         onSubmit={handleReviewSubmit}
       />
 
+      {templateId && (
+        <ReportModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="ACTIVITY"
+          targetId={templateId}
+          targetLabel={templateTitle}
+          contextLabel={guide?.username ? `Hosted by ${guide.username}` : "Activity listing"}
+        />
+      )}
+
       {participantsModalOpen && participantsPreview && participantsPreview.totalConfirmed > 0 && (
         <ParticipantsModal preview={participantsPreview} onClose={() => setParticipantsModalOpen(false)} />
       )}
@@ -1441,6 +1465,14 @@ export default function ActivityDetailsPage() {
                         {label}
                       </span>
                     ))}
+                  </div>
+                )}
+                {!isGuideOwner && (
+                  <div className={styles.reportActionRow}>
+                    <button type="button" className={styles.reportButton} onClick={openActivityReport}>
+                      Report activity
+                    </button>
+                    {reportPrompt && <span>{reportPrompt}</span>}
                   </div>
                 )}
               </div>

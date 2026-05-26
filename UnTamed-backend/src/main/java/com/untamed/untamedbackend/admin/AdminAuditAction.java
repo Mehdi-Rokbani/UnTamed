@@ -1,0 +1,16 @@
+package com.untamed.untamedbackend.admin;
+
+public enum AdminAuditAction {
+    VERIFY_GUIDE,
+    SUSPEND_GUIDE,
+    REACTIVATE_GUIDE,
+    CANCEL_SESSION,
+    PROCESS_REFUND,
+    REFUND_FAILED,
+    SUSPEND_USER,
+    REACTIVATE_USER,
+    DISABLE_ACTIVITY,
+    REPUBLISH_ACTIVITY,
+    REPORT_RESOLVED,
+    REPORT_REJECTED
+}

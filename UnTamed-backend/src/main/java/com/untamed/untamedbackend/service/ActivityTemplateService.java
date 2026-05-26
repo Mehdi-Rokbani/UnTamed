@@ -41,6 +41,7 @@ public class ActivityTemplateService {
     private final N8nWebhookService n8nWebhookService;
     private final TagService tagService;
     private final BookingRepository bookingRepo;
+    private final GuideAccessService guideAccessService;
 
     // -------- Reads --------
 
@@ -443,14 +444,7 @@ public class ActivityTemplateService {
     // -------- Helpers --------
 
     private User getGuideByEmail(String authEmail) {
-        User u = userRepo.findByEmail(authEmail)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        if (u.getRole() != Role.GUIDE) {
-            throw new IllegalArgumentException("Only GUIDE can manage activities");
-        }
-
-        return u;
+        return guideAccessService.requireActiveGuideByEmail(authEmail);
     }
 
     private Address getOrCreateAddress(AddressPickDto dto) {

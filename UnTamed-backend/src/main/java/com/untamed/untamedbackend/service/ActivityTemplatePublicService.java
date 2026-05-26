@@ -35,6 +35,7 @@ public class ActivityTemplatePublicService {
     private final AddressRepository addressRepo;
     private final CategoryRepository categoryRepo;
     private final MongoTemplate mongo;
+    private final GuideAccessService guideAccessService;
 
     public List<PublicTemplateCardResponse> list() {
         Instant now = Instant.now();
@@ -83,6 +84,10 @@ public class ActivityTemplatePublicService {
             throw new IllegalArgumentException("Template not found");
         }
 
+        if (!guideAccessService.isPubliclyBookableGuide(template.getGuideId())) {
+            return List.of();
+        }
+
         Instant now = Instant.now();
 
         return sessionRepo
@@ -128,6 +133,7 @@ public class ActivityTemplatePublicService {
         List<ActivityTemplate> matchingTemplates = mongo.find(query, ActivityTemplate.class)
                 .stream()
                 .filter(t -> !t.isArchived())
+                .filter(t -> guideAccessService.isPubliclyBookableGuide(t.getGuideId()))
                 .filter(t -> !hasQ || templateMatchesQuery(t, variants))
                 .toList();
 
@@ -283,6 +289,7 @@ public class ActivityTemplatePublicService {
         return templateRepo.findAllById(templateIds)
                 .stream()
                 .filter(t -> !t.isArchived())
+                .filter(t -> guideAccessService.isPubliclyBookableGuide(t.getGuideId()))
                 .map(ActivityTemplate::getId)
                 .collect(Collectors.toSet());
     }
@@ -325,6 +332,7 @@ public class ActivityTemplatePublicService {
                         ActivityStatus.PUBLISHED,
                         now
                 )
+                .filter(s -> guideAccessService.isPubliclyBookableGuide(t.getGuideId()))
                 .map(s -> new PublicNextSessionDto(
                         s.getId(),
                         s.getStartAt(),

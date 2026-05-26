@@ -101,6 +101,6 @@ public class GuestPassController {
             );
         }
 
-        return bookingService.requireAuthenticatedDbUserId(auth);
+        return bookingService.requireAuthenticatedActiveGuideId(auth);
     }
 }

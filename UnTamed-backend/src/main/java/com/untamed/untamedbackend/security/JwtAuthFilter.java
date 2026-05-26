@@ -92,6 +92,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        if (!user.isEnabled() || user.isSuspended()) {
+            System.out.println("User disabled or suspended; authentication skipped");
+            System.out.println("=== JWT FILTER END ===");
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
         AuthenticatedUser principal = new AuthenticatedUser(userId, email);
 

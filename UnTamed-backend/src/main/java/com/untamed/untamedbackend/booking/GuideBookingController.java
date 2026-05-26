@@ -21,7 +21,7 @@ public class GuideBookingController {
             @PathVariable String sessionId,
             Authentication auth
     ) {
-        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        String guideId = bookingService.requireAuthenticatedActiveGuideId(auth);
         return ResponseEntity.ok(bookingService.listParticipantsForGuide(sessionId, guideId));
     }
 
@@ -30,7 +30,7 @@ public class GuideBookingController {
             @PathVariable String sessionId,
             Authentication auth
     ) {
-        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        String guideId = bookingService.requireAuthenticatedActiveGuideId(auth);
         return ResponseEntity.ok(bookingService.listAllBookingsForGuide(sessionId, guideId));
     }
 
@@ -39,7 +39,7 @@ public class GuideBookingController {
             @PathVariable String bookingId,
             Authentication auth
     ) {
-        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        String guideId = bookingService.requireAuthenticatedActiveGuideId(auth);
         return ResponseEntity.ok(bookingService.cancelPendingBookingByGuide(bookingId, guideId));
     }
 
@@ -49,7 +49,7 @@ public class GuideBookingController {
             @RequestBody MarkAttendanceRequest req,
             Authentication auth
     ) {
-        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        String guideId = bookingService.requireAuthenticatedActiveGuideId(auth);
         return ResponseEntity.ok(
                 bookingService.markAttendanceAbsent(bookingId, guideId, req.isAbsent())
         );
@@ -60,7 +60,7 @@ public class GuideBookingController {
             @RequestBody GuideRemoveBookingRequest request,
             Authentication auth
     ) {
-        String guideId = bookingService.requireAuthenticatedDbUserId(auth);
+        String guideId = bookingService.requireAuthenticatedActiveGuideId(auth);
         return ResponseEntity.ok(
                 bookingService.removeBookingByGuide(
                         bookingId,

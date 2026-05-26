@@ -4,11 +4,14 @@ import com.untamed.untamedbackend.dto.*;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
 import com.untamed.untamedbackend.security.JwtService;
+import com.untamed.untamedbackend.service.AccountSuspendedException;
 import com.untamed.untamedbackend.service.AuthService;
 import com.untamed.untamedbackend.service.EmailVerificationService;
+import com.untamed.untamedbackend.service.SuspensionAppealService;
 import com.untamed.untamedbackend.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -29,6 +32,7 @@ public class AuthController {
     private final JwtService jwtService;
     private final UserRepository userRepo;
     private final EmailVerificationService emailVerificationService;
+    private final SuspensionAppealService suspensionAppealService;
 
     @Value("${app.cookies.secure:false}")
     private boolean cookieSecure;
@@ -37,17 +41,36 @@ public class AuthController {
     private String cookieSameSite;
 
 
-    public AuthController(AuthService authService, UserService userService, JwtService jwtService, UserRepository userRepo , EmailVerificationService emailVerificationService) {
+    public AuthController(
+            AuthService authService,
+            UserService userService,
+            JwtService jwtService,
+            UserRepository userRepo,
+            EmailVerificationService emailVerificationService,
+            SuspensionAppealService suspensionAppealService
+    ) {
         this.authService = authService;
         this.userService = userService;
         this.jwtService = jwtService;
         this.userRepo = userRepo;
         this.emailVerificationService = emailVerificationService;
+        this.suspensionAppealService = suspensionAppealService;
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
-        LoginResponse res = authService.login(req);
+        LoginResponse res;
+        try {
+            res = authService.login(req);
+        } catch (AccountSuspendedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new SuspendedLoginResponse(
+                            "ACCOUNT_SUSPENDED",
+                            ex.getMessage(),
+                            ex.getAppealToken(),
+                            ex.getExpiresInSeconds()
+                    ));
+        }
 
         // If LoginResponse is a record: res.token() ; if class: res.getToken()
         String accessToken = getTokenFromLoginResponse(res);
@@ -80,6 +103,11 @@ public class AuthController {
                         "user", toUserResponse(user)
                 ));
 
+    }
+
+    @PostMapping("/suspension-appeal")
+    public SuspensionAppealResponse submitSuspensionAppeal(@Valid @RequestBody SuspensionAppealRequest req) {
+        return suspensionAppealService.submitAppeal(req);
     }
 
     @GetMapping("/me")
@@ -150,6 +178,9 @@ public class AuthController {
 
         String email = jwtService.extractEmail(refreshToken);
         User user = userRepo.findByEmail(email).orElseThrow();
+        if (user.isSuspended() || !user.isEnabled()) {
+            return ResponseEntity.status(403).build();
+        }
         if (!user.isVerified()) {
             return ResponseEntity.status(403).build();
         }

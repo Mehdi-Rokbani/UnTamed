@@ -1,6 +1,7 @@
 package com.untamed.untamedbackend.payment.stripe;
 
 import com.stripe.exception.StripeException;
+import com.stripe.model.StripeError;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
@@ -17,6 +18,8 @@ import com.untamed.untamedbackend.payment.PaymentProvider;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,11 +30,14 @@ import com.stripe.param.checkout.SessionRetrieveParams;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class StripePaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(StripePaymentService.class);
 
     private final StripeProperties stripeProps;
     private final PaymentAttemptRepository attempts;
@@ -45,8 +51,10 @@ public class StripePaymentService {
         PaymentAttempt attempt = null;
 
         try {
+            ensureStripeConfigured();
+
             long amount = computeAmountInCents(booking);
-            String currency = "tnd";
+            String currency = stripeCurrency();
 
             String idempotencyKey = "stripe:" + bookingId + ":" + UUID.randomUUID();
 
@@ -107,10 +115,11 @@ public class StripePaymentService {
             }
 
             bookingService.handlePaymentFailed(bookingId);
+            logStripeException("checkout session", bookingId, attempt, e);
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
-                    "Stripe payment creation failed"
+                    "Stripe payment creation failed. Please try again later."
             );
 
         } catch (RuntimeException e) {
@@ -121,6 +130,7 @@ public class StripePaymentService {
 
     public StripeElementsPaymentResponse createElementsPayment(String userId, String bookingId) {
         Booking booking = bookingService.markPaying(bookingId, userId);
+        ensureStripeConfigured();
 
         PaymentAttempt reusable = findReusablePaymentIntentAttempt(bookingId);
         if (reusable != null) {
@@ -145,11 +155,12 @@ public class StripePaymentService {
                 reusable.setStatus(PaymentAttemptStatus.FAILED);
                 reusable.setUpdatedAt(Instant.now());
                 attempts.save(reusable);
+                logStripeException("reusable payment intent retrieval", bookingId, reusable, e);
             }
         }
 
         long amount = computeAmountInCents(booking);
-        String currency = "tnd";
+        String currency = stripeCurrency();
         String idempotencyKey = "stripe-elements:" + bookingId + ":" + UUID.randomUUID();
 
         PaymentAttempt attempt = PaymentAttempt.builder()
@@ -206,10 +217,11 @@ public class StripePaymentService {
             attempts.save(attempt);
 
             bookingService.handlePaymentFailed(bookingId);
+            logStripeException("payment intent", bookingId, attempt, e);
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
-                    "Stripe payment intent creation failed"
+                    stripePaymentErrorMessage(e)
             );
         } catch (RuntimeException e) {
             bookingService.handlePaymentFailed(bookingId);
@@ -230,6 +242,55 @@ public class StripePaymentService {
                 .filter(attempt -> attempt.getProviderRef() != null)
                 .filter(attempt -> attempt.getProviderRef().startsWith("pi_"))
                 .orElse(null);
+    }
+
+    private void ensureStripeConfigured() {
+        if (stripeProps.getSecretKey() == null || stripeProps.getSecretKey().isBlank()) {
+            log.error("Stripe payment creation blocked: stripe.secret-key is missing.");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Stripe is not configured. Please contact support."
+            );
+        }
+    }
+
+    private String stripeCurrency() {
+        String configured = stripeProps.getCurrency();
+        if (configured == null || configured.isBlank()) {
+            return "eur";
+        }
+
+        return configured.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String stripePaymentErrorMessage(StripeException e) {
+        StripeError stripeError = e.getStripeError();
+        if (stripeError != null && "currency".equals(stripeError.getParam())) {
+            return "Payment currency is not supported by the current Stripe account configuration.";
+        }
+
+        return "Stripe payment intent creation failed. Please try again later.";
+    }
+
+    private void logStripeException(String operation, String bookingId, PaymentAttempt attempt, StripeException e) {
+        StripeError stripeError = e.getStripeError();
+        String code = stripeError == null ? e.getCode() : stripeError.getCode();
+        String declineCode = stripeError == null ? null : stripeError.getDeclineCode();
+        String param = stripeError == null ? null : stripeError.getParam();
+
+        log.error(
+                "Stripe {} failed for bookingId={}, attemptId={}, providerRef={}, statusCode={}, requestId={}, code={}, declineCode={}, param={}, message={}",
+                operation,
+                bookingId,
+                attempt == null ? null : attempt.getId(),
+                attempt == null ? null : attempt.getProviderRef(),
+                e.getStatusCode(),
+                e.getRequestId(),
+                code,
+                declineCode,
+                param,
+                e.getMessage()
+        );
     }
 
     private boolean isReusablePaymentIntentStatus(String status) {

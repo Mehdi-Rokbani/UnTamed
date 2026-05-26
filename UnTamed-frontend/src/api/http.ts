@@ -5,6 +5,23 @@ import { setAccessToken } from "../auth/accessToken";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
+export class HttpError<T = unknown> extends Error {
+  status?: number;
+  data?: T;
+  response?: {
+    status?: number;
+    data?: T;
+  };
+
+  constructor(message: string, status?: number, data?: T) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+    this.data = data;
+    this.response = status === undefined ? undefined : { status, data };
+  }
+}
+
 export const http = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true, // ✅ send HttpOnly cookies
@@ -118,6 +135,6 @@ http.interceptors.response.use(
       error.message ||
       "Request failed";
 
-    return Promise.reject(new Error(`HTTP ${status ?? "?"}: ${msg}`));
+    return Promise.reject(new HttpError(`HTTP ${status ?? "?"}: ${msg}`, status, data));
   }
 );

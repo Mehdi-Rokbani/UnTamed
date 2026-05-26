@@ -70,6 +70,13 @@ public class ActivitySession {
     @Size(max = 1000)
     private String sessionNote;
 
+    @Size(max = 1000)
+    private String cancellationReason;
+
+    private Instant cancelledAt;
+
+    private String cancelledBy;
+
     @CreatedDate
     private Instant createdAt;
 

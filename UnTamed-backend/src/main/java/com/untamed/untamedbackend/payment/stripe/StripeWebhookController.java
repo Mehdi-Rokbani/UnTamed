@@ -84,10 +84,12 @@ public class StripeWebhookController {
             attempts.save(attempt);
         }
 
-        bookingService.markCompleted(attempt.getBookingId());
-        guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+        var booking = bookingService.markCompletedFromPayment(attempt.getBookingId());
+        if (booking != null && booking.getStatus() == com.untamed.untamedbackend.booking.BookingStatus.COMPLETED) {
+            guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+        }
 
-        System.out.println("PaymentIntent succeeded, booking completed, and guest passes generated: "
+        System.out.println("PaymentIntent succeeded and booking completion was processed: "
                 + attempt.getBookingId());
     }
 
@@ -158,9 +160,12 @@ public class StripeWebhookController {
         if (attempt.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
             System.out.println("Payment attempt already succeeded: " + attempt.getId());
 
-            // Important: if Stripe retries the webhook but passes were not created before,
-            // this safely creates them because GuestPassService checks if they already exist.
-            guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+            var booking = bookingService.markCompletedFromPayment(attempt.getBookingId());
+            if (booking != null && booking.getStatus() == com.untamed.untamedbackend.booking.BookingStatus.COMPLETED) {
+                // Important: if Stripe retries the webhook but passes were not created before,
+                // this safely creates them because GuestPassService checks if they already exist.
+                guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+            }
 
             return;
         }
@@ -169,10 +174,11 @@ public class StripeWebhookController {
         attempt.setUpdatedAt(Instant.now());
         attempts.save(attempt);
 
-        bookingService.markCompleted(attempt.getBookingId());
+        var booking = bookingService.markCompletedFromPayment(attempt.getBookingId());
+        if (booking != null && booking.getStatus() == com.untamed.untamedbackend.booking.BookingStatus.COMPLETED) {
+            guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
+        }
 
-        guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
-
-        System.out.println("Payment succeeded, booking completed, and guest passes generated: " + attempt.getBookingId());
+        System.out.println("Payment succeeded and booking completion was processed: " + attempt.getBookingId());
     }
 }

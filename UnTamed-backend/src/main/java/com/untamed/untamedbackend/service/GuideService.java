@@ -1,7 +1,6 @@
 package com.untamed.untamedbackend.service;
 
 import com.untamed.untamedbackend.dto.*;
-import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
 import com.untamed.untamedbackend.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -15,9 +14,11 @@ import java.util.UUID;
 public class GuideService {
 
     private final UserRepository repo;
+    private final GuideAccessService guideAccessService;
 
-    public GuideService(UserRepository repo) {
+    public GuideService(UserRepository repo, GuideAccessService guideAccessService) {
         this.repo = repo;
+        this.guideAccessService = guideAccessService;
     }
 
     public GuideProfileResponse getMe(String authEmail) {
@@ -117,13 +118,7 @@ public class GuideService {
     // ---------- helpers ----------
 
     private User getGuideUser(String authEmail) {
-        User u = repo.findByEmail(authEmail)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        if (u.getRole() != Role.GUIDE) {
-            throw new IllegalArgumentException("Only GUIDE can access this resource");
-        }
-        return u;
+        return guideAccessService.requireActiveGuideByEmail(authEmail);
     }
 
     private void ensureGuideProfile(User u) {

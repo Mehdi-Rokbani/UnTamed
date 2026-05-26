@@ -1,6 +1,14 @@
 // src/api/auth.api.ts  (cookie-only)
 import { http } from "./http";
-import type { AuthUser, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse } from "../types/auth";
+import type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
+  SuspensionAppealRequest,
+  SuspensionAppealResponse,
+} from "../types/auth";
 import { clearAccessToken, setAccessToken } from "../auth/accessToken";
 
 /**
@@ -70,6 +78,14 @@ export async function logout(): Promise<void> {
     clearAccessToken();
   }
 }
+
+export async function submitSuspensionAppeal(
+  body: SuspensionAppealRequest
+): Promise<SuspensionAppealResponse> {
+  const { data } = await http.post<SuspensionAppealResponse>("/api/auth/suspension-appeal", body);
+  return data;
+}
+
 export async function usernameAvailable(username: string): Promise<boolean> {
   const { data } = await http.get<{ available: boolean }>(
     "/api/auth/available/username",
