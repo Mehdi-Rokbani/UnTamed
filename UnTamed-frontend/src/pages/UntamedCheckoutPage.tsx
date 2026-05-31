@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import type { StripeElementsOptions } from "@stripe/stripe-js";
@@ -55,6 +55,9 @@ export default function UntamedCheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const hasCreatedPaymentIntentRef = useRef(false);
+  const currentBookingIdRef = useRef<string | null>(null);
+  const paymentClientSecretRef = useRef<string | null>(null);
 
   const mainGuestName = user?.username?.trim() || user?.email || "Main guest";
   const guestNames = useMemo(
@@ -70,6 +73,14 @@ export default function UntamedCheckoutPage() {
       setError("Booking ID is missing.");
       setLoading(false);
       return;
+    }
+
+    if (currentBookingIdRef.current !== bookingId) {
+      currentBookingIdRef.current = bookingId;
+      hasCreatedPaymentIntentRef.current = false;
+      paymentClientSecretRef.current = null;
+      setPayment(null);
+      setExpired(false);
     }
 
     setLoading(true);
@@ -107,9 +118,21 @@ export default function UntamedCheckoutPage() {
         return;
       }
 
-      const paymentResponse = await BookingApi.createStripeElementsPayment(match.id);
-      setPayment(paymentResponse);
-      setExpired(isExpired(paymentResponse.expiresAt));
+      if (paymentClientSecretRef.current || hasCreatedPaymentIntentRef.current) {
+        return;
+      }
+
+      hasCreatedPaymentIntentRef.current = true;
+
+      try {
+        const paymentResponse = await BookingApi.createStripeElementsPayment(match.id);
+        paymentClientSecretRef.current = paymentResponse.clientSecret;
+        setPayment(paymentResponse);
+        setExpired(isExpired(paymentResponse.expiresAt));
+      } catch (err) {
+        hasCreatedPaymentIntentRef.current = false;
+        throw err;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load checkout.");
     } finally {

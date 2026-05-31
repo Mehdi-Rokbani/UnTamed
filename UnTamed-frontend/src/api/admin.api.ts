@@ -66,6 +66,15 @@ export type AdminAlertParams = {
   status?: string;
 };
 
+export type AdminReportParams = {
+  page?: number;
+  size?: number;
+  status?: string;
+  targetType?: string;
+  reason?: string;
+  sort?: string;
+};
+
 export type AdminUser = {
   id: string;
   username: string;
@@ -184,6 +193,64 @@ export type AdminRefundItem = {
   message?: string | null;
 };
 
+export type RevenueRecord = {
+  id: string;
+  bookingId: string;
+  paymentAttemptId: string;
+  sessionId: string;
+  templateId: string;
+  activityTitle?: string | null;
+  guideId: string;
+  guideName?: string | null;
+  guideEmail?: string | null;
+  userId: string;
+  grossAmountMinor: number;
+  platformCommissionMinor: number;
+  guidePayoutMinor: number;
+  currency: string;
+  commissionRate: number;
+  status: string;
+  bookingDate?: string | null;
+  sessionStartAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  sessionCompletedAt?: string | null;
+  payoutBatchId?: string | null;
+  paidAt?: string | null;
+};
+
+export type PayoutBatch = {
+  id: string;
+  guideId: string;
+  guideName?: string | null;
+  guideEmail?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  totalGrossMinor: number;
+  totalCommissionMinor: number;
+  totalPayoutMinor: number;
+  currency: string;
+  totalBookings: number;
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  paidAt?: string | null;
+};
+
+export type AdminRevenueSummary = {
+  totalGrossMinor: number;
+  totalPlatformCommissionMinor: number;
+  totalGuidePayoutMinor: number;
+  readyPayoutMinor: number;
+  scheduledPayoutMinor: number;
+  paidPayoutMinor: number;
+  totalRevenueRecords: number;
+  readyRecords: number;
+  scheduledRecords: number;
+  paidRecords: number;
+  payoutBatches: number;
+};
+
 export type AdminAuditLog = {
   id: string;
   adminId?: string | null;
@@ -210,6 +277,51 @@ export type AdminAlert = {
   createdAt: string | null;
 };
 
+export type AdminReportTargetSummary = {
+  label?: string | null;
+  username?: string | null;
+  email?: string | null;
+  role?: string | null;
+  suspended?: boolean | null;
+  activityTitle?: string | null;
+  activityStatus?: string | null;
+  sessionTemplateId?: string | null;
+  sessionGuideId?: string | null;
+  sessionStatus?: string | null;
+  sessionStartAt?: string | null;
+};
+
+export type AdminReport = {
+  id: string;
+  reporterId: string;
+  reporterEmail?: string | null;
+  reporterUsername?: string | null;
+  targetType: "GUIDE" | "ACTIVITY" | "USER" | "SESSION" | "ACCOUNT";
+  targetId: string;
+  reason:
+    | "FAKE_INFORMATION"
+    | "INAPPROPRIATE_CONTENT"
+    | "ABUSE_OR_HARASSMENT"
+    | "SCAM_OR_FRAUD"
+    | "SAFETY_CONCERN"
+    | "NO_SHOW"
+    | "PAYMENT_OR_BOOKING_ISSUE"
+    | "SESSION_PROBLEM"
+    | "SUSPENSION_APPEAL"
+    | "OTHER";
+  description: string;
+  status: "PENDING" | "RESOLVED" | "REJECTED";
+  reporterBookedTarget: boolean;
+  reporterCompletedTarget: boolean;
+  reporterHadChatWithTarget: boolean;
+  reporterBelongsToSession: boolean;
+  adminNote?: string | null;
+  reviewedByAdminId?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  target?: AdminReportTargetSummary | null;
+};
+
 export type AdminOverview = {
   stats: {
     totalUsers: number;
@@ -224,6 +336,8 @@ export type AdminOverview = {
     completedBookings: number;
     pendingRefunds: number;
     failedRefunds: number;
+    pendingReports: number;
+    pendingSuspensionAppeals: number;
     openAlerts: number;
     totalRevenue: number;
   };
@@ -263,6 +377,10 @@ export type AdminOverview = {
     cancellationReason: string | null;
     payingNeedsReview: number;
     paidNeedsRefund: number;
+  }>;
+  reportStatusBuckets: Array<{
+    status: string;
+    count: number;
   }>;
   alertStatusBuckets: Array<{
     status: string;
@@ -333,6 +451,26 @@ export async function getAdminOverview(): Promise<AdminOverview> {
 
 export async function getAdminAlerts(params?: AdminAlertParams): Promise<PageResponse<AdminAlert>> {
   const { data } = await http.get<PageResponse<AdminAlert>>("/api/admin/alerts", { params });
+  return data;
+}
+
+export async function getAdminReports(params?: AdminReportParams): Promise<PageResponse<AdminReport>> {
+  const { data } = await http.get<PageResponse<AdminReport>>("/api/admin/reports", { params });
+  return data;
+}
+
+export async function getAdminReport(id: string): Promise<AdminReport> {
+  const { data } = await http.get<AdminReport>(`/api/admin/reports/${id}`);
+  return data;
+}
+
+export async function resolveAdminReport(id: string, adminNote?: string): Promise<AdminReport> {
+  const { data } = await http.patch<AdminReport>(`/api/admin/reports/${id}/resolve`, { adminNote });
+  return data;
+}
+
+export async function rejectAdminReport(id: string, adminNote?: string): Promise<AdminReport> {
+  const { data } = await http.patch<AdminReport>(`/api/admin/reports/${id}/reject`, { adminNote });
   return data;
 }
 
@@ -422,6 +560,26 @@ export async function processAdminRefund(bookingId: string, notifyUser = true): 
   const { data } = await http.post<AdminRefundItem>(`/api/admin/refunds/${bookingId}/process`, {
     notifyUser,
   });
+  return data;
+}
+
+export async function getAdminRevenueSummary(): Promise<AdminRevenueSummary> {
+  const { data } = await http.get<AdminRevenueSummary>("/api/admin/revenue/summary");
+  return data;
+}
+
+export async function getAdminRevenueRecords(): Promise<RevenueRecord[]> {
+  const { data } = await http.get<RevenueRecord[]>("/api/admin/revenue/records");
+  return data;
+}
+
+export async function getAdminPayouts(): Promise<PayoutBatch[]> {
+  const { data } = await http.get<PayoutBatch[]>("/api/admin/payouts");
+  return data;
+}
+
+export async function markPayoutPaid(batchId: string): Promise<PayoutBatch> {
+  const { data } = await http.post<PayoutBatch>(`/api/admin/payouts/${batchId}/mark-paid`);
   return data;
 }
 

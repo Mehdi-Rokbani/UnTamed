@@ -16,6 +16,7 @@ import com.untamed.untamedbackend.payment.PaymentProvider;
 import com.untamed.untamedbackend.payment.stripe.StripeRefundService;
 import com.untamed.untamedbackend.repository.*;
 import com.untamed.untamedbackend.review.ReviewEligibilityResponse;
+import com.untamed.untamedbackend.revenue.RevenueService;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
 import com.untamed.untamedbackend.service.LevelingService;
 import com.untamed.untamedbackend.service.UserInsightService;
@@ -60,6 +61,7 @@ public class BookingService {
     private final NotificationService notificationService;
     private final ChatService chatService;
     private final GuideAccessService guideAccessService;
+    private final RevenueService revenueService;
 
     private Duration cutoff() {
         long h = policy.getCutoffHours();
@@ -278,6 +280,7 @@ public class BookingService {
         String stripeRefundId = null;
 
         if (b.getStatus() == BookingStatus.COMPLETED && preview.refundable()) {
+            revenueService.assertBookingRevenueRefundAdjustable(b.getId());
             try {
                 stripeRefundId = stripeRefundService.refundPaymentAttempt(
                         attempt,
@@ -314,6 +317,7 @@ public class BookingService {
         );
 
         Booking savedBooking = bookingRepository.save(b);
+        adjustRevenueAfterRefund(savedBooking);
         if (wasCompleted) {
             sendChatRemovalEvent(savedBooking);
         }
@@ -424,6 +428,7 @@ public class BookingService {
         notifyBookingConfirmedIfFirstTransition(savedBooking, oldStatus);
         syncChatRoomParticipants(savedBooking.getSessionId());
         createChatSystemMessage(savedBooking.getSessionId(), usernameForSystemMessage(savedBooking) + " joined the group.");
+        recordRevenueForPaidBooking(savedBooking.getId());
 
         return savedBooking;
     }
@@ -436,6 +441,7 @@ public class BookingService {
         }
 
         if (b.getStatus() == BookingStatus.COMPLETED) {
+            recordRevenueForPaidBooking(b.getId());
             return b;
         }
 
@@ -458,7 +464,11 @@ public class BookingService {
             return b;
         }
 
-        return markCompleted(bookingId);
+        Booking completed = markCompleted(bookingId);
+        if (completed != null && completed.getStatus() == BookingStatus.COMPLETED) {
+            recordRevenueForPaidBooking(completed.getId());
+        }
+        return completed;
     }
 
     public Booking handlePaymentFailed(String bookingId) {
@@ -789,6 +799,7 @@ public class BookingService {
         String stripeRefundId = null;
 
         if (b.getStatus() == BookingStatus.COMPLETED && preview.refundable()) {
+            revenueService.assertBookingRevenueRefundAdjustable(b.getId());
             try {
                 stripeRefundId = stripeRefundService.refundPaymentAttempt(
                         attempt,
@@ -823,6 +834,7 @@ public class BookingService {
         );
 
         Booking savedBooking = bookingRepository.save(b);
+        adjustRevenueAfterRefund(savedBooking);
         if (wasCompleted) {
             sendChatRemovalEvent(savedBooking);
         }
@@ -1502,6 +1514,33 @@ public class BookingService {
                 .findFirstByBookingIdAndProviderOrderByCreatedAtDesc(bookingId, PaymentProvider.STRIPE)
                 .filter(a -> a.getStatus() == PaymentAttemptStatus.SUCCEEDED)
                 .orElse(null);
+    }
+
+    private void recordRevenueForPaidBooking(String bookingId) {
+        try {
+            revenueService.recordPaidBookingIfAbsent(bookingId);
+        } catch (RuntimeException e) {
+            System.out.println("Failed to record revenue for booking " + bookingId + ": " + e.getMessage());
+        }
+    }
+
+    private void adjustRevenueAfterRefund(Booking booking) {
+        if (booking == null) {
+            return;
+        }
+
+        RefundStatus status = booking.getRefundStatus();
+        if (status != RefundStatus.REFUNDED && status != RefundStatus.PARTIALLY_REFUNDED) {
+            return;
+        }
+
+        try {
+            revenueService.applyRefundAdjustment(booking.getId(), booking.getRefundAmount());
+        } catch (RuntimeException e) {
+            System.out.println("Failed to adjust revenue after refund for booking "
+                    + booking.getId() + ": " + e.getMessage());
+            throw e;
+        }
     }
 
     private void cancelGuestPasses(String bookingId) {

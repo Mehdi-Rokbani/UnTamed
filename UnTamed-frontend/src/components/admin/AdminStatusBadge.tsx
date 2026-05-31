@@ -16,6 +16,13 @@ export type AdminStatus =
   | "REFUNDED"
   | "PARTIALLY_REFUNDED"
   | "NOT_REFUNDABLE"
+  | "PENDING_SESSION_COMPLETION"
+  | "READY_FOR_PAYOUT"
+  | "PAYOUT_SCHEDULED"
+  | "PAID"
+  | "VOIDED"
+  | "CREATED"
+  | "FAILED"
   | "APPROVED"
   | "VERIFIED"
   | "REJECTED"
@@ -39,6 +46,13 @@ const statusClass: Record<AdminStatus, string> = {
   REFUNDED: styles.badgeApproved,
   PARTIALLY_REFUNDED: styles.badgeApproved,
   NOT_REFUNDABLE: styles.badgeInactive,
+  PENDING_SESSION_COMPLETION: styles.badgePending,
+  READY_FOR_PAYOUT: styles.badgeApproved,
+  PAYOUT_SCHEDULED: styles.badgePending,
+  PAID: styles.badgeActive,
+  VOIDED: styles.badgeInactive,
+  CREATED: styles.badgePending,
+  FAILED: styles.badgeSuspended,
   APPROVED: styles.badgeApproved,
   VERIFIED: styles.badgeApproved,
   REJECTED: styles.badgeRejected,

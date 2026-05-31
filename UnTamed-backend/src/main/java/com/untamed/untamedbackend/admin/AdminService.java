@@ -24,11 +24,16 @@ import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
 import com.untamed.untamedbackend.payment.PaymentAttempt;
 import com.untamed.untamedbackend.payment.PaymentProvider;
 import com.untamed.untamedbackend.payment.stripe.StripeRefundService;
+import com.untamed.untamedbackend.report.ReportReason;
+import com.untamed.untamedbackend.report.ReportRepository;
+import com.untamed.untamedbackend.report.ReportStatus;
+import com.untamed.untamedbackend.report.ReportTargetType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.AddressRepository;
 import com.untamed.untamedbackend.repository.CategoryRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.revenue.RevenueService;
 import com.untamed.untamedbackend.security.AuthenticatedUser;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -71,8 +76,10 @@ public class AdminService {
     private final StripeRefundService stripeRefundService;
     private final AdminAuditLogService auditLogService;
     private final AdminAlertRepository adminAlertRepository;
+    private final ReportRepository reportRepository;
     private final NotificationService notificationService;
     private final MongoTemplate mongoTemplate;
+    private final RevenueService revenueService;
 
     public AdminService(
             UserRepository userRepository,
@@ -88,8 +95,10 @@ public class AdminService {
             StripeRefundService stripeRefundService,
             AdminAuditLogService auditLogService,
             AdminAlertRepository adminAlertRepository,
+            ReportRepository reportRepository,
             NotificationService notificationService,
-            MongoTemplate mongoTemplate
+            MongoTemplate mongoTemplate,
+            RevenueService revenueService
     ) {
         this.userRepository = userRepository;
         this.activityTemplateRepository = activityTemplateRepository;
@@ -104,8 +113,10 @@ public class AdminService {
         this.stripeRefundService = stripeRefundService;
         this.auditLogService = auditLogService;
         this.adminAlertRepository = adminAlertRepository;
+        this.reportRepository = reportRepository;
         this.notificationService = notificationService;
         this.mongoTemplate = mongoTemplate;
+        this.revenueService = revenueService;
     }
 
     public AdminStatsResponse getStats() {
@@ -178,6 +189,8 @@ public class AdminService {
                         bookingRepository.countByStatus(BookingStatus.COMPLETED),
                         bookingRepository.countByRefundStatus(RefundStatus.REFUND_PENDING),
                         bookingRepository.countByRefundStatus(RefundStatus.REFUND_FAILED),
+                        countPendingReports(),
+                        countPendingSuspensionAppeals(),
                         countAlertsByStatus(AdminAlertStatus.OPEN),
                         calculateTotalRevenue()
                 ),
@@ -196,6 +209,7 @@ public class AdminService {
                         .limit(5)
                         .map(session -> toSessionAlert(session, allBookings))
                         .toList(),
+                buildReportStatusBuckets(),
                 buildAlertStatusBuckets(),
                 allUsers.stream()
                         .limit(5)
@@ -274,6 +288,8 @@ public class AdminService {
     }
 
     private List<AdminOverviewResponse.ModerationPriority> buildModerationPriorities() {
+        long pendingReports = countPendingReports();
+        long pendingAppeals = countPendingSuspensionAppeals();
         long pendingGuides = countUnverifiedGuideBadges();
         long suspendedGuides = userRepository.countByRoleAndSuspendedTrue(Role.GUIDE);
         long pendingRefunds = bookingRepository.countByRefundStatus(RefundStatus.REFUND_PENDING);
@@ -282,6 +298,22 @@ public class AdminService {
         long disabledActivities = Math.max(0, activityTemplateRepository.count() - activityTemplateRepository.countByArchivedFalse());
 
         return List.of(
+                new AdminOverviewResponse.ModerationPriority(
+                        "PENDING_REPORTS",
+                        "User reports",
+                        "User-submitted safety reports waiting for admin review.",
+                        pendingReports,
+                        pendingReports > 0 ? "HIGH" : "CLEAR",
+                        "/admin/reports?status=PENDING"
+                ),
+                new AdminOverviewResponse.ModerationPriority(
+                        "SUSPENSION_APPEALS",
+                        "Suspension appeals",
+                        "Suspended users requesting account review.",
+                        pendingAppeals,
+                        pendingAppeals > 0 ? "HIGH" : "CLEAR",
+                        "/admin/reports?targetType=ACCOUNT&reason=SUSPENSION_APPEAL&status=PENDING"
+                ),
                 new AdminOverviewResponse.ModerationPriority(
                         "PENDING_GUIDES",
                         "Guide verification",
@@ -1377,6 +1409,8 @@ public class AdminService {
         int refundAmount = calculateRefundAmount(booking, attempt);
 
         try {
+            revenueService.assertBookingRevenueRefundAdjustable(booking.getId());
+
             String stripeRefundId = stripeRefundService.refundPaymentAttempt(
                     attempt,
                     refundAmount,
@@ -1392,6 +1426,7 @@ public class AdminService {
             booking.setUpdatedAt(java.time.Instant.now());
 
             var saved = bookingRepository.save(booking);
+            revenueService.applyRefundAdjustment(saved.getId(), saved.getRefundAmount());
             boolean userNotified = false;
             if (notifyUser) {
                 userNotified = notifyRefundUser(
@@ -1945,6 +1980,25 @@ public class AdminService {
                 .stream()
                 .map(status -> new AdminOverviewResponse.AlertStatusBucket(status.name(), countAlertsByStatus(status)))
                 .toList();
+    }
+
+    private List<AdminOverviewResponse.ReportStatusBucket> buildReportStatusBuckets() {
+        return List.of(ReportStatus.PENDING, ReportStatus.RESOLVED, ReportStatus.REJECTED)
+                .stream()
+                .map(status -> new AdminOverviewResponse.ReportStatusBucket(status.name(), reportRepository.countByStatus(status)))
+                .toList();
+    }
+
+    private long countPendingReports() {
+        return reportRepository.countByStatus(ReportStatus.PENDING);
+    }
+
+    private long countPendingSuspensionAppeals() {
+        return reportRepository.countByStatusAndTargetTypeAndReason(
+                ReportStatus.PENDING,
+                ReportTargetType.ACCOUNT,
+                ReportReason.SUSPENSION_APPEAL
+        );
     }
 
     private long countAlertsByStatus(AdminAlertStatus status) {

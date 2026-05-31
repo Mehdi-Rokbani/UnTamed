@@ -40,6 +40,16 @@ function IconAttendance() {
   );
 }
 
+function IconEarnings() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M7 10h.01M17 14h.01" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
 function IconGuideProfile() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -152,6 +162,7 @@ export default function GuideSidebar() {
           <Item to="/guide/activities" label="My Activities" icon={<IconActivities />} end />
           <Item to="/activities/create" label="New Activity" icon={<IconCreate />} end />
           <Item to="/guide/attendance-history" label="Attendance History" icon={<IconAttendance />} end />
+          <Item to="/guide/earnings" label="Earnings" icon={<IconEarnings />} end />
         </div>
 
         <div className={styles.navSection}>

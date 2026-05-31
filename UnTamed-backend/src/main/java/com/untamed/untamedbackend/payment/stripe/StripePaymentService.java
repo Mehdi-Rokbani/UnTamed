@@ -30,7 +30,11 @@ import com.stripe.param.checkout.SessionRetrieveParams;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 
 @Service
@@ -38,12 +42,14 @@ import java.util.UUID;
 public class StripePaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(StripePaymentService.class);
+    private static final Duration PAYMENT_ATTEMPT_STARTUP_GRACE = Duration.ofMinutes(2);
 
     private final StripeProperties stripeProps;
     private final PaymentAttemptRepository attempts;
     private final BookingService bookingService;
     private final ActivitySessionRepository activitySessionRepository;
     private final ActivityTemplateRepository activityTemplateRepository;
+    private final Map<String, Object> paymentIntentLocks = new ConcurrentHashMap<>();
 
     public StripeCreatePaymentResponse create(String userId, String bookingId) {
         Booking booking = bookingService.markPaying(bookingId, userId);
@@ -129,33 +135,21 @@ public class StripePaymentService {
     }
 
     public StripeElementsPaymentResponse createElementsPayment(String userId, String bookingId) {
+        Object lock = paymentIntentLocks.computeIfAbsent(bookingId, key -> new Object());
+        synchronized (lock) {
+            return createElementsPaymentLocked(userId, bookingId);
+        }
+    }
+
+    private StripeElementsPaymentResponse createElementsPaymentLocked(String userId, String bookingId) {
         Booking booking = bookingService.markPaying(bookingId, userId);
         ensureStripeConfigured();
 
         PaymentAttempt reusable = findReusablePaymentIntentAttempt(bookingId);
         if (reusable != null) {
-            try {
-                PaymentIntent intent = PaymentIntent.retrieve(reusable.getProviderRef());
-                if (intent.getClientSecret() != null && isReusablePaymentIntentStatus(intent.getStatus())) {
-                    return new StripeElementsPaymentResponse(
-                            intent.getClientSecret(),
-                            booking.getId(),
-                            reusable.getAmount(),
-                            reusable.getCurrency(),
-                            booking.getExpiresAt(),
-                            reusable.getId(),
-                            reusable.getProviderRef()
-                    );
-                }
-
-                reusable.setStatus(PaymentAttemptStatus.FAILED);
-                reusable.setUpdatedAt(Instant.now());
-                attempts.save(reusable);
-            } catch (StripeException e) {
-                reusable.setStatus(PaymentAttemptStatus.FAILED);
-                reusable.setUpdatedAt(Instant.now());
-                attempts.save(reusable);
-                logStripeException("reusable payment intent retrieval", bookingId, reusable, e);
+            StripeElementsPaymentResponse reusableResponse = tryReusePaymentIntent(booking, reusable);
+            if (reusableResponse != null) {
+                return reusableResponse;
             }
         }
 
@@ -191,11 +185,13 @@ public class StripePaymentService {
                     .putMetadata("attemptId", attempt.getId())
                     .build();
 
-            RequestOptions requestOptions = RequestOptions.builder()
-                    .setIdempotencyKey(idempotencyKey)
-                    .build();
+            RequestOptions requestOptions = stripeRequestOptions(idempotencyKey);
 
+            log.info("Creating Stripe PaymentIntent for bookingId={}, attemptId={}, amount={}, currency={}",
+                    bookingId, attempt.getId(), amount, currency.toUpperCase());
             PaymentIntent intent = PaymentIntent.create(params, requestOptions);
+            log.info("Created Stripe PaymentIntent for bookingId={}, attemptId={}, paymentIntentId={}, stripeStatus={}",
+                    bookingId, attempt.getId(), intent.getId(), intent.getStatus());
 
             attempt.setProviderRef(intent.getId());
             attempt.setStatus(PaymentAttemptStatus.PENDING);
@@ -217,16 +213,84 @@ public class StripePaymentService {
             attempts.save(attempt);
 
             bookingService.handlePaymentFailed(bookingId);
-            logStripeException("payment intent", bookingId, attempt, e);
+            logStripeException("payment intent creation", bookingId, attempt, e);
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     stripePaymentErrorMessage(e)
             );
         } catch (RuntimeException e) {
+            attempt.setStatus(PaymentAttemptStatus.FAILED);
+            attempt.setUpdatedAt(Instant.now());
+            attempts.save(attempt);
+
             bookingService.handlePaymentFailed(bookingId);
+            log.error("Stripe payment intent creation failed unexpectedly for bookingId={}, attemptId={}",
+                    bookingId, attempt.getId(), e);
             throw e;
         }
+    }
+
+    private StripeElementsPaymentResponse tryReusePaymentIntent(Booking booking, PaymentAttempt reusable) {
+        String bookingId = booking.getId();
+
+        if (reusable.getProviderRef() == null || reusable.getProviderRef().isBlank()) {
+            if (isFreshStartupAttempt(reusable)) {
+                log.info("Stripe PaymentIntent creation already in progress for bookingId={}, attemptId={}",
+                        bookingId, reusable.getId());
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Payment initialization is already in progress. Please try again in a few seconds."
+                );
+            }
+
+            reusable.setStatus(PaymentAttemptStatus.FAILED);
+            reusable.setUpdatedAt(Instant.now());
+            attempts.save(reusable);
+            log.warn("Marked stale Stripe payment attempt failed for bookingId={}, attemptId={}",
+                    bookingId, reusable.getId());
+            return null;
+        }
+
+        try {
+            log.info("Retrieving reusable Stripe PaymentIntent for bookingId={}, attemptId={}, paymentIntentId={}",
+                    bookingId, reusable.getId(), reusable.getProviderRef());
+            PaymentIntent intent = PaymentIntent.retrieve(reusable.getProviderRef(), stripeRequestOptions(null));
+            log.info("Retrieved reusable Stripe PaymentIntent for bookingId={}, attemptId={}, paymentIntentId={}, stripeStatus={}",
+                    bookingId, reusable.getId(), reusable.getProviderRef(), intent.getStatus());
+
+            if (intent.getClientSecret() != null && isReusablePaymentIntentStatus(intent.getStatus())) {
+                return new StripeElementsPaymentResponse(
+                        intent.getClientSecret(),
+                        booking.getId(),
+                        reusable.getAmount(),
+                        reusable.getCurrency(),
+                        booking.getExpiresAt(),
+                        reusable.getId(),
+                        reusable.getProviderRef()
+                );
+            }
+
+            reusable.setStatus(PaymentAttemptStatus.FAILED);
+            reusable.setUpdatedAt(Instant.now());
+            attempts.save(reusable);
+            log.info("Reusable Stripe PaymentIntent is no longer active; marked attempt failed for bookingId={}, attemptId={}, stripeStatus={}",
+                    bookingId, reusable.getId(), intent.getStatus());
+        } catch (StripeException e) {
+            reusable.setStatus(PaymentAttemptStatus.FAILED);
+            reusable.setUpdatedAt(Instant.now());
+            attempts.save(reusable);
+            logStripeException("reusable payment intent retrieval", bookingId, reusable, e);
+        } catch (RuntimeException e) {
+            reusable.setStatus(PaymentAttemptStatus.FAILED);
+            reusable.setUpdatedAt(Instant.now());
+            attempts.save(reusable);
+            log.error("Reusable Stripe PaymentIntent retrieval failed unexpectedly for bookingId={}, attemptId={}, paymentIntentId={}",
+                    bookingId, reusable.getId(), reusable.getProviderRef(), e);
+            throw e;
+        }
+
+        return null;
     }
 
     public void cancelPayment(String userId, String bookingId) {
@@ -234,14 +298,40 @@ public class StripePaymentService {
     }
 
     private PaymentAttempt findReusablePaymentIntentAttempt(String bookingId) {
-        return attempts.findFirstByBookingIdAndProviderAndStatusOrderByCreatedAtDesc(
+        return attempts.findFirstByBookingIdAndProviderAndStatusInOrderByCreatedAtDesc(
                         bookingId,
                         PaymentProvider.STRIPE,
-                        PaymentAttemptStatus.PENDING
+                        List.of(PaymentAttemptStatus.PENDING, PaymentAttemptStatus.CREATED)
                 )
-                .filter(attempt -> attempt.getProviderRef() != null)
-                .filter(attempt -> attempt.getProviderRef().startsWith("pi_"))
+                .filter(attempt -> attempt.getProviderRef() == null || attempt.getProviderRef().startsWith("pi_"))
                 .orElse(null);
+    }
+
+    private RequestOptions stripeRequestOptions(String idempotencyKey) {
+        RequestOptions.RequestOptionsBuilder builder = RequestOptions.builder()
+                .setConnectTimeout(connectTimeoutMs())
+                .setReadTimeout(readTimeoutMs());
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            builder.setIdempotencyKey(idempotencyKey);
+        }
+
+        return builder.build();
+    }
+
+    private int connectTimeoutMs() {
+        Integer configured = stripeProps.getConnectTimeoutMs();
+        return configured == null || configured <= 0 ? 5000 : configured;
+    }
+
+    private int readTimeoutMs() {
+        Integer configured = stripeProps.getReadTimeoutMs();
+        return configured == null || configured <= 0 ? 15000 : configured;
+    }
+
+    private boolean isFreshStartupAttempt(PaymentAttempt attempt) {
+        Instant createdAt = attempt.getCreatedAt();
+        return createdAt != null && createdAt.plus(PAYMENT_ATTEMPT_STARTUP_GRACE).isAfter(Instant.now());
     }
 
     private void ensureStripeConfigured() {

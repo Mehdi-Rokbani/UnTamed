@@ -5,6 +5,10 @@ import com.untamed.untamedbackend.dto.GuideTemplateSessionsDashboardResponse;
 import com.untamed.untamedbackend.dto.GuideProfileResponse;
 import com.untamed.untamedbackend.dto.UpdateCertificateRequest;
 import com.untamed.untamedbackend.dto.UpdateGuideProfileRequest;
+import com.untamed.untamedbackend.revenue.GuideEarningsSummaryResponse;
+import com.untamed.untamedbackend.revenue.PayoutBatchResponse;
+import com.untamed.untamedbackend.revenue.RevenueRecordResponse;
+import com.untamed.untamedbackend.revenue.RevenueService;
 import com.untamed.untamedbackend.service.GuideTemplateSessionsDashboardService;
 import com.untamed.untamedbackend.service.GuideService;
 import jakarta.validation.Valid;
@@ -18,13 +22,16 @@ public class GuideController {
 
     private final GuideService guides;
     private final GuideTemplateSessionsDashboardService templateSessionsDashboard;
+    private final RevenueService revenueService;
 
     public GuideController(
             GuideService guides,
-            GuideTemplateSessionsDashboardService templateSessionsDashboard
+            GuideTemplateSessionsDashboardService templateSessionsDashboard,
+            RevenueService revenueService
     ) {
         this.guides = guides;
         this.templateSessionsDashboard = templateSessionsDashboard;
+        this.revenueService = revenueService;
     }
 
     @GetMapping("/me")
@@ -49,6 +56,24 @@ public class GuideController {
                 page,
                 size
         );
+    }
+
+    @GetMapping("/me/earnings/summary")
+    public GuideEarningsSummaryResponse getEarningsSummary(Authentication auth) {
+        String guideId = revenueService.requireGuideIdByEmail(requireAuthEmail(auth));
+        return revenueService.getGuideEarningsSummary(guideId);
+    }
+
+    @GetMapping("/me/revenue-records")
+    public java.util.List<RevenueRecordResponse> getRevenueRecords(Authentication auth) {
+        String guideId = revenueService.requireGuideIdByEmail(requireAuthEmail(auth));
+        return revenueService.getGuideRevenueRecords(guideId);
+    }
+
+    @GetMapping("/me/payouts")
+    public java.util.List<PayoutBatchResponse> getPayouts(Authentication auth) {
+        String guideId = revenueService.requireGuideIdByEmail(requireAuthEmail(auth));
+        return revenueService.getGuidePayouts(guideId);
     }
 
     @PatchMapping("/me")
@@ -76,5 +101,13 @@ public class GuideController {
     public GuideProfileResponse deleteCertificate(@PathVariable String certificateId,
                                                   Authentication auth) {
         return guides.deleteCertificate(auth.getName(), certificateId);
+    }
+
+    private String requireAuthEmail(Authentication auth) {
+        if (auth == null || auth.getName() == null) {
+            throw new AccessDeniedException("Not authenticated");
+        }
+
+        return auth.getName();
     }
 }

@@ -1,10 +1,11 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { ArrowLeft, CheckCircle2, Send, ShieldAlert } from "lucide-react";
+import { BadgeDollarSign, CalendarOff, CheckCircle2, Clock3, Lock, Send, ShieldAlert } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import styles from "../style/login.module.css";
 import { BackButton } from "../components/BackButton";
+import { AuthToast } from "../components/auth/AuthToast";
 import { useAuth } from "../auth/auth.store";
 import { getErrorMessage } from "../utils/errorNessage";
 import { submitSuspensionAppeal } from "../api/auth.api";
@@ -28,6 +29,36 @@ function apiMessage(error: any, fallback: string) {
   return fallback;
 }
 
+function loginErrorMessage(error: any) {
+  const status = error?.response?.status ?? error?.status;
+  const message = apiMessage(error, "").toLowerCase();
+
+  if (
+    status === 400 ||
+    status === 401 ||
+    message.includes("bad credentials") ||
+    message.includes("invalid credentials") ||
+    message.includes("invalid email") ||
+    message.includes("invalid password")
+  ) {
+    return "Invalid email or password. Please check your details and try again.";
+  }
+
+  if (status === 403) {
+    return "This account cannot sign in right now. Please contact support if this seems wrong.";
+  }
+
+  if (!error?.response) {
+    return "We could not reach the server. Please check your connection and try again.";
+  }
+
+  if (status >= 500) {
+    return "We could not sign you in right now. Please try again in a moment.";
+  }
+
+  return getErrorMessage(error);
+}
+
 export function LoginPage() {
   const nav = useNavigate();
   const { signIn } = useAuth();
@@ -38,7 +69,6 @@ export function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [suspended, setSuspended] = useState<SuspendedState | null>(null);
-  const [appealOpen, setAppealOpen] = useState(false);
   const [appealDescription, setAppealDescription] = useState("");
   const [appealError, setAppealError] = useState<string | null>(null);
   const [appealSuccess, setAppealSuccess] = useState<{ message: string; reportId: string } | null>(null);
@@ -46,7 +76,6 @@ export function LoginPage() {
 
   function backToLogin() {
     setSuspended(null);
-    setAppealOpen(false);
     setAppealDescription("");
     setAppealError(null);
     setAppealSuccess(null);
@@ -59,7 +88,6 @@ export function LoginPage() {
     e.preventDefault();
     setErr(null);
     setSuspended(null);
-    setAppealOpen(false);
     setAppealError(null);
     setAppealSuccess(null);
     setLoading(true);
@@ -76,7 +104,7 @@ export function LoginPage() {
           message: data.message,
         });
       } else {
-        setErr(getErrorMessage(e));
+        setErr(loginErrorMessage(e));
       }
     } finally {
       setLoading(false);
@@ -102,7 +130,6 @@ export function LoginPage() {
         description,
       });
       setAppealSuccess(result);
-      setAppealOpen(false);
     } catch (e: any) {
       const status = e?.response?.status ?? e?.status;
       if (status === 401) {
@@ -121,52 +148,81 @@ export function LoginPage() {
         <BackButton />
       </div>
 
+      <AuthToast message={err} title="Sign in failed" onClose={() => setErr(null)} />
+
       <div className={styles.loginWrap}>
-        <div className={styles.loginCard}>
+        <div className={`${styles.loginCard} ${suspended ? styles.suspendedCard : ""}`}>
           {suspended ? (
             <div className={styles.suspendedPanel}>
-              <div className={styles.suspendedIconWrap} aria-hidden="true">
-                <ShieldAlert size={30} />
-              </div>
-
-              <div className={styles.loginBrand}>
-                <span className={styles.loginDot} />
-                <span>UnTamed</span>
-              </div>
-
-              <div className={styles.suspendedHeader}>
-                <span className={styles.suspendedKicker}>Access review</span>
-                <h2>Account suspended</h2>
-                <p>
-                  {suspended.message || "Your account has been suspended."} You cannot currently access UnTamed.
-                </p>
-              </div>
-
-              {appealSuccess ? (
-                <div className={styles.appealSuccess} role="status">
-                  <CheckCircle2 size={22} />
-                  <div>
-                    <strong>Your appeal has been submitted.</strong>
-                    <span>Our team will review it soon.</span>
-                    {appealSuccess.reportId && <small>Reference: {appealSuccess.reportId}</small>}
-                  </div>
+              <header className={styles.suspendedHeader}>
+                <div className={styles.suspendedBrand}>
+                  <span className={styles.suspendedLogo} aria-hidden="true">
+                    <ShieldAlert size={18} />
+                  </span>
+                  <span>UnTamed</span>
                 </div>
-              ) : (
-                <>
-                  <div className={styles.suspendedInfo}>
-                    <span>Review link expires in</span>
-                    <strong>{Math.ceil(suspended.expiresInSeconds / 60)} minutes</strong>
-                    <p>If you believe this is a mistake, you can request a review.</p>
-                  </div>
+                <div className={styles.restrictedBadge}>
+                  <span aria-hidden="true" />
+                  Access restricted
+                </div>
+              </header>
 
-                  {!appealOpen ? (
-                    <button type="button" className={styles.loginBtn} onClick={() => setAppealOpen(true)}>
-                      Request a review
-                    </button>
+              <div className={styles.suspendedBody}>
+                <section className={styles.suspendedIntro}>
+                  <span className={styles.suspendedStatusIcon} aria-hidden="true">
+                    <Lock size={23} />
+                  </span>
+                  <div>
+                    <h2>Account suspended</h2>
+                    <p>{suspended.message || "Your account is under admin review. Here's what this means for your bookings."}</p>
+                  </div>
+                </section>
+
+                <div className={styles.suspensionEffects} aria-label="Account suspension effects">
+                  <article>
+                    <CalendarOff size={17} aria-hidden="true" />
+                    <div>
+                      <strong>New bookings are not available</strong>
+                      <span>Future sessions cannot be booked until the review is complete.</span>
+                    </div>
+                  </article>
+                  <article>
+                    <Clock3 size={17} aria-hidden="true" />
+                    <div>
+                      <strong>Upcoming bookings are under review</strong>
+                      <span>Pending bookings may be checked by admin as part of the review.</span>
+                    </div>
+                  </article>
+                  <article>
+                    <BadgeDollarSign size={17} aria-hidden="true" />
+                    <div>
+                      <strong>Paid bookings are handled by admins</strong>
+                      <span>If action is needed, the admin team reviews payment and refund status.</span>
+                    </div>
+                  </article>
+                </div>
+
+                <section className={styles.appealCard}>
+                  {appealSuccess ? (
+                    <div className={styles.appealSuccess} role="status">
+                      <CheckCircle2 size={24} />
+                      <div>
+                        <strong>Your appeal has been submitted.</strong>
+                        <span>Our team will review it soon.</span>
+                        {appealSuccess.reportId && <small>Reference: {appealSuccess.reportId}</small>}
+                      </div>
+                    </div>
                   ) : (
                     <form className={styles.appealForm} onSubmit={onAppealSubmit}>
+                      <div className={styles.sectionHeading}>
+                        <div>
+                          <span className={styles.suspendedKicker}>Submit appeal</span>
+                          <h3>Tell us why this should be reviewed</h3>
+                        </div>
+                      </div>
+
                       <div className={styles.formGroup}>
-                        <label htmlFor="appealDescription">Tell us why we should review your suspension</label>
+                        <label htmlFor="appealDescription">Appeal message</label>
                         <textarea
                           id="appealDescription"
                           value={appealDescription}
@@ -187,21 +243,33 @@ export function LoginPage() {
 
                       {appealError && <div className={styles.errorMessage}>{appealError}</div>}
 
-                      <button type="submit" className={styles.loginBtn} disabled={appealSubmitting}>
-                        <Send size={16} />
-                        {appealSubmitting ? "Submitting..." : "Submit appeal"}
-                      </button>
+                      <div className={styles.appealActions}>
+                        <button type="submit" className={styles.loginBtn} disabled={appealSubmitting}>
+                          <Send size={16} />
+                          {appealSubmitting ? "Submitting..." : "Submit appeal"}
+                        </button>
+                        <button type="button" className={styles.secondaryAction} onClick={backToLogin}>
+                          Back to login
+                        </button>
+                      </div>
                     </form>
                   )}
-                </>
-              )}
 
-              {!appealOpen && appealError && <div className={styles.errorMessage}>{appealError}</div>}
+                  {appealSuccess && (
+                    <button type="button" className={styles.secondaryAction} onClick={backToLogin}>
+                      Back to login
+                    </button>
+                  )}
+                </section>
+              </div>
 
-              <button type="button" className={styles.secondaryAction} onClick={backToLogin}>
-                <ArrowLeft size={16} />
-                Back to login
-              </button>
+              <footer className={styles.suspendedFooter}>
+                <span>
+                  <Clock3 size={15} aria-hidden="true" />
+                  Review link expires in
+                </span>
+                <strong>{Math.ceil(suspended.expiresInSeconds / 60)} minutes</strong>
+              </footer>
             </div>
           ) : (
             <>
@@ -221,7 +289,10 @@ export function LoginPage() {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(ev) => setEmail(ev.target.value)}
+                    onChange={(ev) => {
+                      setEmail(ev.target.value);
+                      setErr(null);
+                    }}
                     placeholder="you@email.com"
                     required
                     autoComplete="email"
@@ -235,7 +306,10 @@ export function LoginPage() {
                       id="password"
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(ev) => setPassword(ev.target.value)}
+                      onChange={(ev) => {
+                        setPassword(ev.target.value);
+                        setErr(null);
+                      }}
                       placeholder="••••••••"
                       required
                       autoComplete="current-password"
@@ -249,8 +323,6 @@ export function LoginPage() {
                     </button>
                   </div>
                 </div>
-
-                {err && <div className={styles.errorMessage}>{err}</div>}
 
                 <button type="submit" className={styles.loginBtn} disabled={loading}>
                   {loading ? "Signing in..." : "Sign in"}

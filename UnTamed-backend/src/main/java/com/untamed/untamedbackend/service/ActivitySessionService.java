@@ -36,6 +36,7 @@ import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.repository.ActivitySessionRepository;
 import com.untamed.untamedbackend.repository.ActivityTemplateRepository;
 import com.untamed.untamedbackend.repository.UserRepository;
+import com.untamed.untamedbackend.revenue.RevenueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -77,6 +78,7 @@ public class ActivitySessionService {
     private final NotificationService notificationService;
     private final ChatService chatService;
     private final GuideAccessService guideAccessService;
+    private final RevenueService revenueService;
 
     // -------- Guide dashboard lists --------
 
@@ -419,6 +421,7 @@ public class ActivitySessionService {
 
         ActivitySession savedSession = sessionRepo.save(s);
         notifySessionChangeIfNeeded(savedSession, oldStartAt, oldEndAt, oldStatus);
+        markRevenueReadyIfCompleted(savedSession, oldStatus);
 
         return toSessionResponse(savedSession);
     }
@@ -863,6 +866,21 @@ public class ActivitySessionService {
             );
         } catch (RuntimeException e) {
             System.out.println("Failed to create session change notifications for session "
+                    + session.getId() + ": " + e.getMessage());
+        }
+    }
+
+    private void markRevenueReadyIfCompleted(ActivitySession session, ActivityStatus oldStatus) {
+        if (session == null
+                || oldStatus == ActivityStatus.COMPLETED
+                || session.getStatus() != ActivityStatus.COMPLETED) {
+            return;
+        }
+
+        try {
+            revenueService.markSessionRevenueReady(session.getId());
+        } catch (RuntimeException e) {
+            System.out.println("Failed to mark revenue ready for session "
                     + session.getId() + ": " + e.getMessage());
         }
     }

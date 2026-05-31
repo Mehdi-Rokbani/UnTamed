@@ -30,7 +30,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import { getAdminAlerts, getAdminOverview, type AdminOverview } from "../../api/admin.api";
+import { getAdminOverview, type AdminOverview } from "../../api/admin.api";
 import styles from "../../style/admin.module.css";
 
 type StatTone = "emerald" | "sky" | "amber" | "rose";
@@ -101,10 +101,10 @@ function buildStats(overview: AdminOverview): StatCard[] {
       icon: <CalendarClock size={18} />,
     },
     {
-      label: "Open reports",
-      value: formatNumber(overview.stats.openAlerts),
-      helper: "Operational alerts from backend",
-      tone: overview.stats.openAlerts > 0 ? "rose" : "emerald",
+      label: "User reports",
+      value: formatNumber(overview.stats.pendingReports),
+      helper: `${formatNumber(overview.stats.pendingSuspensionAppeals)} suspension appeals`,
+      tone: overview.stats.pendingReports > 0 ? "rose" : "emerald",
       icon: <FileWarning size={18} />,
     },
     {
@@ -154,7 +154,8 @@ function attentionItems(overview: AdminOverview) {
 }
 
 function openWorkCount(overview: AdminOverview) {
-  return overview.stats.openAlerts
+  return overview.stats.pendingReports
+    + overview.stats.openAlerts
     + overview.stats.pendingGuides
     + overview.stats.pendingRefunds
     + overview.stats.failedRefunds
@@ -219,19 +220,14 @@ function QuickAction({
 
 export default function AdminDashboardPage() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [openAlertCount, setOpenAlertCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function loadOverview() {
     setLoading(true);
     try {
-      const [data, alerts] = await Promise.all([
-        getAdminOverview(),
-        getAdminAlerts({ page: 0, size: 1, status: "OPEN" }),
-      ]);
+      const data = await getAdminOverview();
       setOverview(data);
-      setOpenAlertCount(alerts.totalElements);
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load admin overview");
@@ -296,7 +292,12 @@ export default function AdminDashboardPage() {
           </div>
         </div>
         <div className={styles.modernHeroActions}>
-          {openAlertCount > 0 && <Link to="/admin/alerts?status=OPEN">{formatNumber(openAlertCount)} open reports</Link>}
+          {overview.stats.pendingReports > 0 && (
+            <Link to="/admin/reports?status=PENDING">{formatNumber(overview.stats.pendingReports)} pending reports</Link>
+          )}
+          {overview.stats.openAlerts > 0 && (
+            <Link to="/admin/alerts?status=OPEN">{formatNumber(overview.stats.openAlerts)} open alerts</Link>
+          )}
           <button className={styles.button} type="button" onClick={() => void loadOverview()} disabled={loading}>
             <RefreshCw size={16} />
             {loading ? "Refreshing" : "Refresh"}
@@ -328,10 +329,10 @@ export default function AdminDashboardPage() {
           icon={<ShieldCheck size={18} />}
         />
         <QuickAction
-          to="/admin/alerts?status=OPEN"
+          to="/admin/reports?status=PENDING"
           label="Review reports"
-          value={formatNumber(overview.stats.openAlerts)}
-          helper="open operational alerts"
+          value={formatNumber(overview.stats.pendingReports)}
+          helper={`${formatNumber(overview.stats.pendingSuspensionAppeals)} suspension appeals`}
           icon={<FileWarning size={18} />}
         />
         <QuickAction
@@ -388,9 +389,9 @@ export default function AdminDashboardPage() {
       </section>
 
       <section className={styles.modernSecondaryGrid}>
-        <ChartCard title="Reports by status" subtitle="Operational alert status, not user-submitted report claims">
+        <ChartCard title="Reports by status" subtitle="User-submitted reports and suspension appeals">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.alertStatusBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={overview.reportStatusBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid stroke="rgba(48,67,57,0.1)" vertical={false} />
               <XAxis dataKey="status" tick={{ fill: "#7a857d", fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#7a857d", fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -406,7 +407,7 @@ export default function AdminDashboardPage() {
               <h2>Needs attention</h2>
               <p>Backend-ranked moderation and operations queues.</p>
             </div>
-            <Link to="/admin/alerts?status=OPEN">Open reports</Link>
+            <Link to="/admin/reports?status=PENDING">Open reports</Link>
           </div>
           {priorities.length > 0 ? (
             <div className={styles.modernAttentionList}>

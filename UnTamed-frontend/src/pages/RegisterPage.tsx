@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactElement } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import styles from "../style/register.module.css";
 import { BackButton } from "../components/BackButton";
+import { AuthToast } from "../components/auth/AuthToast";
 import { passwordRules } from "../utils/paswordRules";
 
 import {
@@ -22,6 +23,37 @@ function isAdventurerRole(role: Role) {
 
 function isValidEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function registerErrorMessage(error: any, fallback: string) {
+  const data = error?.response?.data ?? error?.data;
+  const raw =
+    (typeof data === "string" && data) ||
+    data?.message ||
+    data?.error ||
+    error?.message ||
+    fallback;
+  const message = String(raw);
+  const normalized = message.toLowerCase();
+  const status = error?.response?.status ?? error?.status;
+
+  if (!error?.response && (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("timeout"))) {
+    return "We could not reach the server. Please check your connection and try again.";
+  }
+
+  if (normalized.includes("username") && (normalized.includes("taken") || normalized.includes("exist"))) {
+    return "That username is already taken. Please choose another one.";
+  }
+
+  if (normalized.includes("email") && (normalized.includes("registered") || normalized.includes("taken") || normalized.includes("exist"))) {
+    return "That email is already registered. Try logging in or use a different email.";
+  }
+
+  if (status >= 500) {
+    return "We could not complete registration right now. Please try again in a moment.";
+  }
+
+  return message || fallback;
 }
 
 export function RegisterPage() {
@@ -64,7 +96,7 @@ export function RegisterPage() {
       if (!ok) return setErr("Username already taken. Please choose another one.");
       setStep(2);
     } catch (e: any) {
-      setErr(e?.message ?? "Could not check username.");
+      setErr(registerErrorMessage(e, "Could not check username. Please try again."));
     } finally {
       setChecking(false);
     }
@@ -82,7 +114,7 @@ export function RegisterPage() {
       setEmail(e);
       setStep(3);
     } catch (e: any) {
-      setErr(e?.message ?? "Could not check email.");
+      setErr(registerErrorMessage(e, "Could not check email. Please try again."));
     } finally {
       setChecking(false);
     }
@@ -99,7 +131,7 @@ export function RegisterPage() {
       setRegisteredEmail(user.email);
       setErr(null);
     } catch (e: any) {
-      setErr(e?.message ?? "Registration failed");
+      setErr(registerErrorMessage(e, "Registration failed. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -112,7 +144,7 @@ export function RegisterPage() {
     try {
       await resendVerification(registeredEmail);
     } catch (e: any) {
-      setErr(e?.message ?? "Could not resend verification email");
+      setErr(registerErrorMessage(e, "Could not resend verification email. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -187,6 +219,8 @@ export function RegisterPage() {
       <div className={styles.fixedTopLeft}>
         <BackButton />
       </div>
+
+      <AuthToast message={err} title="Registration needs attention" onClose={() => setErr(null)} />
 
       <div className={styles.regWrap}>
         <div className={styles.regCard}>
@@ -299,8 +333,6 @@ export function RegisterPage() {
                   <span>Can't find it? Check your spam or promotions folder.</span>
                 </div>
 
-                {err && <div className={styles.errorBanner}>{err}</div>}
-
                 <div className={styles.successActions}>
   <button
     className={`${styles.regBtn} ${styles.regBtnSecondary}`}
@@ -391,14 +423,15 @@ export function RegisterPage() {
                           type="text"
                           className={`${styles.fieldInput} ${styles.hasPrefix}`}
                           value={username}
-                          onChange={(e) => setUsername(e.target.value)}
+                          onChange={(e) => {
+                            setUsername(e.target.value);
+                            setErr(null);
+                          }}
                           placeholder="mehdi_adventures"
                         />
                       </div>
                       <div className={styles.fieldHint}>This will be your unique identifier</div>
                     </div>
-
-                    {err && <div className={styles.errorBanner}>{err}</div>}
 
                     <div className={styles.formActions}>
                       <Link className={styles.linkText} to="/login">
@@ -437,7 +470,10 @@ export function RegisterPage() {
                           type="email"
                           className={styles.fieldInput}
                           value={email}
-                          onChange={(e) => setEmail(e.target.value)}
+                          onChange={(e) => {
+                            setEmail(e.target.value);
+                            setErr(null);
+                          }}
                           placeholder="you@example.com"
                         />
                         <span className={styles.inputIcon}>
@@ -459,7 +495,10 @@ export function RegisterPage() {
                           type={showPassword ? "text" : "password"}
                           className={styles.fieldInput}
                           value={password}
-                          onChange={(e) => setPassword(e.target.value)}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setErr(null);
+                          }}
                           placeholder="••••••••••"
                         />
                         <button
@@ -521,10 +560,11 @@ export function RegisterPage() {
                       </div>
                     </div>
 
-                    {err && <div className={styles.errorBanner}>{err}</div>}
-
                     <div className={styles.formActions}>
-                      <button className={`${styles.regBtn} ${styles.regBtnSecondary}`} onClick={() => setStep(1)}>
+                      <button className={`${styles.regBtn} ${styles.regBtnSecondary}`} onClick={() => {
+                        setStep(1);
+                        setErr(null);
+                      }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <line x1="19" y1="12" x2="5" y2="12" />
                           <polyline points="12 19 5 12 12 5" />
@@ -591,10 +631,11 @@ export function RegisterPage() {
                       </div>
                     )}
 
-                    {err && <div className={styles.errorBanner}>{err}</div>}
-
                     <div className={styles.formActions}>
-                      <button className={`${styles.regBtn} ${styles.regBtnSecondary}`} onClick={() => setStep(2)}>
+                      <button className={`${styles.regBtn} ${styles.regBtnSecondary}`} onClick={() => {
+                        setStep(2);
+                        setErr(null);
+                      }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <line x1="19" y1="12" x2="5" y2="12" />
                           <polyline points="12 19 5 12 12 5" />

@@ -34,6 +34,7 @@ const GuideCheckInPage = lazy(() => import("./pages/GuideCheckInPage"));
 const GuestPassPage = lazy(() => import("./pages/GuestPassPage"));
 const GuideSessionAttendancePage = lazy(() => import("./pages/GuideSessionAttendancePage"));
 const GuideAttendanceHistoryPage = lazy(() => import("./pages/GuideAttendanceHistoryPage"));
+const GuideEarningsPage = lazy(() => import("./pages/GuideEarningsPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ChatRoomsPage = lazy(() => import("./pages/ChatRoomsPage"));
 const ChatRoomPage = lazy(() => import("./pages/ChatRoomPage"));
@@ -45,6 +46,8 @@ const AdminUsersPage = lazy(() => import("./pages/admin/AdminUsersPage"));
 const AdminGuidesPage = lazy(() => import("./pages/admin/AdminGuidesPage"));
 const AdminSessionsPage = lazy(() => import("./pages/admin/AdminSessionsPage"));
 const AdminRefundsPage = lazy(() => import("./pages/admin/AdminRefundsPage"));
+const AdminRevenuePage = lazy(() => import("./pages/admin/AdminRevenuePage"));
+const AdminReportsPage = lazy(() => import("./pages/admin/AdminReportsPage"));
 const AdminAuditLogsPage = lazy(() => import("./pages/admin/AdminAuditLogsPage"));
 const AdminActivitiesPage = lazy(() => import("./pages/admin/AdminActivitiesPage"));
 
@@ -181,6 +184,8 @@ export default function App() {
           <Route path="activities" element={<AdminActivitiesPage />} />
           <Route path="sessions" element={<AdminSessionsPage />} />
           <Route path="refunds" element={<AdminRefundsPage />} />
+          <Route path="revenue" element={<AdminRevenuePage />} />
+          <Route path="reports" element={<AdminReportsPage />} />
           <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         </Route>
 
@@ -247,6 +252,7 @@ export default function App() {
           <Route path="templates/:id/sessions" element={<TemplateSessionsPage />} />
           <Route path="sessions/:sessionId/attendance" element={<GuideSessionAttendancePage />} />
           <Route path="attendance-history" element={<GuideAttendanceHistoryPage />} />
+          <Route path="earnings" element={<GuideEarningsPage />} />
         </Route>
 
         {/* Errors */}

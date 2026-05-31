@@ -2,6 +2,7 @@ package com.untamed.untamedbackend.config;
 
 import com.untamed.untamedbackend.booking.Booking;
 import com.untamed.untamedbackend.booking.BookingStatus;
+import com.untamed.untamedbackend.revenue.RevenueRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,7 +44,7 @@ public class MongoIndexesConfig {
                 return;
             }
 
-            log.info("Starting Mongo index creation for booking constraints.");
+            log.info("Starting Mongo index creation for booking and revenue constraints.");
 
             Index uniqUnpaidActiveBooking = new Index()
                     .on("userId", Direction.ASC)
@@ -57,14 +58,20 @@ public class MongoIndexesConfig {
                             ))
                     ));
 
+            Index uniqRevenueBooking = new Index()
+                    .on("bookingId", Direction.ASC)
+                    .named("uniq_revenue_record_booking")
+                    .unique();
+
             RuntimeException lastFailure = null;
             int safeMaxAttempts = Math.max(1, maxAttempts);
 
             for (int attempt = 1; attempt <= safeMaxAttempts; attempt++) {
                 try {
                     mongoTemplate.indexOps(Booking.class).ensureIndex(uniqUnpaidActiveBooking);
+                    mongoTemplate.indexOps(RevenueRecord.class).ensureIndex(uniqRevenueBooking);
                     log.info(
-                            "Mongo index creation completed for bookings on attempt {}/{}. Ensured index: uniq_unpaid_active_booking_user_session.",
+                            "Mongo index creation completed on attempt {}/{}. Ensured indexes: uniq_unpaid_active_booking_user_session, uniq_revenue_record_booking.",
                             attempt,
                             safeMaxAttempts
                     );

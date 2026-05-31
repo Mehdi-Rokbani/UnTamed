@@ -15,6 +15,17 @@ public interface PaymentAttemptRepository extends MongoRepository<PaymentAttempt
             PaymentAttemptStatus status
     );
 
+    Optional<PaymentAttempt> findFirstByBookingIdAndProviderAndStatusInOrderByCreatedAtDesc(
+            String bookingId,
+            PaymentProvider provider,
+            List<PaymentAttemptStatus> statuses
+    );
+
+    Optional<PaymentAttempt> findFirstByBookingIdAndStatusOrderByCreatedAtDesc(
+            String bookingId,
+            PaymentAttemptStatus status
+    );
+
     Optional<PaymentAttempt> findByProviderAndProviderRef(PaymentProvider provider, String providerRef);
 
     boolean existsByIdempotencyKey(String idempotencyKey);

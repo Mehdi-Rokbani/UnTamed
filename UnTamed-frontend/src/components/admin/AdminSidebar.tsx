@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   BellDot,
+  Flag,
   CalendarClock,
   Compass,
   LayoutDashboard,
@@ -9,6 +10,7 @@ import {
   ScrollText,
   ShieldCheck,
   Users,
+  WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -16,7 +18,7 @@ import { getAdminAlerts, getAdminOverview } from "../../api/admin.api";
 import { useAuth } from "../../auth/auth.store";
 import styles from "../../style/admin.module.css";
 
-type BadgeKey = "alerts" | "users" | "guides" | "refunds";
+type BadgeKey = "alerts" | "reports" | "users" | "guides" | "refunds";
 
 type SidebarLink = {
   to: string;
@@ -41,7 +43,9 @@ const sections: Array<{ title: string; links: SidebarLink[] }> = [
     links: [
       { to: "/admin/sessions", label: "Session management", icon: CalendarClock },
       { to: "/admin/refunds", label: "Refunds", icon: ReceiptText, badgeKey: "refunds" },
-      { to: "/admin/alerts", label: "Reports & alerts", icon: BellDot, badgeKey: "alerts" },
+      { to: "/admin/revenue", label: "Revenue & payouts", icon: WalletCards },
+      { to: "/admin/reports", label: "Reports & appeals", icon: Flag, badgeKey: "reports" },
+      { to: "/admin/alerts", label: "Alerts", icon: BellDot, badgeKey: "alerts" },
     ],
   },
   {
@@ -64,7 +68,7 @@ function initials(value?: string | null) {
 
 export default function AdminSidebar() {
   const { user } = useAuth();
-  const [badges, setBadges] = useState({ alerts: 0, users: 0, guides: 0, refunds: 0 });
+  const [badges, setBadges] = useState({ alerts: 0, reports: 0, users: 0, guides: 0, refunds: 0 });
   const displayName = user?.username || user?.email || "Administrator";
 
   async function loadSidebarStats() {
@@ -75,12 +79,13 @@ export default function AdminSidebar() {
       ]);
       setBadges({
         alerts: alerts.totalElements,
+        reports: overview.stats.pendingReports,
         users: overview.stats.totalUsers,
         guides: overview.stats.pendingGuides,
         refunds: overview.stats.pendingRefunds + overview.stats.failedRefunds,
       });
     } catch {
-      setBadges({ alerts: 0, users: 0, guides: 0, refunds: 0 });
+      setBadges({ alerts: 0, reports: 0, users: 0, guides: 0, refunds: 0 });
     }
   }
 

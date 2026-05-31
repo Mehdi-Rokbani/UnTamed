@@ -12,6 +12,8 @@ import com.untamed.untamedbackend.payment.PaymentAttemptRepository;
 import com.untamed.untamedbackend.payment.PaymentAttemptStatus;
 import com.untamed.untamedbackend.payment.PaymentProvider;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +25,8 @@ import java.util.Optional;
 @RequestMapping("/api/payments/stripe")
 @RequiredArgsConstructor
 public class StripeWebhookController {
+
+    private static final Logger log = LoggerFactory.getLogger(StripeWebhookController.class);
 
     private final StripeProperties stripeProps;
     private final PaymentAttemptRepository attempts;
@@ -36,6 +40,12 @@ public class StripeWebhookController {
     ) {
         Event event;
 
+        if (stripeProps.getWebhookSecret() == null || stripeProps.getWebhookSecret().isBlank()) {
+            log.error("Stripe webhook blocked: stripe.webhook-secret missing");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("Stripe webhook is not configured");
+        }
+
         try {
             event = Webhook.constructEvent(
                     payload,
@@ -43,6 +53,7 @@ public class StripeWebhookController {
                     stripeProps.getWebhookSecret()
             );
         } catch (SignatureVerificationException e) {
+            log.warn("Stripe webhook signature verification failed");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
         }
 

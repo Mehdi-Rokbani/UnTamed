@@ -1,6 +1,10 @@
 package com.untamed.untamedbackend.admin;
 
 import com.untamed.untamedbackend.dto.PaginatedResponse;
+import com.untamed.untamedbackend.revenue.AdminRevenueSummaryResponse;
+import com.untamed.untamedbackend.revenue.PayoutBatchResponse;
+import com.untamed.untamedbackend.revenue.RevenueRecordResponse;
+import com.untamed.untamedbackend.revenue.RevenueService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,15 +26,18 @@ public class AdminController {
     private final AdminService adminService;
     private final AdminAuditLogService adminAuditLogService;
     private final AdminReportService adminReportService;
+    private final RevenueService revenueService;
 
     public AdminController(
             AdminService adminService,
             AdminAuditLogService adminAuditLogService,
-            AdminReportService adminReportService
+            AdminReportService adminReportService,
+            RevenueService revenueService
     ) {
         this.adminService = adminService;
         this.adminAuditLogService = adminAuditLogService;
         this.adminReportService = adminReportService;
+        this.revenueService = revenueService;
     }
 
     @GetMapping("/health")
@@ -49,6 +56,26 @@ public class AdminController {
     @GetMapping("/overview")
     public AdminOverviewResponse overview() {
         return adminService.getOverview();
+    }
+
+    @GetMapping("/revenue/summary")
+    public AdminRevenueSummaryResponse revenueSummary() {
+        return revenueService.getAdminRevenueSummary();
+    }
+
+    @GetMapping("/revenue/records")
+    public List<RevenueRecordResponse> revenueRecords() {
+        return revenueService.getAdminRevenueRecords();
+    }
+
+    @GetMapping("/payouts")
+    public List<PayoutBatchResponse> payoutBatches() {
+        return revenueService.getAdminPayoutBatches();
+    }
+
+    @PostMapping("/payouts/{batchId}/mark-paid")
+    public PayoutBatchResponse markPayoutPaid(@PathVariable String batchId) {
+        return revenueService.markPayoutBatchPaid(batchId);
     }
 
     @GetMapping("/alerts")

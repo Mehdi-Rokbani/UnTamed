@@ -25,4 +25,12 @@ public interface ReportRepository extends MongoRepository<Report, String> {
     Page<Report> findByTargetType(ReportTargetType targetType, Pageable pageable);
 
     Page<Report> findByStatusAndTargetType(ReportStatus status, ReportTargetType targetType, Pageable pageable);
+
+    long countByStatus(ReportStatus status);
+
+    long countByStatusAndTargetType(ReportStatus status, ReportTargetType targetType);
+
+    long countByStatusAndReason(ReportStatus status, ReportReason reason);
+
+    long countByStatusAndTargetTypeAndReason(ReportStatus status, ReportTargetType targetType, ReportReason reason);
 }

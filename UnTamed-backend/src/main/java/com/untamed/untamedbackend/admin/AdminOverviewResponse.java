@@ -9,6 +9,7 @@ public record AdminOverviewResponse(
         List<ModerationPriority> moderationPriorities,
         List<RefundAlert> refundAlerts,
         List<SessionAlert> sessionAlerts,
+        List<ReportStatusBucket> reportStatusBuckets,
         List<AlertStatusBucket> alertStatusBuckets,
         List<RecentUser> recentUsers,
         List<RecentActivity> recentActivities,
@@ -30,6 +31,8 @@ public record AdminOverviewResponse(
             long completedBookings,
             long pendingRefunds,
             long failedRefunds,
+            long pendingReports,
+            long pendingSuspensionAppeals,
             long openAlerts,
             double totalRevenue
     ) {}
@@ -76,6 +79,11 @@ public record AdminOverviewResponse(
     ) {}
 
     public record AlertStatusBucket(
+            String status,
+            long count
+    ) {}
+
+    public record ReportStatusBucket(
             String status,
             long count
     ) {}

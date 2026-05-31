@@ -25,8 +25,65 @@ export type UpdateGuideProfilePayload = {
   experienceYears?: number | null;
 };
 
+export type GuideEarningsSummary = {
+  grossCompletedBookingAmountMinor: number;
+  platformCommissionMinor: number;
+  guideEarningsMinor: number;
+  pendingPayoutMinor: number;
+  scheduledPayoutMinor: number;
+  paidPayoutMinor: number;
+  revenueRecords: number;
+  payoutBatches: number;
+};
+
+export type GuideRevenueRecord = {
+  id: string;
+  bookingId: string;
+  paymentAttemptId: string;
+  sessionId: string;
+  templateId: string;
+  activityTitle?: string | null;
+  grossAmountMinor: number;
+  platformCommissionMinor: number;
+  guidePayoutMinor: number;
+  currency: string;
+  status: string;
+  bookingDate?: string | null;
+  sessionStartAt?: string | null;
+  payoutBatchId?: string | null;
+  paidAt?: string | null;
+};
+
+export type GuidePayoutBatch = {
+  id: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  totalGrossMinor: number;
+  totalCommissionMinor: number;
+  totalPayoutMinor: number;
+  currency: string;
+  totalBookings: number;
+  status: string;
+  paidAt?: string | null;
+};
+
 export async function getGuideMe() {
   const { data } = await http.get<GuideProfileResponse>("/api/guides/me");
+  return data;
+}
+
+export async function getGuideEarningsSummary() {
+  const { data } = await http.get<GuideEarningsSummary>("/api/guides/me/earnings/summary");
+  return data;
+}
+
+export async function getGuideRevenueRecords() {
+  const { data } = await http.get<GuideRevenueRecord[]>("/api/guides/me/revenue-records");
+  return data;
+}
+
+export async function getGuidePayouts() {
+  const { data } = await http.get<GuidePayoutBatch[]>("/api/guides/me/payouts");
   return data;
 }
 

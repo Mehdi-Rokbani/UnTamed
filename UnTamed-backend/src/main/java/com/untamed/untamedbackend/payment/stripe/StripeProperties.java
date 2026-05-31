@@ -14,4 +14,7 @@ public class StripeProperties {
     private String cancelUrl;
     private String currency;
 
+    private Integer connectTimeoutMs = 5000;
+    private Integer readTimeoutMs = 15000;
+
 }

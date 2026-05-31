@@ -1,10 +1,14 @@
 package com.untamed.untamedbackend.admin;
 
 import com.untamed.untamedbackend.dto.PaginatedResponse;
+import com.untamed.untamedbackend.integrations.email.EmailSender;
 import com.untamed.untamedbackend.model.ActivitySession;
 import com.untamed.untamedbackend.model.ActivityTemplate;
 import com.untamed.untamedbackend.model.Role;
 import com.untamed.untamedbackend.model.User;
+import com.untamed.untamedbackend.notification.NotificationService;
+import com.untamed.untamedbackend.notification.NotificationSeverity;
+import com.untamed.untamedbackend.notification.NotificationType;
 import com.untamed.untamedbackend.report.Report;
 import com.untamed.untamedbackend.report.ReportReason;
 import com.untamed.untamedbackend.report.ReportRepository;
@@ -38,6 +42,8 @@ public class AdminReportService {
     private final ActivityTemplateRepository activityTemplateRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final AdminAuditLogService auditLogService;
+    private final NotificationService notificationService;
+    private final EmailSender emailSender;
     private final MongoTemplate mongoTemplate;
 
     public PaginatedResponse<AdminReportResponse> listReports(
@@ -114,6 +120,8 @@ public class AdminReportService {
         report.setReviewedAt(now);
 
         Report saved = reportRepository.save(report);
+        String notificationDetails = notifyReporterAfterReview(saved, nextStatus);
+        String emailDetails = sendSuspensionAppealEmailIfNeeded(saved, nextStatus);
 
         auditLogService.logAction(
                 admin,
@@ -126,6 +134,8 @@ public class AdminReportService {
                         + ", reportTargetId=" + saved.getTargetId()
                         + ", reportReason=" + saved.getReason()
                         + ", reporterId=" + saved.getReporterId()
+                        + ", " + notificationDetails
+                        + ", " + emailDetails
         );
 
         return toResponse(saved);
@@ -300,6 +310,140 @@ public class AdminReportService {
     private String normalizeNote(String value) {
         String note = trimToNull(value);
         return note == null ? "Reviewed by admin." : note;
+    }
+
+    private String notifyReporterAfterReview(Report report, ReportStatus status) {
+        if (report == null || trimToNull(report.getReporterId()) == null) {
+            return "notificationSent=false, notificationReason=missingReporter";
+        }
+
+        if (report.getReason() == ReportReason.SUSPENSION_APPEAL
+                || report.getTargetType() == ReportTargetType.ACCOUNT) {
+            return notifySuspensionAppealReporter(report, status);
+        }
+
+        NotificationSeverity severity = status == ReportStatus.RESOLVED
+                ? NotificationSeverity.SUCCESS
+                : NotificationSeverity.INFO;
+        String title = status == ReportStatus.RESOLVED
+                ? "Your report was reviewed"
+                : "Your report was closed";
+        String message = status == ReportStatus.RESOLVED
+                ? "Thanks for helping keep UnTamed safe. Our team reviewed your report and handled it according to our policies."
+                : "Thanks for your report. Our team reviewed it and closed it based on the available information.";
+
+        return sendReportNotification(
+                report,
+                NotificationType.REPORT_REVIEWED,
+                title,
+                message,
+                severity,
+                "/notifications"
+        );
+    }
+
+    private String notifySuspensionAppealReporter(Report report, ReportStatus status) {
+        User account = userRepository.findById(report.getReporterId()).orElse(null);
+        if (account == null) {
+            return "notificationSent=false, notificationReason=appealUserMissing";
+        }
+
+        if (account.isSuspended()) {
+            return "notificationSent=false, notificationReason=appealUserStillSuspended";
+        }
+
+        NotificationSeverity severity = status == ReportStatus.RESOLVED
+                ? NotificationSeverity.SUCCESS
+                : NotificationSeverity.INFO;
+        String title = status == ReportStatus.RESOLVED
+                ? "Your account review is complete"
+                : "Your suspension appeal was reviewed";
+        String message = status == ReportStatus.RESOLVED
+                ? "Your appeal was reviewed and your account access is available again."
+                : "Your suspension appeal was reviewed. Check your account status or contact support if you need more help.";
+
+        return sendReportNotification(
+                report,
+                NotificationType.SUSPENSION_APPEAL_REVIEWED,
+                title,
+                message,
+                severity,
+                "/home"
+        );
+    }
+
+    private String sendReportNotification(
+            Report report,
+            NotificationType type,
+            String title,
+            String message,
+            NotificationSeverity severity,
+            String actionUrl
+    ) {
+        try {
+            notificationService.createAndSend(
+                    report.getReporterId(),
+                    type,
+                    title,
+                    message,
+                    severity,
+                    actionUrl,
+                    "REPORT",
+                    report.getId()
+            );
+            return "notificationSent=true";
+        } catch (RuntimeException e) {
+            return "notificationSent=false, notificationReason=" + e.getClass().getSimpleName();
+        }
+    }
+
+    private String sendSuspensionAppealEmailIfNeeded(Report report, ReportStatus status) {
+        if (report == null
+                || (report.getReason() != ReportReason.SUSPENSION_APPEAL
+                && report.getTargetType() != ReportTargetType.ACCOUNT)) {
+            return "emailSent=false, emailReason=notSuspensionAppeal";
+        }
+
+        User account = trimToNull(report.getReporterId()) == null
+                ? null
+                : userRepository.findById(report.getReporterId()).orElse(null);
+        String email = account == null ? report.getReporterEmail() : account.getEmail();
+        if (trimToNull(email) == null) {
+            return "emailSent=false, emailReason=missingEmail";
+        }
+
+        boolean accessRestored = status == ReportStatus.RESOLVED && account != null && !account.isSuspended();
+        try {
+            emailSender.send(
+                    email,
+                    suspensionAppealEmailSubject(accessRestored),
+                    suspensionAppealEmailBody(account, accessRestored)
+            );
+            return "emailSent=true";
+        } catch (RuntimeException e) {
+            return "emailSent=false, emailReason=" + e.getClass().getSimpleName();
+        }
+    }
+
+    private String suspensionAppealEmailSubject(boolean accessRestored) {
+        return accessRestored
+                ? "Your UnTamed account access was restored"
+                : "Your suspension appeal was reviewed";
+    }
+
+    private String suspensionAppealEmailBody(User account, boolean accessRestored) {
+        String greetingName = account == null ? null : trimToNull(account.getUsername());
+        String greeting = greetingName == null ? "Hello," : "Hello " + greetingName + ",";
+        String decision = accessRestored
+                ? "Your suspension appeal has been reviewed, and your UnTamed account access is available again."
+                : "Your suspension appeal has been reviewed. Based on the information available, your account access may remain restricted.";
+
+        return greeting + "\n\n"
+                + decision + "\n\n"
+                + "For privacy and safety reasons, moderation notes are not included in this email. "
+                + "You can try signing in again to check your current account status.\n\n"
+                + "Thank you,\n"
+                + "The UnTamed Team";
     }
 
     private String trimToNull(String value) {

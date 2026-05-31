@@ -7,6 +7,8 @@ UnTamed-backend/*.iml
 UnTamed-backend/.classpath
 UnTamed-backend/.project
 UnTamed-backend/.settings/
+UnTamed-backend/.env
+UnTamed-backend/.env.local
 UnTamed-backend/src/main/resources/application.properties
 
 # ===============================

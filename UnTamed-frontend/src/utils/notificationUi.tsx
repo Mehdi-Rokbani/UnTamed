@@ -96,6 +96,48 @@ const TYPE_META: Record<NotificationType, Omit<NotificationMeta, "actionLabel">>
     tone: "error",
     icon: "credit-card",
   },
+  GUIDE_SUSPENDED: {
+    categoryLabel: "Account",
+    statusLabel: "Guide suspended",
+    tone: "warning",
+    icon: "user-x",
+  },
+  GUIDE_REACTIVATED: {
+    categoryLabel: "Account",
+    statusLabel: "Guide reactivated",
+    tone: "success",
+    icon: "user-check",
+  },
+  SESSION_CANCELLED_REFUND_PENDING: {
+    categoryLabel: "Payment",
+    statusLabel: "Refund pending",
+    tone: "warning",
+    icon: "receipt",
+  },
+  REFUND_PROCESSED: {
+    categoryLabel: "Payment",
+    statusLabel: "Refund processed",
+    tone: "success",
+    icon: "receipt",
+  },
+  REFUND_FAILED_REVIEW: {
+    categoryLabel: "Payment",
+    statusLabel: "Refund review",
+    tone: "warning",
+    icon: "receipt-off",
+  },
+  REPORT_REVIEWED: {
+    categoryLabel: "Account",
+    statusLabel: "Report reviewed",
+    tone: "info",
+    icon: "bell",
+  },
+  SUSPENSION_APPEAL_REVIEWED: {
+    categoryLabel: "Account",
+    statusLabel: "Appeal reviewed",
+    tone: "success",
+    icon: "user-check",
+  },
   CHAT_MESSAGE: {
     categoryLabel: "Message",
     statusLabel: "New message",

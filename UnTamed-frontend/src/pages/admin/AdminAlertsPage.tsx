@@ -204,9 +204,9 @@ export default function AdminAlertsPage() {
     <>
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>Reports & Alerts</h1>
+          <h1 className={styles.pageTitle}>Alerts</h1>
           <p className={styles.pageSubtitle}>
-            Operational reports generated from guide verification, refunds, sessions, and activity moderation.
+            Operational alerts generated from guide verification, refunds, sessions, and activity moderation.
           </p>
         </div>
         <button className={styles.button} type="button" onClick={() => void loadAlerts()} disabled={loading}>
