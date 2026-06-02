@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Compass,
   LayoutDashboard,
+  LogOut,
   ReceiptText,
   ScrollText,
   ShieldCheck,
@@ -13,7 +14,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { getAdminAlerts, getAdminOverview } from "../../api/admin.api";
 import { useAuth } from "../../auth/auth.store";
 import styles from "../../style/admin.module.css";
@@ -67,7 +68,8 @@ function initials(value?: string | null) {
 }
 
 export default function AdminSidebar() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [badges, setBadges] = useState({ alerts: 0, reports: 0, users: 0, guides: 0, refunds: 0 });
   const displayName = user?.username || user?.email || "Administrator";
 
@@ -102,6 +104,11 @@ export default function AdminSidebar() {
       window.clearInterval(intervalId);
     };
   }, []);
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/login", { replace: true });
+  }
 
   return (
     <aside className={styles.sidebar}>
@@ -148,6 +155,15 @@ export default function AdminSidebar() {
           <strong>{displayName}</strong>
           <p>Administrator</p>
         </div>
+        <button
+          className={styles.previewSidebarLogout}
+          type="button"
+          onClick={() => void handleSignOut()}
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut size={16} strokeWidth={2.3} />
+        </button>
       </div>
     </aside>
   );

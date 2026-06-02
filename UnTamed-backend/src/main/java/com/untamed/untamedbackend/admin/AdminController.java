@@ -5,6 +5,7 @@ import com.untamed.untamedbackend.revenue.AdminRevenueSummaryResponse;
 import com.untamed.untamedbackend.revenue.PayoutBatchResponse;
 import com.untamed.untamedbackend.revenue.RevenueRecordResponse;
 import com.untamed.untamedbackend.revenue.RevenueService;
+import com.untamed.untamedbackend.revenue.RunWeeklyPayoutsResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -76,6 +77,19 @@ public class AdminController {
     @PostMapping("/payouts/{batchId}/mark-paid")
     public PayoutBatchResponse markPayoutPaid(@PathVariable String batchId) {
         return revenueService.markPayoutBatchPaid(batchId);
+    }
+
+    @PostMapping("/payouts/run-weekly")
+    public RunWeeklyPayoutsResponse runWeeklyPayouts() {
+        List<PayoutBatchResponse> created = revenueService.createWeeklyPayoutBatches();
+        int scheduledRecords = created.stream()
+                .mapToInt(PayoutBatchResponse::totalBookings)
+                .sum();
+        return new RunWeeklyPayoutsResponse(
+                created.size(),
+                scheduledRecords,
+                created
+        );
     }
 
     @GetMapping("/alerts")

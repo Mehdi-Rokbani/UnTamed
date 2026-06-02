@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import AdminDataTable from "../../components/admin/AdminDataTable";
+import { Eye, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import AdminPagination from "../../components/admin/AdminPagination";
 import { getAdminAuditLogs, type AdminAuditLog } from "../../api/admin.api";
 import styles from "../../style/admin.module.css";
@@ -19,6 +19,12 @@ const actionOptions = [
 ];
 
 const targetOptions = ["USER", "GUIDE", "ACTIVITY", "SESSION", "BOOKING", "REFUND"];
+const rangeOptions = [
+  { value: "30", label: "Last 30 days" },
+  { value: "7", label: "Last 7 days" },
+  { value: "90", label: "Last 90 days" },
+  { value: "ALL", label: "All time" },
+];
 
 function formatDate(value?: string | null) {
   if (!value) return "Unknown";
@@ -31,8 +37,65 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
+function formatDateStack(value?: string | null) {
+  if (!value) return { date: "Unknown", time: "" };
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: "Unknown", time: "" };
+  return {
+    date: new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date),
+    time: new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date),
+  };
+}
+
+function todayLabel() {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date());
+}
+
 function formatAction(action: string) {
   return action.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function compactId(value?: string | null) {
+  if (!value) return "";
+  return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function initials(value?: string | null) {
+  if (!value) return "AD";
+  return value
+    .split(/\s+|@|\./)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "AD";
+}
+
+function actionTone(action: string) {
+  if (action.includes("SUSPEND") || action.includes("CANCEL") || action.includes("FAILED")) return styles.auditActionDanger;
+  if (action.includes("REACTIVATE") || action.includes("REPUBLISH")) return styles.auditActionSuccess;
+  if (action.includes("REPORT") || action.includes("REFUND")) return styles.auditActionInfo;
+  if (action.includes("VERIFY") || action.includes("APPROVE")) return styles.auditActionNeutral;
+  return styles.auditActionDefault;
+}
+
+function fromDateForRange(range: string) {
+  if (range === "ALL") return undefined;
+  const days = Number(range);
+  if (!Number.isFinite(days)) return undefined;
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
 }
 
 function initialSelectValue(value: string | null, options: string[]) {
@@ -64,8 +127,8 @@ export default function AdminAuditLogsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState(() => (searchParams.get("query") ?? "").trim());
   const [action, setAction] = useState(() => initialSelectValue(searchParams.get("action"), actionOptions));
   const [targetType, setTargetType] = useState(() => initialSelectValue(searchParams.get("targetType"), targetOptions));
-  const [fromDate, setFromDate] = useState(() => searchParams.get("fromDate") ?? "");
-  const [toDate, setToDate] = useState(() => searchParams.get("toDate") ?? "");
+  const [dateRange, setDateRange] = useState(() => searchParams.get("range") ?? "30");
+  const [selectedLog, setSelectedLog] = useState<AdminAuditLog | null>(null);
 
   async function loadLogs() {
     setLoading(true);
@@ -76,8 +139,7 @@ export default function AdminAuditLogsPage() {
         query: debouncedQuery || undefined,
         action: action === "ALL" ? undefined : action,
         targetType: targetType === "ALL" ? undefined : targetType,
-        fromDate: fromDate || undefined,
-        toDate: toDate || undefined,
+        fromDate: fromDateForRange(dateRange),
       });
       setLogs(data.content);
       setTotalLogs(data.totalElements);
@@ -101,7 +163,7 @@ export default function AdminAuditLogsPage() {
 
   useEffect(() => {
     void loadLogs();
-  }, [page, pageSize, debouncedQuery, action, targetType, fromDate, toDate]);
+  }, [page, pageSize, debouncedQuery, action, targetType, dateRange]);
 
   function updateActionFilter(value: string) {
     setPage(0);
@@ -113,14 +175,9 @@ export default function AdminAuditLogsPage() {
     setTargetType(value);
   }
 
-  function updateFromDate(value: string) {
+  function updateDateRange(value: string) {
     setPage(0);
-    setFromDate(value);
-  }
-
-  function updateToDate(value: string) {
-    setPage(0);
-    setToDate(value);
+    setDateRange(value);
   }
 
   function updatePageSize(value: number) {
@@ -134,21 +191,26 @@ export default function AdminAuditLogsPage() {
     setDebouncedQuery("");
     setAction("ALL");
     setTargetType("ALL");
-    setFromDate("");
-    setToDate("");
+    setDateRange("30");
   }
 
+  const suspensions = logs.filter((log) => log.action.includes("SUSPEND")).length;
+  const reportsResolved = logs.filter((log) => log.action.includes("REPORT") && log.action.includes("RESOL")).length;
+  const adminsActive = new Set(logs.map((log) => log.adminEmail || log.adminId).filter(Boolean)).size;
+  const currentRangeLabel = rangeOptions.find((option) => option.value === dateRange)?.label.toLowerCase() ?? "selected range";
+
   return (
-    <>
-      <div className={styles.pageHeader}>
+    <div className={styles.auditPage}>
+      <div className={styles.auditHeader}>
         <div>
-          <h1 className={styles.pageTitle}>Audit Logs</h1>
-          <p className={styles.pageSubtitle}>
-            Trace sensitive admin actions, who performed them, and what they changed.
+          <h1 className={styles.auditTitle}>Audit logs</h1>
+          <p className={styles.auditSubtitle}>
+            Trace sensitive admin actions, targets, and what changed - {todayLabel()}
           </p>
         </div>
-        <button className={styles.button} type="button" onClick={() => void loadLogs()} disabled={loading}>
-          Refresh
+        <button className={styles.auditRefreshButton} type="button" onClick={() => void loadLogs()} disabled={loading}>
+          <RefreshCw size={16} />
+          <span>{loading ? "Refreshing" : "Refresh"}</span>
         </button>
       </div>
 
@@ -164,80 +226,137 @@ export default function AdminAuditLogsPage() {
       )}
       {loading && <p className={styles.pageSubtitle}>Loading audit logs...</p>}
 
-      <section className={styles.panel}>
-        <div className={styles.panelHeader}>
-          <div className={styles.toolbar}>
+      <section className={styles.auditStatsGrid} aria-label="Audit log summary">
+        <article className={styles.auditStatCard}>
+          <span><ShieldCheck size={14} /></span>
+          <p>Total actions</p>
+          <strong>{totalLogs}</strong>
+          <small>{currentRangeLabel}</small>
+        </article>
+        <article className={styles.auditStatCard}>
+          <span><ShieldCheck size={14} /></span>
+          <p>Suspensions</p>
+          <strong>{suspensions}</strong>
+          <small>visible page</small>
+        </article>
+        <article className={styles.auditStatCard}>
+          <span><ShieldCheck size={14} /></span>
+          <p>Reports resolved</p>
+          <strong>{reportsResolved}</strong>
+          <small>visible page</small>
+        </article>
+        <article className={styles.auditStatCard}>
+          <span><ShieldCheck size={14} /></span>
+          <p>Admins active</p>
+          <strong>{adminsActive}</strong>
+          <small>visible page</small>
+        </article>
+      </section>
+
+      <section className={styles.auditFiltersPanel} aria-label="Audit log filters">
+        <label className={styles.auditSearchBox}>
+          <Search size={18} />
             <input
-              className={styles.search}
               type="search"
-              placeholder="Search admin, target, reason, or details"
+              placeholder="Search admin, target, reason..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <div className={styles.filters}>
-              <select className={styles.select} value={action} onChange={(event) => updateActionFilter(event.target.value)}>
-                <option value="ALL">All actions</option>
-                {actionOptions.map((option) => (
-                  <option key={option} value={option}>{formatAction(option)}</option>
-                ))}
-              </select>
-              <select
-                className={styles.select}
-                value={targetType}
-                onChange={(event) => updateTargetTypeFilter(event.target.value)}
-              >
-                <option value="ALL">All targets</option>
-                {targetOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <input
-                className={styles.select}
-                type="date"
-                value={fromDate}
-                onChange={(event) => updateFromDate(event.target.value)}
-                aria-label="From date"
-              />
-              <input
-                className={styles.select}
-                type="date"
-                value={toDate}
-                onChange={(event) => updateToDate(event.target.value)}
-                aria-label="To date"
-              />
-            </div>
-            <button className={styles.button} type="button" onClick={clearFilters} disabled={loading}>
-              Clear filters
-            </button>
-          </div>
-        </div>
-
-        <AdminDataTable columns={["Date", "Admin", "Action", "Target", "Reason", "Details"]}>
-          {logs.map((log) => (
-            <tr key={log.id}>
-              <td className={styles.mutedText}>{formatDate(log.createdAt)}</td>
-              <td>
-                <p className={styles.identityName}>{log.adminEmail || "Unknown admin"}</p>
-                {log.adminId && <p className={styles.mutedText}>{log.adminId}</p>}
-              </td>
-              <td>{formatAction(log.action)}</td>
-              <td>
-                <p className={styles.identityName}>{log.targetLabel || log.targetId}</p>
-                <p className={styles.mutedText}>{log.targetType} - {log.targetId}</p>
-              </td>
-              <td className={styles.mutedText}>{log.reason || "-"}</td>
-              <td className={styles.mutedText}>{log.details || "-"}</td>
-            </tr>
+        </label>
+        <select className={styles.auditSelect} value={action} onChange={(event) => updateActionFilter(event.target.value)}>
+          <option value="ALL">All actions</option>
+          {actionOptions.map((option) => (
+            <option key={option} value={option}>{formatAction(option)}</option>
           ))}
+        </select>
+        <select
+          className={styles.auditSelect}
+          value={targetType}
+          onChange={(event) => updateTargetTypeFilter(event.target.value)}
+        >
+          <option value="ALL">All targets</option>
+          {targetOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <select className={styles.auditSelect} value={dateRange} onChange={(event) => updateDateRange(event.target.value)}>
+          {rangeOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <button className={styles.auditClearButton} type="button" onClick={clearFilters} disabled={loading}>
+          Clear filters
+        </button>
+      </section>
 
-          {!loading && logs.length === 0 && (
-            <tr>
-              <td className={styles.mutedText} colSpan={6}>
-                No audit logs match the selected filters.
-              </td>
-            </tr>
-          )}
-        </AdminDataTable>
+      <section className={styles.auditTableCard}>
+        <div className={styles.auditTableWrap}>
+          <table className={styles.auditTable}>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Admin</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Reason</th>
+                <th aria-label="Details" />
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => {
+                const stamped = formatDateStack(log.createdAt);
+
+                return (
+                  <tr key={log.id}>
+                    <td>
+                      <strong>{stamped.date}</strong>
+                      <span>{stamped.time}</span>
+                    </td>
+                    <td>
+                      <div className={styles.auditAdminCell}>
+                        <span>{initials(log.adminEmail || log.adminId)}</span>
+                        <div>
+                          <strong>{log.adminEmail?.split("@")[0] || "Unknown"}</strong>
+                          <small>{compactId(log.adminId)}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`${styles.auditActionPill} ${actionTone(log.action)}`}>
+                        {formatAction(log.action)}
+                      </span>
+                    </td>
+                    <td>
+                      <strong>{log.targetLabel || log.targetType}</strong>
+                      <span>{log.targetType} {compactId(log.targetId)}</span>
+                    </td>
+                    <td>
+                      <span className={styles.auditReason}>{log.reason || log.details || "-"}</span>
+                    </td>
+                    <td>
+                      <button
+                        className={styles.auditIconButton}
+                        type="button"
+                        onClick={() => setSelectedLog(log)}
+                        aria-label="View audit details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {!loading && logs.length === 0 && (
+                <tr>
+                  <td className={styles.auditEmpty} colSpan={6}>
+                    No audit logs match the selected filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         <AdminPagination
           page={page}
@@ -249,6 +368,28 @@ export default function AdminAuditLogsPage() {
           onSizeChange={updatePageSize}
         />
       </section>
-    </>
+
+      {selectedLog && (
+        <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setSelectedLog(null)}>
+          <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="audit-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.pageSubtitle}>Audit detail</p>
+                <h2 className={styles.modalTitle} id="audit-detail-title">{formatAction(selectedLog.action)}</h2>
+              </div>
+              <button className={styles.button} type="button" onClick={() => setSelectedLog(null)}>Close</button>
+            </div>
+            <div className={styles.resultGrid}>
+              <div className={styles.resultItem}><span>Date</span><strong>{formatDate(selectedLog.createdAt)}</strong></div>
+              <div className={styles.resultItem}><span>Admin</span><strong>{selectedLog.adminEmail || selectedLog.adminId || "Unknown"}</strong></div>
+              <div className={styles.resultItem}><span>Target</span><strong>{selectedLog.targetLabel || selectedLog.targetId}</strong></div>
+              <div className={styles.resultItem}><span>Type</span><strong>{selectedLog.targetType}</strong></div>
+            </div>
+            <p className={styles.modalHint}>{selectedLog.reason || "No reason provided."}</p>
+            <p className={styles.modalHint}>{selectedLog.details || "No extra details recorded."}</p>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }

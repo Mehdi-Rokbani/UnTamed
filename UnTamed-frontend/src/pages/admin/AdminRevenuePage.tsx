@@ -6,6 +6,7 @@ import {
   getAdminRevenueRecords,
   getAdminRevenueSummary,
   markPayoutPaid,
+  runWeeklyPayouts,
   type AdminRevenueSummary,
   type PayoutBatch,
   type RevenueRecord,
@@ -56,6 +57,7 @@ export default function AdminRevenuePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [runningPayouts, setRunningPayouts] = useState(false);
 
   async function loadRevenue() {
     setLoading(true);
@@ -97,6 +99,25 @@ export default function AdminRevenuePage() {
     }
   }
 
+  async function handleRunWeeklyPayouts() {
+    setRunningPayouts(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await runWeeklyPayouts();
+      setSuccess(
+        result.createdBatches === 0
+          ? "No ready revenue records to batch."
+          : `Created ${result.createdBatches} payout batch${result.createdBatches === 1 ? "" : "es"} for ${result.scheduledRecords} record${result.scheduledRecords === 1 ? "" : "s"}.`
+      );
+      await loadRevenue();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run weekly payouts");
+    } finally {
+      setRunningPayouts(false);
+    }
+  }
+
   return (
     <>
       <div className={styles.pageHeader}>
@@ -104,9 +125,19 @@ export default function AdminRevenuePage() {
           <h1 className={styles.pageTitle}>Revenue and payouts</h1>
           <p className={styles.pageSubtitle}>Audit platform commission, guide earnings, and weekly payout batches.</p>
         </div>
-        <button className={styles.button} type="button" onClick={() => void loadRevenue()} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
+        <div className={styles.headerActions}>
+          <button
+            className={`${styles.button} ${styles.buttonAccent}`}
+            type="button"
+            onClick={() => void handleRunWeeklyPayouts()}
+            disabled={loading || runningPayouts}
+          >
+            {runningPayouts ? "Running..." : "Run weekly payout"}
+          </button>
+          <button className={styles.button} type="button" onClick={() => void loadRevenue()} disabled={loading || runningPayouts}>
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {error && <p className={`${styles.notice} ${styles.noticeError}`}>{error}</p>}

@@ -7,6 +7,7 @@ import styles from "../style/login.module.css";
 import { BackButton } from "../components/BackButton";
 import { AuthToast } from "../components/auth/AuthToast";
 import { useAuth } from "../auth/auth.store";
+import { roleHome } from "../auth/roleRouting";
 import { getErrorMessage } from "../utils/errorNessage";
 import { submitSuspensionAppeal } from "../api/auth.api";
 import type { SuspendedLoginResponse } from "../types/auth";
@@ -93,8 +94,8 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn(email.trim(), password);
-      nav("/home", { replace: true });
+      const user = await signIn(email.trim(), password);
+      nav(roleHome(user.role), { replace: true });
     } catch (e: any) {
       if (isSuspendedLogin(e)) {
         const data = responseData(e) as SuspendedLoginResponse;

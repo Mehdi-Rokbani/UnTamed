@@ -9,7 +9,7 @@ type AuthCtx = {
   loading: boolean;
 
   refreshMe: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
 
   hasRole: (...roles: Role[]) => boolean;
@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // ✅ backend sets cookies; body returns user
     const me = await AuthApi.login({ email, password });
     setUser(me);
+    return me;
   };
 
   const signOut = async () => {

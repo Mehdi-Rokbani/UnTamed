@@ -251,6 +251,12 @@ export type AdminRevenueSummary = {
   payoutBatches: number;
 };
 
+export type RunWeeklyPayoutsResponse = {
+  createdBatches: number;
+  scheduledRecords: number;
+  batches: PayoutBatch[];
+};
+
 export type AdminAuditLog = {
   id: string;
   adminId?: string | null;
@@ -580,6 +586,11 @@ export async function getAdminPayouts(): Promise<PayoutBatch[]> {
 
 export async function markPayoutPaid(batchId: string): Promise<PayoutBatch> {
   const { data } = await http.post<PayoutBatch>(`/api/admin/payouts/${batchId}/mark-paid`);
+  return data;
+}
+
+export async function runWeeklyPayouts(): Promise<RunWeeklyPayoutsResponse> {
+  const { data } = await http.post<RunWeeklyPayoutsResponse>("/api/admin/payouts/run-weekly");
   return data;
 }
 

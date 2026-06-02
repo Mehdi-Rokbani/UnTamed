@@ -4,6 +4,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./auth/auth.store";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireRole } from "./auth/RequireRole";
+import { RedirectIfAuthenticated } from "./auth/RedirectIfAuthenticated";
+import { RoleLandingRedirect } from "./auth/RoleLandingRedirect";
 import { NotificationsProvider } from "./hooks/useNotifications";
 
 const LoginPage = lazy(() => import("./pages/LoginPage").then((module) => ({ default: module.LoginPage })));
@@ -82,14 +84,24 @@ export default function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
         {/* Public */}
-        <Route path="/" element={<LaunchPage />} />
+        <Route path="/" element={<RoleLandingRedirect />} />
+        <Route path="/launch" element={<RedirectIfAuthenticated><LaunchPage /></RedirectIfAuthenticated>} />
         <Route path="/landing" element={<Navigate to="/" replace />} />
         <Route path="/about" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<RedirectIfAuthenticated><LoginPage /></RedirectIfAuthenticated>} />
+        <Route path="/register" element={<RedirectIfAuthenticated><RegisterPage /></RedirectIfAuthenticated>} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/passes/:token" element={<GuestPassPage />} />
-        <Route path="/users/:userId" element={<PublicUserProfilePage />} />
+        <Route
+          path="/users/:userId"
+          element={
+            <RequireAuth>
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <PublicUserProfilePage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
         <Route path="/guide/check-in/:token" element={<GuideCheckInPage />} />
 
         {/* Authenticated */}
@@ -97,7 +109,9 @@ export default function App() {
           path="/home"
           element={
             <RequireAuth>
-              <HomePage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <HomePage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -106,7 +120,9 @@ export default function App() {
           path="/activities/:id"
           element={
             <RequireAuth>
-              <ActivityDetailsPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <ActivityDetailsPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -115,7 +131,9 @@ export default function App() {
           path="/my-bookings"
           element={
             <RequireAuth>
-              <MyBookingsPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <MyBookingsPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -124,7 +142,9 @@ export default function App() {
           path="/checkout/:bookingId"
           element={
             <RequireAuth>
-              <UntamedCheckoutPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <UntamedCheckoutPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -133,7 +153,9 @@ export default function App() {
           path="/notifications"
           element={
             <RequireAuth>
-              <NotificationsPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <NotificationsPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -142,7 +164,9 @@ export default function App() {
           path="/chat"
           element={
             <RequireAuth>
-              <ChatRoomsPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <ChatRoomsPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -151,7 +175,9 @@ export default function App() {
           path="/chat/rooms/:roomId"
           element={
             <RequireAuth>
-              <ChatRoomPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <ChatRoomPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -194,7 +220,9 @@ export default function App() {
           path="/profile"
           element={
             <RequireAuth>
-              <ProfilePage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <ProfilePage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -202,7 +230,9 @@ export default function App() {
           path="/profile/edit"
           element={
             <RequireAuth>
-              <ProfileEditPage />
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <ProfileEditPage />
+              </RequireRole>
             </RequireAuth>
           }
         />
@@ -259,10 +289,46 @@ export default function App() {
         <Route path="/403" element={<ForbiddenFallback />} />
 
         {/* Stripe payment result pages */}
-        <Route path="/payment-success" element={<PaymentSuccess />} />
-        <Route path="/payment-cancel" element={<PaymentCancel />} />
-        <Route path="/payment/success" element={<PaymentSuccess />} />
-        <Route path="/payment/cancel" element={<PaymentCancel />} />
+        <Route
+          path="/payment-success"
+          element={
+            <RequireAuth>
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <PaymentSuccess />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/payment-cancel"
+          element={
+            <RequireAuth>
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <PaymentCancel />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/payment/success"
+          element={
+            <RequireAuth>
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <PaymentSuccess />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/payment/cancel"
+          element={
+            <RequireAuth>
+              <RequireRole allow={["ADVENTURER", "GUIDE"]}>
+                <PaymentCancel />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

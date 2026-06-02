@@ -2,12 +2,15 @@ import { type JSX } from "react";
 import { Navigate } from "react-router-dom";
 import type { Role } from "../types/auth";
 import { useAuth } from "./auth.store";
+import { roleHome } from "./roleRouting";
 
 export function RequireRole({
   allow,
+  redirectUnauthorized = true,
   children,
 }: {
   allow: Role[];
+  redirectUnauthorized?: boolean;
   children: JSX.Element;
 }) {
   const { user, loading } = useAuth();
@@ -17,7 +20,7 @@ export function RequireRole({
 
   if (loading) return <div style={{ padding: 24 }}>Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!allowed) return <Navigate to="/403" replace />;
+  if (!allowed) return <Navigate to={redirectUnauthorized ? roleHome(user.role) : "/403"} replace />;
 
   return children;
 }
