@@ -58,7 +58,8 @@ public class SecurityConfig {
                         // This endpoint only verifies/displays a pass; it does not allow marking attendance.
                         .requestMatchers(HttpMethod.GET, "/api/guest-passes/public/**").permitAll()
 
-                        // Stripe webhook must be public
+                        // Stripe webhooks must be public because Stripe cannot send app JWT cookies/tokens.
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
 
                         // Stripe payment creation must be authenticated

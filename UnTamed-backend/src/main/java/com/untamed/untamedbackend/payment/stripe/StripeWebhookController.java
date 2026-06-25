@@ -19,10 +19,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/payments/stripe")
+@RequestMapping("/api/payments")
 @RequiredArgsConstructor
 public class StripeWebhookController {
 
@@ -33,7 +35,7 @@ public class StripeWebhookController {
     private final BookingService bookingService;
     private final GuestPassService guestPassService;
 
-    @PostMapping("/webhook")
+    @PostMapping({"/webhook", "/stripe/webhook"})
     public ResponseEntity<String> webhook(
             @RequestBody String payload,
             @RequestHeader("Stripe-Signature") String sigHeader
@@ -57,17 +59,17 @@ public class StripeWebhookController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
         }
 
+        log.info("Stripe webhook received: eventId={}, type={}", event.getId(), event.getType());
+
         if ("checkout.session.completed".equals(event.getType())) {
             handleCheckoutSessionCompleted(event);
-        }
-
-        if ("payment_intent.succeeded".equals(event.getType())) {
+        } else if ("payment_intent.succeeded".equals(event.getType())) {
             handlePaymentIntentSucceeded(event);
-        }
-
-        if ("payment_intent.payment_failed".equals(event.getType())
+        } else if ("payment_intent.payment_failed".equals(event.getType())
                 || "payment_intent.canceled".equals(event.getType())) {
             handlePaymentIntentFailed(event);
+        } else {
+            log.info("Stripe webhook ignored unsupported event type={}", event.getType());
         }
 
         return ResponseEntity.ok("received");
@@ -79,20 +81,28 @@ public class StripeWebhookController {
             return;
         }
 
-        Optional<PaymentAttempt> optionalAttempt =
-                attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, paymentIntent.getId());
+        Optional<PaymentAttempt> optionalAttempt = findAttemptForPaymentIntent(paymentIntent);
 
         if (optionalAttempt.isEmpty()) {
-            System.out.println("No payment attempt found for Stripe payment intent: " + paymentIntent.getId());
+            log.warn("No payment attempt found for Stripe payment intent: paymentIntentId={}, metadata={}",
+                    paymentIntent.getId(), paymentIntent.getMetadata());
             return;
         }
 
         PaymentAttempt attempt = optionalAttempt.get();
 
-        if (attempt.getStatus() != PaymentAttemptStatus.SUCCEEDED) {
+        log.info("Processing Stripe payment_intent.succeeded: paymentIntentId={}, attemptId={}, bookingId={}, currentStatus={}",
+                paymentIntent.getId(), attempt.getId(), attempt.getBookingId(), attempt.getStatus());
+
+        if (attempt.getStatus() == PaymentAttemptStatus.SUCCEEDED) {
+            log.info("Stripe payment attempt already succeeded: attemptId={}, paymentIntentId={}",
+                    attempt.getId(), paymentIntent.getId());
+        } else {
             attempt.setStatus(PaymentAttemptStatus.SUCCEEDED);
             attempt.setUpdatedAt(Instant.now());
             attempts.save(attempt);
+            log.info("Stripe payment attempt marked succeeded: attemptId={}, paymentIntentId={}, bookingId={}",
+                    attempt.getId(), paymentIntent.getId(), attempt.getBookingId());
         }
 
         var booking = bookingService.markCompletedFromPayment(attempt.getBookingId());
@@ -100,8 +110,8 @@ public class StripeWebhookController {
             guestPassService.generatePassesForPaidBooking(attempt.getBookingId());
         }
 
-        System.out.println("PaymentIntent succeeded and booking completion was processed: "
-                + attempt.getBookingId());
+        log.info("Stripe payment intent succeeded and booking completion processed: paymentIntentId={}, bookingId={}",
+                paymentIntent.getId(), attempt.getBookingId());
     }
 
     private void handlePaymentIntentFailed(Event event) {
@@ -110,11 +120,11 @@ public class StripeWebhookController {
             return;
         }
 
-        Optional<PaymentAttempt> optionalAttempt =
-                attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, paymentIntent.getId());
+        Optional<PaymentAttempt> optionalAttempt = findAttemptForPaymentIntent(paymentIntent);
 
         if (optionalAttempt.isEmpty()) {
-            System.out.println("No payment attempt found for failed Stripe payment intent: " + paymentIntent.getId());
+            log.warn("No payment attempt found for failed Stripe payment intent: paymentIntentId={}, metadata={}",
+                    paymentIntent.getId(), paymentIntent.getMetadata());
             return;
         }
 
@@ -125,8 +135,40 @@ public class StripeWebhookController {
 
         bookingService.handlePaymentFailed(attempt.getBookingId());
 
-        System.out.println("PaymentIntent failed/cancelled, booking payment state reset if needed: "
-                + attempt.getBookingId());
+        log.info("Stripe payment intent failed/cancelled and booking payment state reset if needed: paymentIntentId={}, bookingId={}",
+                paymentIntent.getId(), attempt.getBookingId());
+    }
+
+    private Optional<PaymentAttempt> findAttemptForPaymentIntent(PaymentIntent paymentIntent) {
+        Optional<PaymentAttempt> byProviderRef =
+                attempts.findByProviderAndProviderRef(PaymentProvider.STRIPE, paymentIntent.getId());
+        if (byProviderRef.isPresent()) {
+            return byProviderRef;
+        }
+
+        Map<String, String> metadata = paymentIntent.getMetadata();
+        if (metadata == null || metadata.isEmpty()) {
+            return Optional.empty();
+        }
+
+        String attemptId = metadata.get("attemptId");
+        if (attemptId != null && !attemptId.isBlank()) {
+            Optional<PaymentAttempt> byAttemptId = attempts.findById(attemptId);
+            if (byAttemptId.isPresent() && byAttemptId.get().getProvider() == PaymentProvider.STRIPE) {
+                return byAttemptId;
+            }
+        }
+
+        String bookingId = metadata.get("bookingId");
+        if (bookingId == null || bookingId.isBlank()) {
+            return Optional.empty();
+        }
+
+        return attempts.findFirstByBookingIdAndProviderAndStatusInOrderByCreatedAtDesc(
+                bookingId,
+                PaymentProvider.STRIPE,
+                List.of(PaymentAttemptStatus.PENDING, PaymentAttemptStatus.CREATED, PaymentAttemptStatus.SUCCEEDED)
+        );
     }
 
     private PaymentIntent deserializePaymentIntent(Event event) {
